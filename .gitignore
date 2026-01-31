@@ -1,0 +1,41 @@
+# Large generated data files
+data/standardized_data.csv
+data/standardized_predictive_data.csv
+data/predictive_features_data.csv
+data/predictive_scaler.pkl
+data/predictive_features_list.pkl
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# VS Code
+.vscode/
+
+# Environment
+.env
+venv/
+env/
+ENV/
+
+# Model outputs
+*.pkl
+*.joblib
+*.h5
+*.model
+
+# Results
+model_results_*.csv
+model_comparison_*.png
+*_results.csv
