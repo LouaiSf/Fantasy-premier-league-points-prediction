@@ -39,3 +39,10 @@ ENV/
 model_results_*.csv
 model_comparison_*.png
 *_results.csv
+
+# Large data files
+all_seasons_data_featured.csv
+all_seasons_data_final.csv
+all_seasons_data.csv
+*.pkl
+model_comparison_results.csv
