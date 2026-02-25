@@ -39,3 +39,9 @@ ENV/
 model_results_*.csv
 model_comparison_*.png
 *_results.csv
+
+all_seasons_data_featured.csv
+all_seasons_data_cleaned.csv
+all_seasons_data_final.csv
+defensive_stats_cleaned.csv
+defensive_stats_raw.csv
