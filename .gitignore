@@ -1,4 +1,5 @@
 # Large generated data files
+*.csv
 data/standardized_data.csv
 data/standardized_predictive_data.csv
 data/predictive_features_data.csv
@@ -45,3 +46,6 @@ all_seasons_data_cleaned.csv
 all_seasons_data_final.csv
 defensive_stats_cleaned.csv
 defensive_stats_raw.csv
+backtest_summary.csv
+model_results_predictive.csv
+all_seasons_data_final.csv
