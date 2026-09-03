@@ -52,3 +52,6 @@ all_seasons_data_final.csv
 # Backups of files repaired by scripts/
 *.bak
 *.prev
+
+# Colab upload bundles (rebuild with scripts/make_colab_bundle.py)
+*.zip
