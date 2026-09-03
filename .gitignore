@@ -49,3 +49,5 @@ defensive_stats_raw.csv
 backtest_summary.csv
 model_results_predictive.csv
 all_seasons_data_final.csv
+# Backups of files repaired by scripts/
+*.bak
