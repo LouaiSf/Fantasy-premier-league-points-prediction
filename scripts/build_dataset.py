@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import sys
 
 import numpy as np
@@ -130,6 +131,23 @@ def add_game_number(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def read_csv_tolerant(path: str, **kwargs) -> pd.DataFrame:
+    """Read a CSV whose encoding is not known up front.
+
+    This pipeline writes its CSVs with encoding='latin-1' (the notebook's
+    choice, kept for compatibility), but the vaastav source files are a mix of
+    utf-8 and latin-1. Letting pandas default to utf-8 means a file this very
+    script wrote fails to read back, on the first accented player name.
+    """
+    last_error = None
+    for encoding in ('utf-8', 'latin-1'):
+        try:
+            return pd.read_csv(path, encoding=encoding, low_memory=False, **kwargs)
+        except UnicodeDecodeError as exc:
+            last_error = exc
+    raise RuntimeError(f"could not decode {path} as utf-8 or latin-1") from last_error
+
+
 def defensive_lookup(path: str) -> pd.DataFrame | None:
     """Defensive columns from the previous all_seasons_data_final.csv."""
     if not os.path.exists(path):
@@ -137,8 +155,19 @@ def defensive_lookup(path: str) -> pd.DataFrame | None:
         print("Every row will be flagged has_fbref_defensive=0.")
         return None
 
+    # If the source is itself a previous output of this script, it already
+    # carries has_fbref_defensive. Take that flag rather than re-deriving it:
+    # the unmatched rows were filled with 0 on the way out, so notna() would
+    # now report them as real observations and the distinction would be lost
+    # the first time anyone re-ran the rebuild.
+    header = read_csv_tolerant(path, nrows=0)
     cols = JOIN_KEYS + DEFENSIVE_COLS
-    old = pd.read_csv(path, usecols=cols, low_memory=False)
+    carries_flag = 'has_fbref_defensive' in header.columns
+    if carries_flag:
+        cols = cols + ['has_fbref_defensive']
+        print("  source already carries has_fbref_defensive; reusing it")
+
+    old = read_csv_tolerant(path, usecols=cols)
 
     dupes = old.duplicated(subset=JOIN_KEYS).sum()
     if dupes:
@@ -165,8 +194,12 @@ def build_final(raw: pd.DataFrame, old_final: str) -> pd.DataFrame:
         df = df.merge(lookup, on=JOIN_KEYS, how='left')
         assert len(df) == before, f"join changed row count: {before} -> {len(df)}"
 
-        matched = df[DEFENSIVE_COLS].notna().any(axis=1)
-        df['has_fbref_defensive'] = matched.astype(int)
+        if 'has_fbref_defensive' in df.columns:
+            # Carried over from a previous run of this script.
+            df['has_fbref_defensive'] = df['has_fbref_defensive'].fillna(0).astype(int)
+        else:
+            matched = df[DEFENSIVE_COLS].notna().any(axis=1)
+            df['has_fbref_defensive'] = matched.astype(int)
         for col in DEFENSIVE_COLS:
             df[col] = df[col].fillna(0)
     else:
@@ -231,21 +264,45 @@ def main() -> int:
                     help=f'reuse an existing {RAW_OUT} instead of re-merging the seasons')
     ap.add_argument('--old-final', default=FINAL_OUT,
                     help='file to lift the defensive columns out of')
+    ap.add_argument('--allow-missing-defensive', action='store_true',
+                    help='build even with no defensive stats to carry over')
     args = ap.parse_args()
 
-    # Read the defensive lookup BEFORE the output is overwritten.
+    # Preserve the original before this run overwrites it, since it is the only
+    # source of the FBref defensive columns.
+    #
+    # This copies rather than moves. Moving meant a failure part-way through
+    # left no all_seasons_data_final.csv at all, and the next attempt then
+    # found nothing to look up and silently produced a dataset with every row
+    # flagged has_fbref_defensive=0 -- a much worse outcome than the crash.
+    # .prev, once written, is never overwritten: it is the pristine original.
     old_final_snapshot = args.old_final
-    if args.write and os.path.exists(FINAL_OUT) and args.old_final == FINAL_OUT:
-        old_final_snapshot = FINAL_OUT + '.prev'
-        if not os.path.exists(old_final_snapshot):
-            print(f"snapshotting {FINAL_OUT} -> {old_final_snapshot}")
-            os.replace(FINAL_OUT, old_final_snapshot)
-        else:
-            print(f"reusing existing snapshot {old_final_snapshot}")
+    if args.write and args.old_final == FINAL_OUT:
+        snapshot = FINAL_OUT + '.prev'
+        if os.path.exists(snapshot):
+            print(f"using existing snapshot {snapshot}")
+            old_final_snapshot = snapshot
+        elif os.path.exists(FINAL_OUT):
+            print(f"snapshotting {FINAL_OUT} -> {snapshot}")
+            shutil.copy2(FINAL_OUT, snapshot)
+            old_final_snapshot = snapshot
+
+    if not os.path.exists(old_final_snapshot):
+        print(f"\n{'!' * 70}")
+        print(f"WARNING: {old_final_snapshot} does not exist.")
+        print("Without it there are no FBref defensive stats to carry over, and")
+        print("every row will be flagged has_fbref_defensive=0. That is almost")
+        print("certainly not what you want -- restore the file and re-run.")
+        print(f"{'!' * 70}")
+        if not args.allow_missing_defensive:
+            raise SystemExit(
+                "refusing to build a dataset with no defensive stats; "
+                "pass --allow-missing-defensive to override"
+            )
 
     if args.skip_raw:
         print(f"reading existing {RAW_OUT}")
-        raw = pd.read_csv(RAW_OUT, encoding='latin-1', low_memory=False)
+        raw = read_csv_tolerant(RAW_OUT)
     else:
         raw = build_raw()
         if args.write:
