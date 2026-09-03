@@ -93,12 +93,14 @@ def main() -> int:
 
     print(f"\nwrote {out} ({os.path.getsize(out) / 1e6:.1f} MB)")
     print("\nNext:")
-    print("  1. upload it to Drive and unzip into a folder, e.g. MyDrive/fpl/")
-    print("  2. open FPL_Colab.ipynb in Colab, set PROJECT to that folder")
+    print(f"  1. upload {name} to the top level of your Google Drive (My Drive)")
+    print("  2. colab.research.google.com -> File -> Upload notebook -> FPL_Colab.ipynb")
+    print("  3. Runtime -> Change runtime type -> CPU, High-RAM")
     if args.minimal:
-        print("  3. run sections 0-2, then skip to section 5 (feature engineering)")
+        print("  4. run sections 0-2, then skip to section 5 (feature engineering)")
     else:
-        print("  3. run every section in order")
+        print("  4. Runtime -> Run all")
+    print("\nDo not unzip it yourself -- section 1 of the notebook does that.")
     return 0
 
 
