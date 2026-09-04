@@ -157,6 +157,20 @@ def main() -> int:
         json.dump(metrics, fh, indent=2, default=float)
     print(f"\nwrote {METRICS_OUT}")
 
+    # Baselines, scored on the same namespace so the test rows are identical.
+    # An R2 is only meaningful next to what a heuristic gets on the same rows.
+    try:
+        from baselines import compute_baselines, print_table
+        baselines = compute_baselines(ns)
+        print_table(baselines, metrics)
+        with open('baseline_metrics.json', 'w', encoding='utf-8') as fh:
+            json.dump(baselines, fh, indent=2)
+        print("\nwrote baseline_metrics.json")
+    except Exception as exc:  # never let this cost you a finished training run
+        print(f"\nWARNING: baseline comparison failed ({type(exc).__name__}: {exc})")
+        print("The models and metrics above are unaffected; run "
+              "scripts/baselines.py separately to retry.")
+
     if not args.no_save:
         print("models and artifacts written under saved_models/")
         # The bug this whole branch exists to fix showed up here: features.json
