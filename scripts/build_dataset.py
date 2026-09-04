@@ -134,10 +134,10 @@ def add_game_number(df: pd.DataFrame) -> pd.DataFrame:
 def read_csv_tolerant(path: str, **kwargs) -> pd.DataFrame:
     """Read a CSV whose encoding is not known up front.
 
-    This pipeline writes its CSVs with encoding='latin-1' (the notebook's
-    choice, kept for compatibility), but the vaastav source files are a mix of
-    utf-8 and latin-1. Letting pandas default to utf-8 means a file this very
-    script wrote fails to read back, on the first accented player name.
+    Outputs are written as utf-8, but the vaastav source files are a mix of
+    utf-8 and latin-1, and files produced by earlier versions of this pipeline
+    are latin-1. Reading those with pandas' utf-8 default dies on the first
+    accented player name.
     """
     last_error = None
     for encoding in ('utf-8', 'latin-1'):
@@ -306,14 +306,14 @@ def main() -> int:
     else:
         raw = build_raw()
         if args.write:
-            raw.to_csv(RAW_OUT, index=False, encoding='latin-1')
+            raw.to_csv(RAW_OUT, index=False, encoding='utf-8')
             print(f"wrote {RAW_OUT}")
 
     final = build_final(raw, old_final_snapshot)
     report(final)
 
     if args.write:
-        final.to_csv(FINAL_OUT, index=False, encoding='latin-1')
+        final.to_csv(FINAL_OUT, index=False, encoding='utf-8')
         print(f"\nwrote {FINAL_OUT}")
     else:
         print("\n(dry run -- pass --write to save)")
