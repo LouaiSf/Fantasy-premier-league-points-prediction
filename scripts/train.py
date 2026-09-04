@@ -128,6 +128,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--notebook', default=NOTEBOOK)
+    ap.add_argument('--with-pca', action='store_true',
+                    help='also train the PCA branch (off by default -- it loses '
+                         'to the direct models at every position)')
     ap.add_argument('--no-save', action='store_true',
                     help='skip the model-saving cell')
     args = ap.parse_args()
@@ -144,7 +147,13 @@ def main() -> int:
     ns = run_range(
         args.notebook,
         first=f"all_seasons_data_featured = pd.read_csv('{IN_FILE}')",
-        last="# Train Models with PCA-Reduced Features",
+        # The PCA branch is off by default. It only ever looked better than
+        # "direct" because direct was the price-only bug: with real features it
+        # loses at every position (-0.010 GK, -0.010 DEF, -0.017 MID, -0.017
+        # FWD) while costing about half the training time. It is lossy
+        # compression of features the models handle better raw.
+        last=("# Train Models with PCA-Reduced Features" if args.with_pca
+              else "# Display best model for each position"),
         namespace={'pd': pd, 'np': np},
         extra_cells=extra,
     )

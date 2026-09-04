@@ -93,6 +93,70 @@ def calculate_modified_points(row):
     return points
 
 
+NOTEBOOK_SEASONS = ('2016-17', '2017-18', '2018-19', '2019-20', '2020-21',
+                    '2021-22', '2022-23', '2023-24', '2024-25', '2025-26')
+
+
+def discover_extra_seasons() -> list:
+    """Season folders on disk that the notebook cells know nothing about.
+
+    The merge cells name every season in hardcoded variables
+    (data_merged_gw_2016_17 and so on), so a new season means editing eight
+    cells. Seasons from 2020-21 onwards all share the modern merged_gw schema,
+    so they can be appended generically instead -- which means next season
+    needs a fetch and nothing else.
+    """
+    if not os.path.isdir('data'):
+        return []
+    found = []
+    for name in sorted(os.listdir('data')):
+        if name in NOTEBOOK_SEASONS or not name[:4].isdigit():
+            continue
+        if os.path.exists(os.path.join('data', name, 'gws', 'merged_gw.csv')):
+            found.append(name)
+    return found
+
+
+def load_extra_season(season: str, template: pd.DataFrame) -> pd.DataFrame | None:
+    """Bring one unknown season up to the merged frame's schema.
+
+    Mirrors what cells 15/17/28/32 do for 2025-26: drop xP, map opponent ids to
+    names, tag the season, and compute defensive_contribution. Any column the
+    template has and this season lacks is filled with 0 rather than left
+    missing, so the concat cannot silently widen the frame.
+    """
+    path = os.path.join('data', season, 'gws', 'merged_gw.csv')
+    df = read_csv_tolerant(path)
+    if df.empty:
+        return None
+
+    df = df.drop(columns=[c for c in ('xP',) if c in df.columns])
+    df['season'] = season
+
+    teams_path = os.path.join('data', season, 'teams.csv')
+    if 'opponent_team' in df.columns and os.path.exists(teams_path):
+        teams = read_csv_tolerant(teams_path)
+        if {'id', 'name'} <= set(teams.columns):
+            mapping = dict(zip(teams['id'], teams['name']))
+            df['opponent_team'] = df['opponent_team'].map(mapping).fillna(df['opponent_team'])
+
+    if 'position' in df.columns:
+        df['position'] = df['position'].replace({
+            'Goalkeeper': 'GK', 'Defender': 'DEF',
+            'Midfielder': 'MID', 'Forward': 'FWD', 'GKP': 'GK',
+        })
+
+    for col in template.columns:
+        if col not in df.columns:
+            df[col] = 0
+    df = df[[c for c in template.columns if c in df.columns]]
+
+    df['defensive_contribution'] = df.apply(calculate_defensive_contribution_row, axis=1)
+    print(f"  {season}: {len(df):,} rows, GW "
+          f"{int(df['GW'].min())}-{int(df['GW'].max())}")
+    return df
+
+
 def build_raw() -> pd.DataFrame:
     """Run the notebook's own season-merging cells (3..34), then cell 40."""
     print("=" * 78)
@@ -106,6 +170,19 @@ def build_raw() -> pd.DataFrame:
     )
     df = ns['all_seasons_data']
     print(f"\nmerged seasons: {df.shape[0]:,} rows x {df.shape[1]} cols")
+
+    extra = discover_extra_seasons()
+    if extra:
+        print(f"\nappending {len(extra)} season(s) the notebook does not know about:")
+        frames = [df]
+        for season in extra:
+            loaded = load_extra_season(season, df)
+            if loaded is not None and len(loaded):
+                frames.append(loaded)
+        if len(frames) > 1:
+            df = pd.concat(frames, ignore_index=True)
+            print(f"  total now: {df.shape[0]:,} rows")
+
     return add_game_number(df)
 
 
@@ -187,8 +264,22 @@ def build_final(raw: pd.DataFrame, old_final: str) -> pd.DataFrame:
     df = raw.copy()
 
     if lookup is not None:
-        # Drop the placeholder defensive columns the merge cells created, so
-        # the joined values are the only ones present.
+        # The FBref merge only ever applied to MERGED_SEASONS. Every other
+        # season carries defensive stats natively: 2016-17..2018-19 from FPL's
+        # own feed, and 2025-26 onwards from the defensive-contribution stats
+        # FPL introduced with the new scoring rules.
+        #
+        # Overwriting all of them from the lookup destroys that. It is not
+        # hypothetical: 2025-26 GW10-38 is absent from the old file, so those
+        # rows would be zero-filled even though merged_gw.csv carries real
+        # values for them (recoveries are non-zero on 31.7% of GW10+ rows).
+        # That is 24,000 rows of a test season silently blanked.
+        needs_fbref = df['season'].isin(MERGED_SEASONS)
+        print(f"  FBref join applies to {int(needs_fbref.sum()):,} rows "
+              f"({', '.join(MERGED_SEASONS)})")
+        print(f"  native defensive stats kept for {int((~needs_fbref).sum()):,} rows")
+
+        native = df.loc[~needs_fbref, DEFENSIVE_COLS].copy()
         df = df.drop(columns=[c for c in DEFENSIVE_COLS if c in df.columns])
         before = len(df)
         df = df.merge(lookup, on=JOIN_KEYS, how='left')
@@ -200,6 +291,12 @@ def build_final(raw: pd.DataFrame, old_final: str) -> pd.DataFrame:
         else:
             matched = df[DEFENSIVE_COLS].notna().any(axis=1)
             df['has_fbref_defensive'] = matched.astype(int)
+
+        # Put the native values back and mark them as real data.
+        for col in DEFENSIVE_COLS:
+            df.loc[~needs_fbref, col] = native[col]
+        df.loc[~needs_fbref, 'has_fbref_defensive'] = 1
+
         for col in DEFENSIVE_COLS:
             df[col] = df[col].fillna(0)
     else:

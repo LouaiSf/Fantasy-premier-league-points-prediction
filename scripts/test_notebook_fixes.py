@@ -15,6 +15,7 @@ Covers
 Run:  python scripts/test_notebook_fixes.py
 """
 import json
+import sys
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
@@ -300,6 +301,126 @@ check('holds out the latest season, validates on the previous', t_adv_folds)
 check('training fold is contiguous after ordering', t_adv_contiguous)
 check('rejects a frame with too few seasons', t_adv_too_few_seasons)
 check('coverage guard fires on the GK 2-of-18 case', t_adv_guard)
+
+
+# ---------------------------------------------------------------------------
+# Availability features: the whole point is that they only see the past.
+# ---------------------------------------------------------------------------
+avail_ns = {'pd': pd, 'np': np}
+exec(cell_with('def add_availability_features(df):'), avail_ns)
+
+
+def _avail_frame():
+    """One player, known minutes, so every value can be checked by hand."""
+    minutes = [90, 90, 0, 0, 45, 90, 90, 90, 0, 90]
+    return pd.DataFrame({
+        'name': ['P'] * len(minutes),
+        'season': ['2023-24'] * len(minutes),
+        'game_number': range(1, len(minutes) + 1),
+        'minutes': minutes,
+        'kickoff_time': pd.date_range('2023-08-12', periods=len(minutes), freq='7D')
+                          .strftime('%Y-%m-%dT%H:%M:%SZ'),
+    })
+
+
+def t_avail_first_row_blank():
+    out = avail_ns['add_availability_features'](_avail_frame())
+    first = out.iloc[0]
+    for col in ('avail_played_rate_3', 'avail_started_rate_5',
+                'avail_season_played_rate', 'avail_days_since_last'):
+        assert pd.isna(first[col]), f"{col} has a value on the first match: {first[col]}"
+
+
+def t_avail_matches_hand_calculation():
+    out = avail_ns['add_availability_features'](_avail_frame())
+    # minutes: 90 90 0 0 45 90 90 90 0 90  -> appeared: 1 1 0 0 1 1 1 1 0 1
+    # row 4 (0-indexed) sees the previous three: 1, 0, 0 -> 1/3
+    assert abs(out['avail_played_rate_3'].iloc[4] - 1 / 3) < 1e-9, \
+        out['avail_played_rate_3'].iloc[4]
+    # row 3 sees 1, 1, 0 -> 2/3
+    assert abs(out['avail_played_rate_3'].iloc[3] - 2 / 3) < 1e-9, \
+        out['avail_played_rate_3'].iloc[3]
+
+
+def t_avail_no_current_match_leak():
+    """Changing only THIS match's minutes must not change this row's features."""
+    base = _avail_frame()
+    out_a = avail_ns['add_availability_features'](base.copy())
+
+    tampered = base.copy()
+    tampered.loc[5, 'minutes'] = 0          # row 5 played 90; pretend it did not
+    out_b = avail_ns['add_availability_features'](tampered)
+
+    cols = [c for c in out_a.columns if c.startswith('avail_')]
+    row_a = out_a.loc[5, cols]
+    row_b = out_b.loc[5, cols]
+    for col in cols:
+        a, b = row_a[col], row_b[col]
+        if pd.isna(a) and pd.isna(b):
+            continue
+        assert a == b, (
+            f"{col} changed when only the current match changed "
+            f"({a} -> {b}) -- the feature is reading the present"
+        )
+
+
+def t_avail_streaks():
+    out = avail_ns['add_availability_features'](_avail_frame())
+    # appeared: 1 1 0 0 1 1 1 1 0 1 -> at row 4 the previous run of blanks is 2
+    assert out['avail_zero_streak'].iloc[4] == 2, out['avail_zero_streak'].iloc[4]
+    # by row 8 there have been three straight full matches before it
+    assert out['avail_start_streak'].iloc[8] == 3, out['avail_start_streak'].iloc[8]
+
+
+check('availability: first match has no lookback', t_avail_first_row_blank)
+check('availability: rates match a hand calculation', t_avail_matches_hand_calculation)
+check('availability: current match cannot change its own features', t_avail_no_current_match_leak)
+check('availability: blank and start streaks count correctly', t_avail_streaks)
+
+
+# ---------------------------------------------------------------------------
+# Seasons with native FPL defensive stats must not be overwritten by the
+# FBref lookup, which only ever covered 2019-20..2024-25.
+# ---------------------------------------------------------------------------
+def t_native_defensive_preserved():
+    sys.path.insert(0, 'scripts')
+    import build_dataset
+
+    raw = pd.DataFrame({
+        'season': ['2021-22', '2025-26'],
+        'element': [1, 1],
+        'fixture': [10, 20],
+        'GW': [1, 1],
+        'position': ['DEF', 'DEF'],
+        'total_points': [2, 2],
+        'tackles': [0, 7],                              # 2025-26 value is real
+        'recoveries': [0, 5],
+        'clearances_blocks_interceptions': [0, 3],
+        'defensive_contribution': [0, 0],
+    })
+    # A lookup that covers only the FBref season.
+    lookup = pd.DataFrame({
+        'season': ['2021-22'], 'element': [1], 'fixture': [10],
+        'tackles': [4], 'recoveries': [2], 'clearances_blocks_interceptions': [1],
+    })
+    orig = build_dataset.defensive_lookup
+    build_dataset.defensive_lookup = lambda _path: lookup
+    try:
+        out = build_dataset.build_final(raw, 'ignored')
+    finally:
+        build_dataset.defensive_lookup = orig
+
+    fbref = out[out.season == '2021-22'].iloc[0]
+    native = out[out.season == '2025-26'].iloc[0]
+    assert fbref['tackles'] == 4, f"FBref season not joined: {fbref['tackles']}"
+    assert native['tackles'] == 7, (
+        f"native 2025-26 tackles overwritten with {native['tackles']} -- "
+        f"the FBref join must not touch seasons it never covered"
+    )
+    assert native['has_fbref_defensive'] == 1
+
+
+check('native defensive stats survive the FBref join', t_native_defensive_preserved)
 
 print()
 if failures:

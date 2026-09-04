@@ -56,9 +56,12 @@ def raw_inputs() -> list[str]:
             if os.path.exists(candidate):
                 paths.append(candidate)
 
-    # The per-gameweek files for 2024-25, so the merged_gw repair can be
-    # re-run on Colab rather than trusted from this machine.
-    paths.extend(sorted(glob.glob('data/2024-25/gws/gw*.csv')))
+    # The per-gameweek files, so scripts/rebuild_merged_gw.py can audit each
+    # merged_gw.csv against its parts rather than trusting it. 2024-25 is the
+    # season the repair actually fixes; 2025-26 and later are included so the
+    # audit stays meaningful as new gameweeks arrive.
+    for season in ('2024-25', '2025-26', '2026-27'):
+        paths.extend(sorted(glob.glob(f'data/{season}/gws/gw*.csv')))
     return paths
 
 
