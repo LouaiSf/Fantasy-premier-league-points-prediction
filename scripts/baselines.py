@@ -20,22 +20,32 @@ fpl_xp         FPL's own expected-points figure for that fixture, read from
                data/<season>/gws/merged_gw.csv. NOT a fair comparison, and
                reported separately for that reason -- see below.
 
-Why fpl_xp is not scored against the models
--------------------------------------------
-The xP snapshot in this dataset was taken at or after lineup announcement, so
-it already knows who started. On 2024-25:
+Why fpl_xp is reported per season, and never scored against the models
+----------------------------------------------------------------------
+The xP column is not the same thing from one season to the next, so pooling it
+across a multi-season test fold produces a number that means nothing.
 
-    players who did NOT play   mean xP 0.145,  82.1% below 0.5
-    players who DID play       mean xP 2.299,  17.8% below 0.5
+    season     R2 all   R2 played   mean xP (played)   %DNP below 0.5
+    2023-24    0.4568      0.2630              2.523            82.5%
+    2024-25    0.4217      0.1999              2.299            82.1%
+    2025-26   -0.0169     -0.6249              0.779            94.2%
 
-No genuine pre-match forecast separates those that cleanly; late benchings and
-injuries are exactly what a forecast cannot see. And xP's R2 falls from 0.4217
-over all rows to 0.1999 once you look only at players who actually played --
-more than half its apparent accuracy is knowing the starting XI.
+Two different problems:
 
-The models here have no team-news feature. Scoring them against xP compares a
-pre-lineup forecast with a post-lineup one, so the verdict below is taken
-against the fair baselines only, and xP is printed with a warning.
+  2023-24 and 2024-25 were snapshotted at or after lineup announcement, so
+  they already know who started. No genuine pre-match forecast separates
+  played from did-not-play that cleanly -- late benchings are exactly what a
+  forecast cannot see -- and more than half the apparent accuracy disappears
+  once you condition on having appeared. Flagged UNFAIR.
+
+  2025-26 is simply broken: players who appeared average 0.779 expected points
+  against roughly 2.3 in prior seasons, and the R2 is negative, meaning it is
+  worse than predicting the mean. Most likely the feed did not keep up with
+  that season's scoring change. Flagged BROKEN via a calibration ratio of mean
+  predicted to mean actual among players who appeared.
+
+Either way the models, which have no team-news feature, cannot be judged
+against it, so the verdict is taken against the fair baselines alone.
 
 Usage
 -----
@@ -203,18 +213,40 @@ def compute_baselines(ns: dict, verbose: bool = True) -> dict:
             ])
             joined = xp_lookup.reindex(keys)
             covered = joined.notna().to_numpy()
-            if covered.sum() > 100:
-                # Scored only where FPL published a number, and marked unfair:
-                # this snapshot knows the starting XI, which the models do not.
-                entry['baselines']['fpl_xp'] = _score(
-                    y_test.to_numpy()[covered], joined.to_numpy()[covered],
-                    fair=False,
+            # Report xP per season, never pooled. The column is not the same
+            # thing from one season to the next: 2024-25's was snapshotted
+            # after lineups and scores an inflated 0.42, while 2025-26's is
+            # simply broken -- players who appeared average 0.779 expected
+            # points against roughly 2.3 in prior seasons, giving a negative
+            # R2. Averaging a leaky season with a broken one produces a number
+            # that means nothing at all.
+            seasons_in_test = test_rows['season'].astype(str)
+            for season in sorted(seasons_in_test.unique()):
+                in_season = (seasons_in_test == season).to_numpy() & covered
+                if in_season.sum() <= 100:
+                    continue
+                truth = y_test.to_numpy()[in_season]
+                pred = joined.to_numpy()[in_season]
+                score = _score(truth, pred, fair=False)
+                score['coverage_pct'] = round(
+                    100 * in_season.sum() / max((seasons_in_test == season).sum(), 1), 1
                 )
-                entry['baselines']['fpl_xp']['coverage_pct'] = round(
-                    100 * covered.mean(), 1
-                )
-            elif verbose:
-                print(f"    {position}: xP matched only {int(covered.sum())} rows, skipping")
+
+                # A usable expected-points column should predict roughly the
+                # right magnitude for players who took the field.
+                appeared = test_rows['minutes'].to_numpy()[in_season] > 0 \
+                    if 'minutes' in test_rows.columns else None
+                if appeared is not None and appeared.sum() > 50:
+                    ratio = pred[appeared].mean() / max(truth[appeared].mean(), 1e-9)
+                    score['calibration_ratio'] = round(float(ratio), 3)
+                    score['usable'] = bool(0.5 <= ratio <= 2.0 and score['r2'] > 0)
+                else:
+                    score['usable'] = score['r2'] > 0
+
+                entry['baselines'][f'fpl_xp[{season}]'] = score
+
+            if verbose and not covered.any():
+                print(f"    {position}: no xP rows matched, skipping")
 
         results[position] = entry
 
@@ -229,11 +261,16 @@ def print_table(baselines: dict, model_metrics: dict | None = None) -> None:
     rows = []
     for position, entry in baselines.items():
         for name, s in entry['baselines'].items():
+            if s.get('fair', True):
+                kind = 'baseline'
+            elif s.get('usable', True):
+                kind = 'UNFAIR'
+            else:
+                kind = 'BROKEN'
             rows.append({
-                'pos': position, 'method': name,
-                'kind': 'baseline' if s.get('fair', True) else 'UNFAIR',
+                'pos': position, 'method': name, 'kind': kind,
                 'r2': round(s['r2'], 4), 'mae': round(s['mae'], 4),
-                'n': s['n'],
+                'n': s['n'], 'calib': s.get('calibration_ratio', ''),
             })
 
     if model_metrics:
@@ -255,8 +292,14 @@ def print_table(baselines: dict, model_metrics: dict | None = None) -> None:
     if any(r['kind'] == 'UNFAIR' for r in rows):
         print("\n  UNFAIR = the predictor saw something the models did not.")
         print("  fpl_xp was snapshotted at or after lineup announcement, so it")
-        print("  knows who started; the models have no team-news feature. It is")
-        print("  shown for context and excluded from the verdict below.")
+        print("  knows who started; the models have no team-news feature.")
+    if any(r['kind'] == 'BROKEN' for r in rows):
+        print()
+        print("  BROKEN = that season's xP column is unusable. 'calib' is mean")
+        print("  predicted over mean actual for players who appeared; far from 1.0")
+        print("  means miscalibrated, not merely inaccurate.")
+    if any(r['kind'] in ('UNFAIR', 'BROKEN') for r in rows):
+        print("  Both are excluded from the verdict below.")
 
     # The question the whole exercise turns on.
     if model_metrics:
