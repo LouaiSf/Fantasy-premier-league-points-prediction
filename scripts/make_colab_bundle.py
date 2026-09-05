@@ -35,6 +35,7 @@ CODE = [
     'final.ipynb',
     'FPL_Colab.ipynb',
     'requirements.txt',
+    'README.md',
 ]
 
 # Produced by scripts/build_dataset.py. The feature stage reads it, and the

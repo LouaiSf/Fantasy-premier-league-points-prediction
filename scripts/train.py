@@ -98,6 +98,79 @@ def collect_metrics(ns: dict) -> dict:
     return out
 
 
+def report_importances(ns: dict, top: int = 15, out: str = 'feature_importance.json') -> None:
+    """Which of the 220 features the best model per position actually uses.
+
+    Two hundred features and no idea which ones matter makes it impossible to
+    tell an improvement from noise, or to know what to build next. Tree models
+    expose this directly; linear models expose the size of their coefficients,
+    which is comparable across features only because everything was scaled.
+
+    Grouped by prefix as well as listed individually, so a family of features
+    that is collectively doing nothing is visible even when no single member
+    looks obviously useless.
+    """
+    all_results = ns.get('all_results', {})
+    if not all_results:
+        return
+
+    print("\n" + "=" * 78)
+    print("FEATURE IMPORTANCE  (best model per position)")
+    print("=" * 78)
+
+    payload = {}
+    for position, res in all_results.items():
+        if not res.get('models'):
+            continue
+        name, best = max(res['models'].items(), key=lambda kv: kv[1]['test_metrics']['r2'])
+        model = best['model']
+        features = res['features']
+
+        if hasattr(model, 'feature_importances_'):
+            weight = np.asarray(model.feature_importances_, dtype=float)
+            kind = 'gain'
+        elif hasattr(model, 'coef_'):
+            weight = np.abs(np.asarray(model.coef_, dtype=float).ravel())
+            kind = '|coef|'
+        else:
+            continue
+        if len(weight) != len(features):
+            continue
+
+        total = weight.sum() or 1.0
+        share = weight / total
+        ranked = sorted(zip(features, share), key=lambda kv: kv[1], reverse=True)
+
+        # Group by the family a feature belongs to.
+        groups: dict = {}
+        for feature, value in zip(features, share):
+            base = feature.split('_prev')[0].split('_rolling')[0]
+            if feature.startswith('avail_'):
+                base = 'avail_*'
+            groups[base] = groups.get(base, 0.0) + float(value)
+        top_groups = sorted(groups.items(), key=lambda kv: kv[1], reverse=True)[:8]
+
+        payload[position] = {
+            'model': name,
+            'measure': kind,
+            'top_features': [{'feature': f, 'share': round(float(v), 5)}
+                             for f, v in ranked[:top]],
+            'by_group': [{'group': g, 'share': round(v, 5)} for g, v in top_groups],
+            'availability_share': round(float(groups.get('avail_*', 0.0)), 5),
+        }
+
+        print(f"\n{position}  ({name}, {kind})")
+        for feature, value in ranked[:top]:
+            print(f"    {value * 100:5.2f}%  {feature}")
+        print(f"    availability features together: "
+              f"{groups.get('avail_*', 0.0) * 100:.2f}%")
+
+    if payload:
+        with open(out, 'w', encoding='utf-8') as fh:
+            json.dump(payload, fh, indent=2)
+        print(f"\nwrote {out}")
+
+
 def print_summary(metrics: dict) -> None:
     print("\n" + "=" * 78)
     print("TEST-FOLD RESULTS  (2024-25 + 2025-26, never seen during training)")
@@ -161,6 +234,7 @@ def main() -> int:
 
     metrics = collect_metrics(ns)
     print_summary(metrics)
+    report_importances(ns)
 
     with open(METRICS_OUT, 'w', encoding='utf-8') as fh:
         json.dump(metrics, fh, indent=2, default=float)
