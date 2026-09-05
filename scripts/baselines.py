@@ -344,7 +344,11 @@ def main() -> int:
     ns = run_range(
         args.notebook,
         first="all_seasons_data_featured = pd.read_csv('all_seasons_data_featured.csv')",
-        last="POSITION_FEATURES = {",
+        # Must reach prepare_position_data, which is defined after
+        # POSITION_FEATURES. Stopping at the latter left the namespace
+        # without it and only showed up when running standalone, since
+        # train.py passes its own fully-populated namespace.
+        last="# Prepare data for modeling",
         namespace={'pd': pd, 'np': np},
     )
 

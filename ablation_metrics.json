@@ -1,0 +1,1443 @@
+{
+  "summary": [
+    {
+      "group": "avail_*",
+      "features": 16,
+      "marginal_R2": 0.0033,
+      "alone_R2": 0.321,
+      "best_marginal": 0.0052
+    },
+    {
+      "group": "opponent_*",
+      "features": 17,
+      "marginal_R2": 0.0012,
+      "alone_R2": -0.0085,
+      "best_marginal": 0.0025
+    },
+    {
+      "group": "tackles*",
+      "features": 5,
+      "marginal_R2": -0.0001,
+      "alone_R2": 0.0974,
+      "best_marginal": 0.0
+    },
+    {
+      "group": "recoveries*",
+      "features": 5,
+      "marginal_R2": -0.0001,
+      "alone_R2": 0.0811,
+      "best_marginal": -0.0001
+    },
+    {
+      "group": "price_*",
+      "features": 3,
+      "marginal_R2": 0.0004,
+      "alone_R2": 0.0067,
+      "best_marginal": 0.0006
+    },
+    {
+      "group": "total_points_*",
+      "features": 8,
+      "marginal_R2": 0.0003,
+      "alone_R2": 0.2943,
+      "best_marginal": 0.0006
+    },
+    {
+      "group": "minutes*",
+      "features": 8,
+      "marginal_R2": 0.0036,
+      "alone_R2": 0.3259,
+      "best_marginal": 0.0064
+    },
+    {
+      "group": "bps*",
+      "features": 8,
+      "marginal_R2": 0.0006,
+      "alone_R2": 0.2788,
+      "best_marginal": 0.0035
+    },
+    {
+      "group": "ict_index*",
+      "features": 8,
+      "marginal_R2": -0.0,
+      "alone_R2": 0.2681,
+      "best_marginal": 0.0
+    },
+    {
+      "group": "selected*",
+      "features": 5,
+      "marginal_R2": -0.0005,
+      "alone_R2": 0.0566,
+      "best_marginal": 0.0005
+    }
+  ],
+  "results": {
+    "avail_": {
+      "GK": {
+        "n_test": 5527,
+        "n_dropped": 16,
+        "dropped": [
+          "avail_days_since_last",
+          "avail_games_since_start",
+          "avail_is_frozen_out",
+          "avail_is_nailed",
+          "avail_is_rotation_risk",
+          "avail_minutes_std_5",
+          "avail_minutes_trend",
+          "avail_played_rate_10",
+          "avail_played_rate_3",
+          "avail_played_rate_5",
+          "avail_season_played_rate",
+          "avail_start_streak",
+          "avail_started_rate_10",
+          "avail_started_rate_3",
+          "avail_started_rate_5",
+          "avail_zero_streak"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.42354620818595723,
+              "mae": 0.7027882474641005,
+              "n_features": 159
+            },
+            "without": {
+              "r2": 0.4232014338674238,
+              "mae": 0.7014542945354632,
+              "n_features": 143
+            },
+            "alone": {
+              "r2": 0.4078888632650547,
+              "mae": 0.694860187560421,
+              "n_features": 16
+            },
+            "delta_r2": 0.000344774318533414,
+            "delta_mae": -0.0013339529286373608,
+            "alone_r2": 0.4078888632650547
+          }
+        }
+      },
+      "DEF": {
+        "n_test": 16567,
+        "n_dropped": 16,
+        "dropped": [
+          "avail_days_since_last",
+          "avail_games_since_start",
+          "avail_is_frozen_out",
+          "avail_is_nailed",
+          "avail_is_rotation_risk",
+          "avail_minutes_std_5",
+          "avail_minutes_trend",
+          "avail_played_rate_10",
+          "avail_played_rate_3",
+          "avail_played_rate_5",
+          "avail_season_played_rate",
+          "avail_start_streak",
+          "avail_started_rate_10",
+          "avail_started_rate_3",
+          "avail_started_rate_5",
+          "avail_zero_streak"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.27925398291065506,
+              "mae": 1.1592205457830558,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.2756361153570096,
+              "mae": 1.146663202800713,
+              "n_features": 204
+            },
+            "alone": {
+              "r2": 0.2554683580406666,
+              "mae": 1.1943092323597166,
+              "n_features": 16
+            },
+            "delta_r2": 0.0036178675536454596,
+            "delta_mae": -0.012557342982342679,
+            "alone_r2": 0.2554683580406666
+          }
+        }
+      },
+      "MID": {
+        "n_test": 22443,
+        "n_dropped": 16,
+        "dropped": [
+          "avail_days_since_last",
+          "avail_games_since_start",
+          "avail_is_frozen_out",
+          "avail_is_nailed",
+          "avail_is_rotation_risk",
+          "avail_minutes_std_5",
+          "avail_minutes_trend",
+          "avail_played_rate_10",
+          "avail_played_rate_3",
+          "avail_played_rate_5",
+          "avail_season_played_rate",
+          "avail_start_streak",
+          "avail_started_rate_10",
+          "avail_started_rate_3",
+          "avail_started_rate_5",
+          "avail_zero_streak"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3391880065516185,
+              "mae": 1.0051065866245714,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.3353537777866755,
+              "mae": 1.001963192144982,
+              "n_features": 204
+            },
+            "alone": {
+              "r2": 0.30095299474561266,
+              "mae": 1.0152520125327007,
+              "n_features": 16
+            },
+            "delta_r2": 0.003834228764942993,
+            "delta_mae": -0.0031433944795893343,
+            "alone_r2": 0.30095299474561266
+          }
+        }
+      },
+      "FWD": {
+        "n_test": 5511,
+        "n_dropped": 16,
+        "dropped": [
+          "avail_days_since_last",
+          "avail_games_since_start",
+          "avail_is_frozen_out",
+          "avail_is_nailed",
+          "avail_is_rotation_risk",
+          "avail_minutes_std_5",
+          "avail_minutes_trend",
+          "avail_played_rate_10",
+          "avail_played_rate_3",
+          "avail_played_rate_5",
+          "avail_season_played_rate",
+          "avail_start_streak",
+          "avail_started_rate_10",
+          "avail_started_rate_3",
+          "avail_started_rate_5",
+          "avail_zero_streak"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3319973423184397,
+              "mae": 1.1497485092502877,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.32677755665869856,
+              "mae": 1.1430807142121897,
+              "n_features": 204
+            },
+            "alone": {
+              "r2": 0.3197805502946005,
+              "mae": 1.1333120696665195,
+              "n_features": 16
+            },
+            "delta_r2": 0.005219785659741127,
+            "delta_mae": -0.006667795038098001,
+            "alone_r2": 0.3197805502946005
+          }
+        }
+      }
+    },
+    "opponent_": {
+      "GK": {
+        "n_test": 5527,
+        "n_dropped": 14,
+        "dropped": [
+          "opponent_difficulty",
+          "opponent_offensive_strength",
+          "opponent_overall_team_strength",
+          "opponent_team_clean_sheet_rolling_3",
+          "opponent_team_clean_sheet_rolling_5",
+          "opponent_team_goals_scored_rolling_3",
+          "opponent_team_goals_scored_rolling_5",
+          "opponent_team_score_prev_1",
+          "opponent_team_score_prev_2",
+          "opponent_team_score_prev_3",
+          "opponent_team_score_prev_4",
+          "opponent_team_score_prev_5",
+          "opponent_team_total_points_rolling_3",
+          "opponent_team_total_points_rolling_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.42354620818595723,
+              "mae": 0.7027882474641005,
+              "n_features": 159
+            },
+            "without": {
+              "r2": 0.4234819181870514,
+              "mae": 0.698891077739436,
+              "n_features": 145
+            },
+            "alone": {
+              "r2": -0.021069454471448035,
+              "mae": 1.3862255448056442,
+              "n_features": 14
+            },
+            "delta_r2": 6.428999890584208e-05,
+            "delta_mae": -0.003897169724664473,
+            "alone_r2": -0.021069454471448035
+          }
+        }
+      },
+      "DEF": {
+        "n_test": 16567,
+        "n_dropped": 17,
+        "dropped": [
+          "opponent_defensive_strength",
+          "opponent_difficulty",
+          "opponent_offensive_strength",
+          "opponent_overall_team_strength",
+          "opponent_team_clean_sheet_rolling_3",
+          "opponent_team_clean_sheet_rolling_5",
+          "opponent_team_goals_conceded_rolling_3",
+          "opponent_team_goals_conceded_rolling_5",
+          "opponent_team_goals_scored_rolling_3",
+          "opponent_team_goals_scored_rolling_5",
+          "opponent_team_score_prev_1",
+          "opponent_team_score_prev_2",
+          "opponent_team_score_prev_3",
+          "opponent_team_score_prev_4",
+          "opponent_team_score_prev_5",
+          "opponent_team_total_points_rolling_3",
+          "opponent_team_total_points_rolling_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.27925398291065506,
+              "mae": 1.1592205457830558,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.2767169651974567,
+              "mae": 1.155917126075413,
+              "n_features": 203
+            },
+            "alone": {
+              "r2": -0.006759432067476867,
+              "mae": 1.6852089613830263,
+              "n_features": 17
+            },
+            "delta_r2": 0.002537017713198364,
+            "delta_mae": -0.0033034197076426963,
+            "alone_r2": -0.006759432067476867
+          }
+        }
+      },
+      "MID": {
+        "n_test": 22443,
+        "n_dropped": 17,
+        "dropped": [
+          "opponent_defensive_strength",
+          "opponent_difficulty",
+          "opponent_offensive_strength",
+          "opponent_overall_team_strength",
+          "opponent_team_clean_sheet_rolling_3",
+          "opponent_team_clean_sheet_rolling_5",
+          "opponent_team_goals_conceded_rolling_3",
+          "opponent_team_goals_conceded_rolling_5",
+          "opponent_team_goals_scored_rolling_3",
+          "opponent_team_goals_scored_rolling_5",
+          "opponent_team_score_prev_1",
+          "opponent_team_score_prev_2",
+          "opponent_team_score_prev_3",
+          "opponent_team_score_prev_4",
+          "opponent_team_score_prev_5",
+          "opponent_team_total_points_rolling_3",
+          "opponent_team_total_points_rolling_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3391880065516185,
+              "mae": 1.0051065866245714,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.3378987507306437,
+              "mae": 1.0002178506346542,
+              "n_features": 203
+            },
+            "alone": {
+              "r2": -0.005617114431827996,
+              "mae": 1.6138438491217868,
+              "n_features": 17
+            },
+            "delta_r2": 0.0012892558209748328,
+            "delta_mae": -0.004888735989917237,
+            "alone_r2": -0.005617114431827996
+          }
+        }
+      },
+      "FWD": {
+        "n_test": 5511,
+        "n_dropped": 17,
+        "dropped": [
+          "opponent_defensive_strength",
+          "opponent_difficulty",
+          "opponent_offensive_strength",
+          "opponent_overall_team_strength",
+          "opponent_team_clean_sheet_rolling_3",
+          "opponent_team_clean_sheet_rolling_5",
+          "opponent_team_goals_conceded_rolling_3",
+          "opponent_team_goals_conceded_rolling_5",
+          "opponent_team_goals_scored_rolling_3",
+          "opponent_team_goals_scored_rolling_5",
+          "opponent_team_score_prev_1",
+          "opponent_team_score_prev_2",
+          "opponent_team_score_prev_3",
+          "opponent_team_score_prev_4",
+          "opponent_team_score_prev_5",
+          "opponent_team_total_points_rolling_3",
+          "opponent_team_total_points_rolling_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3319973423184397,
+              "mae": 1.1497485092502877,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.3310234795744418,
+              "mae": 1.1437842817995476,
+              "n_features": 203
+            },
+            "alone": {
+              "r2": -0.0006401198007366382,
+              "mae": 1.707636976932504,
+              "n_features": 17
+            },
+            "delta_r2": 0.0009738627439979108,
+            "delta_mae": -0.0059642274507401005,
+            "alone_r2": -0.0006401198007366382
+          }
+        }
+      }
+    },
+    "tackles": {
+      "DEF": {
+        "n_test": 16567,
+        "n_dropped": 5,
+        "dropped": [
+          "tackles_prev_1",
+          "tackles_prev_2",
+          "tackles_prev_3",
+          "tackles_prev_4",
+          "tackles_prev_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.27925398291065506,
+              "mae": 1.1592205457830558,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.27936734173916056,
+              "mae": 1.157912842186709,
+              "n_features": 215
+            },
+            "alone": {
+              "r2": 0.10580553024223127,
+              "mae": 1.5251738573935094,
+              "n_features": 5
+            },
+            "delta_r2": -0.00011335882850549428,
+            "delta_mae": -0.0013077035963466876,
+            "alone_r2": 0.10580553024223127
+          }
+        }
+      },
+      "MID": {
+        "n_test": 22443,
+        "n_dropped": 5,
+        "dropped": [
+          "tackles_prev_1",
+          "tackles_prev_2",
+          "tackles_prev_3",
+          "tackles_prev_4",
+          "tackles_prev_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3391880065516185,
+              "mae": 1.0051065866245714,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.3391864053300844,
+              "mae": 1.004913934587028,
+              "n_features": 215
+            },
+            "alone": {
+              "r2": 0.09537149000293765,
+              "mae": 1.4466636507933497,
+              "n_features": 5
+            },
+            "delta_r2": 1.6012215341421054e-06,
+            "delta_mae": -0.0001926520375434837,
+            "alone_r2": 0.09537149000293765
+          }
+        }
+      },
+      "FWD": {
+        "n_test": 5511,
+        "n_dropped": 5,
+        "dropped": [
+          "tackles_prev_1",
+          "tackles_prev_2",
+          "tackles_prev_3",
+          "tackles_prev_4",
+          "tackles_prev_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3319973423184397,
+              "mae": 1.1497485092502877,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.3322160674927861,
+              "mae": 1.1495181886388735,
+              "n_features": 215
+            },
+            "alone": {
+              "r2": 0.09104178910073268,
+              "mae": 1.5480910440722822,
+              "n_features": 5
+            },
+            "delta_r2": -0.00021872517434640137,
+            "delta_mae": -0.00023032061141425864,
+            "alone_r2": 0.09104178910073268
+          }
+        }
+      }
+    },
+    "recoveries": {
+      "DEF": {
+        "n_test": 16567,
+        "n_dropped": 5,
+        "dropped": [
+          "recoveries_prev_1",
+          "recoveries_prev_2",
+          "recoveries_prev_3",
+          "recoveries_prev_4",
+          "recoveries_prev_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.27925398291065506,
+              "mae": 1.1592205457830558,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.2793578501979329,
+              "mae": 1.1593464730867096,
+              "n_features": 215
+            },
+            "alone": {
+              "r2": 0.08346558114129754,
+              "mae": 1.5341066994056518,
+              "n_features": 5
+            },
+            "delta_r2": -0.00010386728727784789,
+            "delta_mae": 0.00012592730365379445,
+            "alone_r2": 0.08346558114129754
+          }
+        }
+      },
+      "MID": {
+        "n_test": 22443,
+        "n_dropped": 5,
+        "dropped": [
+          "recoveries_prev_1",
+          "recoveries_prev_2",
+          "recoveries_prev_3",
+          "recoveries_prev_4",
+          "recoveries_prev_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3391880065516185,
+              "mae": 1.0051065866245714,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.3392442739101641,
+              "mae": 1.0050435828608866,
+              "n_features": 215
+            },
+            "alone": {
+              "r2": 0.08836947346795432,
+              "mae": 1.4385733645495151,
+              "n_features": 5
+            },
+            "delta_r2": -5.626735854558085e-05,
+            "delta_mae": -6.30037636848435e-05,
+            "alone_r2": 0.08836947346795432
+          }
+        }
+      },
+      "FWD": {
+        "n_test": 5511,
+        "n_dropped": 5,
+        "dropped": [
+          "recoveries_prev_1",
+          "recoveries_prev_2",
+          "recoveries_prev_3",
+          "recoveries_prev_4",
+          "recoveries_prev_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3319973423184397,
+              "mae": 1.1497485092502877,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.3321603833055269,
+              "mae": 1.1495304621462044,
+              "n_features": 215
+            },
+            "alone": {
+              "r2": 0.07150961544916346,
+              "mae": 1.5693364548724849,
+              "n_features": 5
+            },
+            "delta_r2": -0.00016304098708719295,
+            "delta_mae": -0.00021804710408335204,
+            "alone_r2": 0.07150961544916346
+          }
+        }
+      }
+    },
+    "price_": {
+      "GK": {
+        "n_test": 5527,
+        "n_dropped": 3,
+        "dropped": [
+          "price_change",
+          "price_change_cumulative",
+          "price_trend"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.42354620818595723,
+              "mae": 0.7027882474641005,
+              "n_features": 159
+            },
+            "without": {
+              "r2": 0.4231605450626863,
+              "mae": 0.6998547546391678,
+              "n_features": 156
+            },
+            "alone": {
+              "r2": 0.00872155784231532,
+              "mae": 1.3352470970592274,
+              "n_features": 3
+            },
+            "delta_r2": 0.00038566312327092955,
+            "delta_mae": -0.0029334928249327152,
+            "alone_r2": 0.00872155784231532
+          }
+        }
+      },
+      "DEF": {
+        "n_test": 16567,
+        "n_dropped": 3,
+        "dropped": [
+          "price_change",
+          "price_change_cumulative",
+          "price_trend"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.27925398291065506,
+              "mae": 1.1592205457830558,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.2789823878290677,
+              "mae": 1.1591888909781394,
+              "n_features": 217
+            },
+            "alone": {
+              "r2": 0.003433371466681545,
+              "mae": 1.6959732295779482,
+              "n_features": 3
+            },
+            "delta_r2": 0.00027159508158736134,
+            "delta_mae": -3.165480491640338e-05,
+            "alone_r2": 0.003433371466681545
+          }
+        }
+      },
+      "MID": {
+        "n_test": 22443,
+        "n_dropped": 3,
+        "dropped": [
+          "price_change",
+          "price_change_cumulative",
+          "price_trend"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3391880065516185,
+              "mae": 1.0051065866245714,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.33888994169038755,
+              "mae": 1.0052150547440328,
+              "n_features": 217
+            },
+            "alone": {
+              "r2": -0.007139614537038819,
+              "mae": 1.632161110808927,
+              "n_features": 3
+            },
+            "delta_r2": 0.0002980648612309622,
+            "delta_mae": 0.00010846811946141344,
+            "alone_r2": -0.007139614537038819
+          }
+        }
+      },
+      "FWD": {
+        "n_test": 5511,
+        "n_dropped": 3,
+        "dropped": [
+          "price_change",
+          "price_change_cumulative",
+          "price_trend"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3319973423184397,
+              "mae": 1.1497485092502877,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.33137230650520744,
+              "mae": 1.1497597989581565,
+              "n_features": 217
+            },
+            "alone": {
+              "r2": 0.021871532617951717,
+              "mae": 1.7145358942767868,
+              "n_features": 3
+            },
+            "delta_r2": 0.0006250358132322553,
+            "delta_mae": 1.1289707868789023e-05,
+            "alone_r2": 0.021871532617951717
+          }
+        }
+      }
+    },
+    "total_points_": {
+      "GK": {
+        "n_test": 5527,
+        "n_dropped": 8,
+        "dropped": [
+          "total_points_prev_1",
+          "total_points_prev_2",
+          "total_points_prev_3",
+          "total_points_prev_4",
+          "total_points_prev_5",
+          "total_points_rolling_10",
+          "total_points_rolling_3",
+          "total_points_rolling_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.42354620818595723,
+              "mae": 0.7027882474641005,
+              "n_features": 159
+            },
+            "without": {
+              "r2": 0.42344533266967466,
+              "mae": 0.7018104611342094,
+              "n_features": 151
+            },
+            "alone": {
+              "r2": 0.36779494942897395,
+              "mae": 0.754019786031524,
+              "n_features": 8
+            },
+            "delta_r2": 0.00010087551628257252,
+            "delta_mae": -0.000977786329891095,
+            "alone_r2": 0.36779494942897395
+          }
+        }
+      },
+      "DEF": {
+        "n_test": 16567,
+        "n_dropped": 8,
+        "dropped": [
+          "total_points_prev_1",
+          "total_points_prev_2",
+          "total_points_prev_3",
+          "total_points_prev_4",
+          "total_points_prev_5",
+          "total_points_rolling_10",
+          "total_points_rolling_3",
+          "total_points_rolling_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.27925398291065506,
+              "mae": 1.1592205457830558,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.2786548168245798,
+              "mae": 1.1597320043972545,
+              "n_features": 212
+            },
+            "alone": {
+              "r2": 0.22744131768391174,
+              "mae": 1.2478934731632312,
+              "n_features": 8
+            },
+            "delta_r2": 0.0005991660860752424,
+            "delta_mae": 0.0005114586141987676,
+            "alone_r2": 0.22744131768391174
+          }
+        }
+      },
+      "MID": {
+        "n_test": 22443,
+        "n_dropped": 8,
+        "dropped": [
+          "total_points_prev_1",
+          "total_points_prev_2",
+          "total_points_prev_3",
+          "total_points_prev_4",
+          "total_points_prev_5",
+          "total_points_rolling_10",
+          "total_points_rolling_3",
+          "total_points_rolling_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3391880065516185,
+              "mae": 1.0051065866245714,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.3388556036556807,
+              "mae": 1.0057088701980414,
+              "n_features": 212
+            },
+            "alone": {
+              "r2": 0.29058141306052576,
+              "mae": 1.0961855222942372,
+              "n_features": 8
+            },
+            "delta_r2": 0.00033240289593783334,
+            "delta_mae": 0.0006022835734700305,
+            "alone_r2": 0.29058141306052576
+          }
+        }
+      },
+      "FWD": {
+        "n_test": 5511,
+        "n_dropped": 8,
+        "dropped": [
+          "total_points_prev_1",
+          "total_points_prev_2",
+          "total_points_prev_3",
+          "total_points_prev_4",
+          "total_points_prev_5",
+          "total_points_rolling_10",
+          "total_points_rolling_3",
+          "total_points_rolling_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3319973423184397,
+              "mae": 1.1497485092502877,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.3318251549715445,
+              "mae": 1.1503465430091753,
+              "n_features": 212
+            },
+            "alone": {
+              "r2": 0.2913239237526307,
+              "mae": 1.2331411663294818,
+              "n_features": 8
+            },
+            "delta_r2": 0.00017218734689516957,
+            "delta_mae": 0.0005980337588875617,
+            "alone_r2": 0.2913239237526307
+          }
+        }
+      }
+    },
+    "minutes": {
+      "GK": {
+        "n_test": 5527,
+        "n_dropped": 8,
+        "dropped": [
+          "minutes_prev_1",
+          "minutes_prev_2",
+          "minutes_prev_3",
+          "minutes_prev_4",
+          "minutes_prev_5",
+          "minutes_rolling_10",
+          "minutes_rolling_3",
+          "minutes_rolling_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.42354620818595723,
+              "mae": 0.7027882474641005,
+              "n_features": 159
+            },
+            "without": {
+              "r2": 0.41710229771896623,
+              "mae": 0.7060864596920648,
+              "n_features": 151
+            },
+            "alone": {
+              "r2": 0.42150340816312293,
+              "mae": 0.6880238945962237,
+              "n_features": 8
+            },
+            "delta_r2": 0.0064439104669909986,
+            "delta_mae": 0.0032982122279643367,
+            "alone_r2": 0.42150340816312293
+          }
+        }
+      },
+      "DEF": {
+        "n_test": 16567,
+        "n_dropped": 8,
+        "dropped": [
+          "minutes_prev_1",
+          "minutes_prev_2",
+          "minutes_prev_3",
+          "minutes_prev_4",
+          "minutes_prev_5",
+          "minutes_rolling_10",
+          "minutes_rolling_3",
+          "minutes_rolling_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.27925398291065506,
+              "mae": 1.1592205457830558,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.27831926999517365,
+              "mae": 1.1598123789381911,
+              "n_features": 212
+            },
+            "alone": {
+              "r2": 0.26017746255472707,
+              "mae": 1.191926883566777,
+              "n_features": 8
+            },
+            "delta_r2": 0.0009347129154814171,
+            "delta_mae": 0.0005918331551353351,
+            "alone_r2": 0.26017746255472707
+          }
+        }
+      },
+      "MID": {
+        "n_test": 22443,
+        "n_dropped": 8,
+        "dropped": [
+          "minutes_prev_1",
+          "minutes_prev_2",
+          "minutes_prev_3",
+          "minutes_prev_4",
+          "minutes_prev_5",
+          "minutes_rolling_10",
+          "minutes_rolling_3",
+          "minutes_rolling_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3391880065516185,
+              "mae": 1.0051065866245714,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.33793445557239177,
+              "mae": 1.0089084596929008,
+              "n_features": 212
+            },
+            "alone": {
+              "r2": 0.3011983850464174,
+              "mae": 1.0380531564303628,
+              "n_features": 8
+            },
+            "delta_r2": 0.0012535509792267474,
+            "delta_mae": 0.0038018730683293533,
+            "alone_r2": 0.3011983850464174
+          }
+        }
+      },
+      "FWD": {
+        "n_test": 5511,
+        "n_dropped": 8,
+        "dropped": [
+          "minutes_prev_1",
+          "minutes_prev_2",
+          "minutes_prev_3",
+          "minutes_prev_4",
+          "minutes_prev_5",
+          "minutes_rolling_10",
+          "minutes_rolling_3",
+          "minutes_rolling_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3319973423184397,
+              "mae": 1.1497485092502877,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.3263060761942338,
+              "mae": 1.1561378848662247,
+              "n_features": 212
+            },
+            "alone": {
+              "r2": 0.32069641884008626,
+              "mae": 1.1685045709423263,
+              "n_features": 8
+            },
+            "delta_r2": 0.005691266124205896,
+            "delta_mae": 0.0063893756159369985,
+            "alone_r2": 0.32069641884008626
+          }
+        }
+      }
+    },
+    "bps": {
+      "GK": {
+        "n_test": 5527,
+        "n_dropped": 8,
+        "dropped": [
+          "bps_prev_1",
+          "bps_prev_2",
+          "bps_prev_3",
+          "bps_prev_4",
+          "bps_prev_5",
+          "bps_rolling_10",
+          "bps_rolling_3",
+          "bps_rolling_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.42354620818595723,
+              "mae": 0.7027882474641005,
+              "n_features": 159
+            },
+            "without": {
+              "r2": 0.4200592464576257,
+              "mae": 0.7200873274670787,
+              "n_features": 151
+            },
+            "alone": {
+              "r2": 0.35175098368615876,
+              "mae": 0.6700664406361575,
+              "n_features": 8
+            },
+            "delta_r2": 0.003486961728331517,
+            "delta_mae": 0.017299080002978195,
+            "alone_r2": 0.35175098368615876
+          }
+        }
+      },
+      "DEF": {
+        "n_test": 16567,
+        "n_dropped": 8,
+        "dropped": [
+          "bps_prev_1",
+          "bps_prev_2",
+          "bps_prev_3",
+          "bps_prev_4",
+          "bps_prev_5",
+          "bps_rolling_10",
+          "bps_rolling_3",
+          "bps_rolling_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.27925398291065506,
+              "mae": 1.1592205457830558,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.2800151245534097,
+              "mae": 1.179456649744429,
+              "n_features": 212
+            },
+            "alone": {
+              "r2": 0.2126894938394177,
+              "mae": 1.1625627861738,
+              "n_features": 8
+            },
+            "delta_r2": -0.000761141642754648,
+            "delta_mae": 0.02023610396137321,
+            "alone_r2": 0.2126894938394177
+          }
+        }
+      },
+      "MID": {
+        "n_test": 22443,
+        "n_dropped": 8,
+        "dropped": [
+          "bps_prev_1",
+          "bps_prev_2",
+          "bps_prev_3",
+          "bps_prev_4",
+          "bps_prev_5",
+          "bps_rolling_10",
+          "bps_rolling_3",
+          "bps_rolling_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3391880065516185,
+              "mae": 1.0051065866245714,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.33949767014930865,
+              "mae": 1.006325685225543,
+              "n_features": 212
+            },
+            "alone": {
+              "r2": 0.2876370047668505,
+              "mae": 1.1233749231298644,
+              "n_features": 8
+            },
+            "delta_r2": -0.0003096635976901352,
+            "delta_mae": 0.0012190986009716909,
+            "alone_r2": 0.2876370047668505
+          }
+        }
+      },
+      "FWD": {
+        "n_test": 5511,
+        "n_dropped": 8,
+        "dropped": [
+          "bps_prev_1",
+          "bps_prev_2",
+          "bps_prev_3",
+          "bps_prev_4",
+          "bps_prev_5",
+          "bps_rolling_10",
+          "bps_rolling_3",
+          "bps_rolling_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3319973423184397,
+              "mae": 1.1497485092502877,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.33199965819054766,
+              "mae": 1.1492226602225442,
+              "n_features": 212
+            },
+            "alone": {
+              "r2": 0.26299902613693005,
+              "mae": 1.3406782169965537,
+              "n_features": 8
+            },
+            "delta_r2": -2.315872107971906e-06,
+            "delta_mae": -0.0005258490277435524,
+            "alone_r2": 0.26299902613693005
+          }
+        }
+      }
+    },
+    "ict_index": {
+      "DEF": {
+        "n_test": 16567,
+        "n_dropped": 8,
+        "dropped": [
+          "ict_index_prev_1",
+          "ict_index_prev_2",
+          "ict_index_prev_3",
+          "ict_index_prev_4",
+          "ict_index_prev_5",
+          "ict_index_rolling_10",
+          "ict_index_rolling_3",
+          "ict_index_rolling_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.27925398291065506,
+              "mae": 1.1592205457830558,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.27931151275232546,
+              "mae": 1.158981247299126,
+              "n_features": 212
+            },
+            "alone": {
+              "r2": 0.22966028358646795,
+              "mae": 1.2732711860411094,
+              "n_features": 8
+            },
+            "delta_r2": -5.752984167040065e-05,
+            "delta_mae": -0.000239298483929673,
+            "alone_r2": 0.22966028358646795
+          }
+        }
+      },
+      "MID": {
+        "n_test": 22443,
+        "n_dropped": 8,
+        "dropped": [
+          "ict_index_prev_1",
+          "ict_index_prev_2",
+          "ict_index_prev_3",
+          "ict_index_prev_4",
+          "ict_index_prev_5",
+          "ict_index_rolling_10",
+          "ict_index_rolling_3",
+          "ict_index_rolling_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3391880065516185,
+              "mae": 1.0051065866245714,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.33917127815440196,
+              "mae": 1.0052527545559062,
+              "n_features": 212
+            },
+            "alone": {
+              "r2": 0.29564255303809484,
+              "mae": 1.107562014229554,
+              "n_features": 8
+            },
+            "delta_r2": 1.6728397216558832e-05,
+            "delta_mae": 0.00014616793133481742,
+            "alone_r2": 0.29564255303809484
+          }
+        }
+      },
+      "FWD": {
+        "n_test": 5511,
+        "n_dropped": 8,
+        "dropped": [
+          "ict_index_prev_1",
+          "ict_index_prev_2",
+          "ict_index_prev_3",
+          "ict_index_prev_4",
+          "ict_index_prev_5",
+          "ict_index_rolling_10",
+          "ict_index_rolling_3",
+          "ict_index_rolling_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3319973423184397,
+              "mae": 1.1497485092502877,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.33204002720927206,
+              "mae": 1.1497111504822357,
+              "n_features": 212
+            },
+            "alone": {
+              "r2": 0.27906794592381334,
+              "mae": 1.1953368426659783,
+              "n_features": 8
+            },
+            "delta_r2": -4.268489083236737e-05,
+            "delta_mae": -3.7358768051998226e-05,
+            "alone_r2": 0.27906794592381334
+          }
+        }
+      }
+    },
+    "selected": {
+      "GK": {
+        "n_test": 5527,
+        "n_dropped": 5,
+        "dropped": [
+          "selected_prev_1",
+          "selected_prev_2",
+          "selected_prev_3",
+          "selected_prev_4",
+          "selected_prev_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.42354620818595723,
+              "mae": 0.7027882474641005,
+              "n_features": 159
+            },
+            "without": {
+              "r2": 0.4243470149705777,
+              "mae": 0.701961507855072,
+              "n_features": 154
+            },
+            "alone": {
+              "r2": 0.0363275190789778,
+              "mae": 1.2110434687494593,
+              "n_features": 5
+            },
+            "delta_r2": -0.000800806784620467,
+            "delta_mae": -0.0008267396090284596,
+            "alone_r2": 0.0363275190789778
+          }
+        }
+      },
+      "DEF": {
+        "n_test": 16567,
+        "n_dropped": 5,
+        "dropped": [
+          "selected_prev_1",
+          "selected_prev_2",
+          "selected_prev_3",
+          "selected_prev_4",
+          "selected_prev_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.27925398291065506,
+              "mae": 1.1592205457830558,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.27919813914633884,
+              "mae": 1.1584338300970782,
+              "n_features": 215
+            },
+            "alone": {
+              "r2": 0.05875979573754375,
+              "mae": 1.6248103614622376,
+              "n_features": 5
+            },
+            "delta_r2": 5.584376431622129e-05,
+            "delta_mae": -0.0007867156859775459,
+            "alone_r2": 0.05875979573754375
+          }
+        }
+      },
+      "MID": {
+        "n_test": 22443,
+        "n_dropped": 5,
+        "dropped": [
+          "selected_prev_1",
+          "selected_prev_2",
+          "selected_prev_3",
+          "selected_prev_4",
+          "selected_prev_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3391880065516185,
+              "mae": 1.0051065866245714,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.3386603859831313,
+              "mae": 1.0053963317528523,
+              "n_features": 215
+            },
+            "alone": {
+              "r2": 0.05462892399499386,
+              "mae": 1.5323267083621182,
+              "n_features": 5
+            },
+            "delta_r2": 0.0005276205684872082,
+            "delta_mae": 0.0002897451282808383,
+            "alone_r2": 0.05462892399499386
+          }
+        }
+      },
+      "FWD": {
+        "n_test": 5511,
+        "n_dropped": 5,
+        "dropped": [
+          "selected_prev_1",
+          "selected_prev_2",
+          "selected_prev_3",
+          "selected_prev_4",
+          "selected_prev_5"
+        ],
+        "models": {
+          "Ridge": {
+            "with": {
+              "r2": 0.3319973423184397,
+              "mae": 1.1497485092502877,
+              "n_features": 220
+            },
+            "without": {
+              "r2": 0.33387820740871,
+              "mae": 1.1483106364264477,
+              "n_features": 215
+            },
+            "alone": {
+              "r2": 0.07664264919811459,
+              "mae": 1.6340927862538486,
+              "n_features": 5
+            },
+            "delta_r2": -0.0018808650902703006,
+            "delta_mae": -0.001437872823840003,
+            "alone_r2": 0.07664264919811459
+          }
+        }
+      }
+    }
+  }
+}

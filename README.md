@@ -104,6 +104,36 @@ carries FPL's own defensive columns, which the FBref join must not overwrite.
 moved test R² by less than 0.005 while the chosen values stayed pinned to the
 grid edges. The ceiling here is the features, not the search.
 
+**Most of the 220 features are redundant.** `scripts/ablate.py` measures each
+family two ways — what it adds on top of everything else, and what it scores
+alone:
+
+| family | features | marginal R² | alone R² |
+|---|---|---|---|
+| `minutes*` | 8 | +0.0036 | **0.326** |
+| `avail_*` | 16 | +0.0033 | 0.321 |
+| `total_points_*` | 8 | +0.0003 | 0.294 |
+| `bps*` | 8 | +0.0006 | 0.279 |
+| `ict_index*` | 8 | −0.0000 | 0.268 |
+| `tackles*` | 5 | −0.0001 | 0.097 |
+| `recoveries*` | 5 | −0.0001 | 0.081 |
+| `opponent_*` | 17 | +0.0012 | −0.009 |
+
+Minutes history alone reaches 0.326 against the full model's 0.339. Keeping
+only `minutes`, `avail_`, `total_points_` and `bps` — **40 features instead of
+220** — costs 0.003 R² on average and is *better* for forwards:
+
+```
+python scripts/ablate.py --keep-only minutes avail_ total_points_ bps
+```
+
+Two consequences worth taking seriously. The 17 opponent-strength and
+fixture-difficulty features score *below* the mean on their own and add
++0.001 in company. And the FBref defensive merge — a 757-line fuzzy name
+matcher plus a scrape of roughly 380 requests per season — produces features
+worth −0.0001 marginally. This is fundamentally a model of whether a player
+will be on the pitch.
+
 **2026-27 contributes nothing yet.** Only GW1 exists upstream, and rolling
 features need five matches, so every row is dropped. It will start counting
 around GW6. `build_dataset.py` picks up new season folders automatically, so
