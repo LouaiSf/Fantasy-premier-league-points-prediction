@@ -1,6 +1,6 @@
 """Train the position models with the fixed pipeline, and save them.
 
-Runs final.ipynb's preprocessing and training cells (103..150) plus its
+Runs the preprocessing and training stages of fpl_pipeline.ipynb plus its
 model-saving cell. Everything the fixes changed applies here by construction:
 
   * the direct models train on the featured frame, not the raw one, and
@@ -33,7 +33,7 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from nbrun import run_range  # noqa: E402
 
-NOTEBOOK = 'final.ipynb'
+NOTEBOOK = 'fpl_pipeline.ipynb'
 IN_FILE = 'all_seasons_data_featured.csv'
 METRICS_OUT = 'model_metrics.json'
 

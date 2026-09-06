@@ -47,7 +47,7 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from nbrun import run_range  # noqa: E402
 
-NOTEBOOK = 'final.ipynb'
+NOTEBOOK = 'fpl_pipeline.ipynb'
 HISTORY = 'all_seasons_data_final.csv'
 MODEL_DIR = os.path.join('saved_models', 'direct')
 POSITIONS = ('GK', 'DEF', 'MID', 'FWD')
@@ -327,7 +327,7 @@ def build_placeholder_rows(season: str, gameweek: int, pairs, bootstrap,
 # ---------------------------------------------------------------------------
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     """Run the notebook's own feature cells over history + placeholder rows."""
-    print("\nbuilding features (final.ipynb cells 84..102)")
+    print("\nbuilding features (fpl_pipeline.ipynb cells 84..102)")
     ns = run_range(
         NOTEBOOK,
         first="# Create my_team_score and opponent_team_score columns based on was_home",

@@ -25,7 +25,7 @@ def code_cells(path):
     return [''.join(c['source']) for c in nb['cells'] if c['cell_type'] == 'code']
 
 
-cells = code_cells('final.ipynb')
+cells = code_cells('fpl_pipeline.ipynb')
 
 
 def cell_with(needle, source=None):
@@ -36,7 +36,7 @@ def cell_with(needle, source=None):
 
 
 print("=" * 70)
-print("final.ipynb")
+print("fpl_pipeline.ipynb")
 print("=" * 70)
 
 

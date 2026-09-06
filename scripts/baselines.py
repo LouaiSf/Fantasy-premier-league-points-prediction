@@ -67,7 +67,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from nbrun import run_range  # noqa: E402
 
-NOTEBOOK = 'final.ipynb'
+NOTEBOOK = 'fpl_pipeline.ipynb'
 POSITIONS = ('GK', 'DEF', 'MID', 'FWD')
 OUT_FILE = 'baseline_metrics.json'
 
