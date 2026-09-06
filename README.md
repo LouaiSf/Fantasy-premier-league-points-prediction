@@ -29,6 +29,31 @@ R² at every position, worse than predicting the overall mean.
 
 Run `python scripts/baselines.py` to reproduce the comparison.
 
+### Does it pick better teams?
+
+R2 measures the wrong thing for FPL: it rewards being close on the 60% of
+players who score two points, while selection only rewards being right at the
+top of the ranking. `scripts/validate_selection.py` solves the same integer
+program once per gameweek under three objectives, with identical budget,
+formation and max-three-per-club constraints, and adds up what those elevens
+actually scored.
+
+All 34 gameweeks of 2025-26, 83m budget:
+
+| strategy | total | per GW | vs. `rolling_5` |
+|---|---|---|---|
+| model predictions | 1614 | 47.5 | **+196** |
+| `rolling_5` average | 1418 | 41.7 | — |
+| perfect foresight | 4621 | 135.9 | +3203 |
+
+The model beat `rolling_5` in **22 of 34 gameweeks**, mean +5.76 per gameweek,
+paired t = 2.61. So the better R2 does translate into better teams.
+
+It captures 6.1% of the distance between the heuristic and perfect foresight —
+better than the obvious alternative, nowhere near the ceiling. Note this picks
+a fresh XI each week with no transfer limit and no captain, so it measures
+ranking quality rather than achievable FPL performance.
+
 ## Quick start
 
 ```bash
@@ -39,6 +64,8 @@ python scripts/rebuild_merged_gw.py     # audit merged_gw.csv against its parts
 python scripts/build_dataset.py --write # -> all_seasons_data_final.csv
 python scripts/build_features.py        # -> all_seasons_data_featured.csv
 python scripts/train.py                 # -> saved_models/, model_metrics.json
+python scripts/predict_gameweek.py      # -> predictions_next_gw.csv
+python scripts/validate_selection.py    # does it pick better teams than a heuristic?
 python scripts/train.py --features full # all 220 features instead of 54
 python scripts/ablate.py --prefix avail_ opponent_   # what a group is worth
 ```
@@ -82,6 +109,8 @@ stays the single source of truth and the scripts cannot drift from it.
 | `train.py` | train, evaluate, save models, report feature importance |
 | `baselines.py` | score heuristics on the identical test rows |
 | `ablate.py` | measure what one feature group is worth, holding all else fixed |
+| `predict_gameweek.py` | rank every player for the upcoming gameweek |
+| `validate_selection.py` | score the XI the model picks against a rolling-average XI |
 | `summarise_run.py` | render `model_metrics.json` as a table |
 | `test_notebook_fixes.py` | 25 regression tests over the split, guards and features |
 | `make_colab_bundle.py` | package the 122 files Colab needs (24 MB, not 17,000 files) |
