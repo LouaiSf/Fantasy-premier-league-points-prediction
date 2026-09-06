@@ -1,34 +1,46 @@
 {
   "GK": {
-    "best_model": "Ridge",
-    "best_test_r2": 0.42499892474165113,
-    "features_count": 46,
+    "best_model": "LightGBM",
+    "best_test_r2": 0.4290798626343474,
+    "features_count": 159,
     "models_saved": [
-      "Ridge"
+      "Ridge",
+      "ElasticNet",
+      "XGBoost",
+      "LightGBM"
     ]
   },
   "DEF": {
-    "best_model": "Ridge",
-    "best_test_r2": 0.27485857159508476,
-    "features_count": 54,
+    "best_model": "LightGBM",
+    "best_test_r2": 0.2842934625120216,
+    "features_count": 220,
     "models_saved": [
-      "Ridge"
+      "Ridge",
+      "ElasticNet",
+      "XGBoost",
+      "LightGBM"
     ]
   },
   "MID": {
-    "best_model": "Ridge",
-    "best_test_r2": 0.3345543619747702,
-    "features_count": 54,
+    "best_model": "LightGBM",
+    "best_test_r2": 0.33889565549333633,
+    "features_count": 220,
     "models_saved": [
-      "Ridge"
+      "Ridge",
+      "ElasticNet",
+      "XGBoost",
+      "LightGBM"
     ]
   },
   "FWD": {
-    "best_model": "Ridge",
-    "best_test_r2": 0.3380562375834296,
-    "features_count": 54,
+    "best_model": "ElasticNet",
+    "best_test_r2": 0.33703716078765367,
+    "features_count": 220,
     "models_saved": [
-      "Ridge"
+      "Ridge",
+      "ElasticNet",
+      "XGBoost",
+      "LightGBM"
     ]
   }
 }
