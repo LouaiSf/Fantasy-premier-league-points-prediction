@@ -220,6 +220,7 @@ def build_placeholder_rows(season: str, gameweek: int, pairs, bootstrap,
             'value': p['now_cost'],
             'status': p.get('status', 'a'),
             'chance': p.get('chance_of_playing_next_round'),
+            'selected_by': p.get('selected_by_percent'),
         } for p in bootstrap['elements']])
     else:
         raw = read_csv_tolerant(os.path.join('data', season, 'players_raw.csv'))
@@ -232,6 +233,7 @@ def build_placeholder_rows(season: str, gameweek: int, pairs, bootstrap,
             'value': raw['now_cost'],
             'status': raw.get('status', 'a'),
             'chance': raw.get('chance_of_playing_next_round'),
+            'selected_by': raw.get('selected_by_percent'),
         })
 
     opponent, at_home, kickoff = {}, {}, {}
@@ -523,7 +525,7 @@ def main() -> int:
 
     cols = ['name', 'team', 'position', 'opponent_team', 'was_home', 'value_m',
             'predicted_points', 'points_per_million', 'has_prior_history',
-            'status', 'model']
+            'selected_by', 'status', 'model']
     cols = [c for c in cols if c in predictions.columns]
     predictions[cols].to_csv(args.out, index=False)
 

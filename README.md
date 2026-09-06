@@ -65,6 +65,10 @@ python scripts/build_dataset.py --write # -> all_seasons_data_final.csv
 python scripts/build_features.py        # -> all_seasons_data_featured.csv
 python scripts/train.py                 # -> saved_models/, model_metrics.json
 python scripts/predict_gameweek.py      # -> predictions_next_gw.csv
+python scripts/optimise.py squad --budget 100        # best legal 15 + XI + captain
+python scripts/optimise.py transfers --squad example_squad.txt --free 1
+python scripts/optimise.py chips --squad example_squad.txt --horizon 8
+python scripts/optimise.py watchlist --max-ownership 5
 python scripts/validate_selection.py    # does it pick better teams than a heuristic?
 python scripts/train.py --features full # all 220 features instead of 54
 python scripts/ablate.py --prefix avail_ opponent_   # what a group is worth
@@ -74,6 +78,45 @@ Training needs `xgboost` and `lightgbm` and takes about an hour on a laptop
 CPU. **`FPL_Colab.ipynb` runs the whole thing on Colab free tier** — upload
 `fpl_colab.zip` (built by `scripts/make_colab_bundle.py`) to Drive, upload the
 notebook to Colab, Run all. No GPU required; none of these models use one.
+
+## Making decisions
+
+`optimise.py` turns predicted points into the choices a manager actually
+faces. Each answer is a single integer program, so it is optimal under the
+stated constraints rather than a greedy pick.
+
+**`squad`** picks the best legal 15 under a budget, and decides the XI, bench
+order and captain *in the same program* — a cheap bench is only worth having
+for what it frees up in the XI, so choosing the 15 and the 11 separately gives
+a worse answer. Constraints are the real ones: 2/5/5/3, £100m, max 3 per club,
+a legal formation. `--lock` and `--ban` force players in or out.
+
+**`transfers`** takes the 15 you already own and reports the best move at
+every transfer count, net of the −4 hits:
+
+```
+moves     gross   hit     net    vs 0
+0         56.66     0   56.66   +0.00
+1         57.13     0   57.13   +0.48
+2         57.13     4   53.13   -3.52
+```
+
+Showing every count matters: a second transfer nearly always buys raw points
+and nearly never survives the hit. It also says when a gain is inside the
+model's error (~1.0 MAE per player) and the transfer is worth rolling.
+
+**`chips`** ranks gameweeks for Triple Captain, Bench Boost, Free Hit and
+Wildcard over a horizon, using fixture counts, FDR, and how much of *your*
+squad plays. It is explicit that the model's per-player number does not vary
+by gameweek — opponent features were measured and dropped — so the
+gameweek-to-gameweek signal is fixtures, not the model. When no double or
+blank gameweek is scheduled it says so rather than inventing a recommendation.
+
+**`watchlist`** surfaces value picks, differentials by ownership, players
+priced above what they return, and anyone whose number comes from no prior
+data at all.
+
+Copy `example_squad.txt` and edit it to your own 15.
 
 ## How it fits together
 
@@ -111,6 +154,7 @@ stays the single source of truth and the scripts cannot drift from it.
 | `ablate.py` | measure what one feature group is worth, holding all else fixed |
 | `predict_gameweek.py` | rank every player for the upcoming gameweek |
 | `validate_selection.py` | score the XI the model picks against a rolling-average XI |
+| `optimise.py` | squad, transfers, chip timing and watchlist |
 | `summarise_run.py` | render `model_metrics.json` as a table |
 | `test_notebook_fixes.py` | 25 regression tests over the split, guards and features |
 | `make_colab_bundle.py` | package the 122 files Colab needs (24 MB, not 17,000 files) |
