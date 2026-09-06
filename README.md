@@ -148,8 +148,8 @@ data/<season>/gws/merged_gw.csv          raw, from vaastav/Fantasy-Premier-Leagu
 all_seasons_data_final.csv               254,179 rows x 47 cols
         |
         |  build_features.py    lags 1-5, rolling 3/5/10, price momentum,
-        v                       availability, expected goals, fixture edge
-all_seasons_data_featured.csv            254,179 rows x 365 cols
+        v                       availability, expected goals, fixture difficulty
+all_seasons_data_featured.csv            254,179 rows x 339 cols
         |
         |  train.py             per-position models, season-holdout split,
         v                       TimeSeriesSplit hyperparameter search
