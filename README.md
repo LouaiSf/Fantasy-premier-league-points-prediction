@@ -11,14 +11,15 @@ Training stops at 2022-23; 2023-24 is the validation season.
 
 | position | best model | features | test R² | test MAE | vs. `rolling_5` |
 |---|---|---|---|---|---|
-| GK  | LightGBM | 66 | 0.456 | 0.637 | **+0.138** |
-| DEF | LightGBM | 74 | 0.303 | 1.127 | **+0.152** |
-| MID | LightGBM | 74 | 0.348 | 0.972 | **+0.125** |
-| FWD | XGBoost  | 74 | 0.353 | 1.064 | **+0.122** |
+| GK  | LightGBM | 66 | 0.459 | 0.632 | **+0.138** |
+| DEF | LightGBM | 74 | 0.303 | 1.128 | **+0.152** |
+| MID | LightGBM | 74 | 0.348 | 0.970 | **+0.126** |
+| FWD | LightGBM | 74 | 0.348 | 1.067 | **+0.121** |
 
-74 features, not 220, and better than 220 at every position — the rebuilt
-fixture features are worth +0.009 to +0.027 R² over the old set while using a
-third of the columns.
+74 features, not 220, and better than 220 at every position — the fixture
+features are worth +0.009 to +0.027 R² over the old set while using a third of
+the columns. Run-to-run variation from the boosters is around ±0.005, so treat
+differences smaller than that as noise.
 
 The last column is the one that matters. `rolling_5` — predict a player's mean
 over their last five matches — is the heuristic the whole model has to justify
@@ -38,21 +39,26 @@ program once per gameweek under three objectives, with identical budget,
 formation and max-three-per-club constraints, and adds up what those elevens
 actually scored.
 
-All 34 gameweeks of 2025-26, 83m budget:
+All 33 gameweeks of 2025-26, 83m budget:
 
 | strategy | total | per GW | vs. `rolling_5` |
 |---|---|---|---|
-| model predictions | 1614 | 47.5 | **+196** |
-| `rolling_5` average | 1418 | 41.7 | — |
-| perfect foresight | 4621 | 135.9 | +3203 |
+| model predictions | 1856 | 56.2 | **+481** |
+| `rolling_5` average | 1375 | 41.7 | — |
+| perfect foresight | 4499 | 136.3 | +3124 |
 
-The model beat `rolling_5` in **22 of 34 gameweeks**, mean +5.76 per gameweek,
-paired t = 2.61. So the better R2 does translate into better teams.
+The model beat `rolling_5` in **29 of 33 gameweeks (88%)**, mean +14.58 per
+gameweek, paired t = 5.64. So the better R² does translate into better teams —
+and by considerably more than the R² gap alone suggests.
 
-It captures 6.1% of the distance between the heuristic and perfect foresight —
-better than the obvious alternative, nowhere near the ceiling. Note this picks
-a fresh XI each week with no transfer limit and no captain, so it measures
-ranking quality rather than achievable FPL performance.
+It captures **15.4%** of the distance between the heuristic and perfect
+foresight, up from 6.1% before the fixture features replaced the old opponent
+family. The R² gain from that change was +0.01 to +0.03; the selection gain was
++285 points over a season, because ranking the top of the distribution
+correctly matters far more here than average closeness does.
+
+Note this picks a fresh XI each week with no transfer limit and no captain, so
+it measures ranking quality rather than achievable FPL performance.
 
 ## The web UI
 
