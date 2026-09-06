@@ -162,13 +162,115 @@ def api_meta():
     })
 
 
+# Fields worth showing next to a prediction. Everything here comes from
+# players_raw.csv, which is FPL's own bootstrap payload as scraped.
+PROFILE_NUMERIC = [
+    'form', 'points_per_game', 'total_points', 'minutes', 'starts',
+    'goals_scored', 'assists', 'clean_sheets', 'bonus', 'bps', 'ict_index',
+    'expected_goals', 'expected_assists', 'expected_goal_involvements',
+    'expected_goals_per_90', 'expected_assists_per_90', 'starts_per_90',
+    'saves', 'goals_conceded', 'yellow_cards', 'red_cards',
+    'chance_of_playing_next_round', 'transfers_in_event', 'transfers_out_event',
+]
+PROFILE_TEXT = ['news', 'birth_date', 'team_join_date', 'squad_number', 'photo']
+
+# England, Scotland and Wales are ISO subdivisions, not countries, so their
+# flags are the tag sequences rather than regional-indicator pairs.
+SUBDIVISION_FLAGS = {
+    'EN': '\U0001F3F4\U000E0067\U000E0062\U000E0065\U000E006E\U000E0067\U000E007F',
+    'SC': '\U0001F3F4\U000E0067\U000E0062\U000E0073\U000E0063\U000E0074\U000E007F',
+    'WA': '\U0001F3F4\U000E0067\U000E0062\U000E0077\U000E006C\U000E0073\U000E007F',
+}
+
+
+def flag_for(iso: str | None) -> str:
+    """ISO 3166-1 alpha-2 to a flag emoji."""
+    if not iso or len(iso) != 2 or not iso.isalpha():
+        return ''
+    iso = iso.upper()
+    if iso in SUBDIVISION_FLAGS:
+        return SUBDIVISION_FLAGS[iso]
+    return chr(0x1F1E6 + ord(iso[0]) - 65) + chr(0x1F1E6 + ord(iso[1]) - 65)
+
+
+def load_regions() -> dict:
+    import json
+    path = os.path.join('data', 'fpl_regions.json')
+    if not os.path.exists(path):
+        return {}
+    return json.load(open(path, encoding='utf-8'))
+
+
+def enriched_players() -> list:
+    """Predictions joined to FPL's own player metadata.
+
+    Joins on `element`, the FPL player id, rather than on the display name.
+    Names are not unique or stable across the season -- two players can share a
+    web_name and FPL renames them when that happens -- and a mis-joined row
+    would attach the wrong photo and the wrong stats to a prediction.
+    """
+    s = state()
+    base = opt.squad_records(s['everyone'])
+
+    raw_path = os.path.join('data', s['season'], 'players_raw.csv')
+    if not os.path.exists(raw_path):
+        return base
+
+    raw = opt.read_csv_tolerant(raw_path) if hasattr(opt, 'read_csv_tolerant') \
+        else pd.read_csv(raw_path, low_memory=False)
+    regions = load_regions()
+
+    keep = ['id'] + [c for c in PROFILE_NUMERIC + PROFILE_TEXT if c in raw.columns]
+    if 'region' in raw.columns:
+        keep.append('region')
+    if 'code' in raw.columns:
+        keep.append('code')
+    profile = raw[keep].set_index('id')
+
+    has_element = bool(base) and 'element' in base[0]
+    if not has_element:
+        # Predictions written before element was carried through. Fall back to
+        # the name join and say so rather than silently showing no stats.
+        by_name = {}
+        if {'first_name', 'second_name'} <= set(raw.columns):
+            full = (raw['first_name'].astype(str) + ' ' + raw['second_name'].astype(str))
+            by_name = dict(zip(full, raw['id']))
+
+    out = []
+    for record in base:
+        pid = record.get('element')
+        if pid is None and not has_element:
+            pid = by_name.get(record.get('name'))
+        row = profile.loc[pid].to_dict() if pid in profile.index else {}
+
+        for key in PROFILE_NUMERIC:
+            value = row.get(key)
+            record[key] = None if value is None or pd.isna(value) else float(value)
+        for key in ('news', 'birth_date', 'team_join_date'):
+            value = row.get(key)
+            record[key] = None if value is None or (isinstance(value, float) and pd.isna(value)) else str(value)
+
+        code = row.get('code')
+        record['photo'] = (
+            f'https://resources.premierleague.com/premierleague/photos/players/110x140/p{int(code)}.png'
+            if code is not None and not pd.isna(code) else None
+        )
+
+        region = row.get('region')
+        meta = regions.get(str(int(region))) if region is not None and not pd.isna(region) else None
+        record['country'] = meta['name'] if meta else None
+        record['flag'] = flag_for(meta.get('iso') if meta else None)
+        out.append(record)
+    return out
+
+
 @app.route('/api/players')
 def api_players():
     """Everyone, for the pickers. Includes the unavailable, flagged as such."""
     s = state()
     if s.get('error'):
         return fail(s['error'])
-    return jsonify({'ok': True, 'players': opt.squad_records(s['everyone'])})
+    return jsonify({'ok': True, 'players': enriched_players()})
 
 
 @app.route('/api/squad', methods=['POST'])

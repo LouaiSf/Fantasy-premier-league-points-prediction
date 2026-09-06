@@ -124,6 +124,27 @@ def load_models() -> dict:
 # ---------------------------------------------------------------------------
 # What is being predicted
 # ---------------------------------------------------------------------------
+def infer_gameweek_locally(season: str) -> int | None:
+    """First gameweek with no result recorded, from the local fixture list."""
+    path = os.path.join('data', season, 'fixtures.csv')
+    if not os.path.exists(path):
+        return None
+    fixtures = read_csv_tolerant(path)
+    event_col = 'event' if 'event' in fixtures.columns else 'GW'
+    if event_col not in fixtures.columns:
+        return None
+
+    if 'finished' in fixtures.columns:
+        unplayed = fixtures[~fixtures['finished'].astype(bool)]
+    elif 'team_h_score' in fixtures.columns:
+        unplayed = fixtures[fixtures['team_h_score'].isna()]
+    else:
+        unplayed = fixtures
+
+    events = unplayed[event_col].dropna()
+    return int(events.min()) if len(events) else None
+
+
 def target_fixtures(season: str, gameweek: int | None, use_api: bool) -> tuple:
     """Fixtures for the gameweek to predict, as (gw, [(home_id, away_id), ...])."""
     bootstrap = None
@@ -139,7 +160,16 @@ def target_fixtures(season: str, gameweek: int | None, use_api: bool) -> tuple:
         print(f"  next unfinished gameweek per the API: GW{gameweek}")
 
     if gameweek is None:
-        raise SystemExit("could not determine the gameweek; pass --gameweek")
+        # No API, so work it out from the local fixture list: the first
+        # gameweek whose fixtures have no result yet. Giving up here meant an
+        # offline run failed outright even though everything it needed was on
+        # disk.
+        gameweek = infer_gameweek_locally(season)
+        if gameweek is None:
+            raise SystemExit(
+                "could not determine the gameweek from the API or from "
+                f"data/{season}/fixtures.csv; pass --gameweek")
+        print(f"  inferred from local fixtures: GW{gameweek}")
 
     fixtures = None
     if use_api:
@@ -523,7 +553,10 @@ def main() -> int:
 
     predictions = predictions.sort_values('predicted_points', ascending=False)
 
-    cols = ['name', 'team', 'position', 'opponent_team', 'was_home', 'value_m',
+    # element is the FPL player id. Carrying it lets anything downstream join
+    # back to players_raw.csv on an id rather than on a name, which is the only
+    # reliable way to pick up photos, nationality and the rest of the metadata.
+    cols = ['element', 'name', 'team', 'position', 'opponent_team', 'was_home', 'value_m',
             'predicted_points', 'points_per_million', 'has_prior_history',
             'selected_by', 'status', 'model']
     cols = [c for c in cols if c in predictions.columns]
