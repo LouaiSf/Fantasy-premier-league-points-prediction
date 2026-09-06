@@ -32,7 +32,7 @@ import zipfile
 
 # Everything the notebook and the pipeline scripts are made of.
 CODE = [
-    'final.ipynb',
+    'fpl_pipeline.ipynb',
     'FPL_Colab.ipynb',
     'requirements.txt',
     'README.md',
@@ -44,7 +44,7 @@ DATASET = ['all_seasons_data_final.csv']
 
 
 def raw_inputs() -> list[str]:
-    """Files the dataset rebuild (final.ipynb cells 3-34 + 40) reads."""
+    """Files the dataset rebuild (fpl_pipeline.ipynb cells 3-34 + 40) reads."""
     paths = ['data/master_team_list.csv']
     seasons = sorted(d for d in os.listdir('data')
                      if os.path.isdir(os.path.join('data', d)) and d[0].isdigit())

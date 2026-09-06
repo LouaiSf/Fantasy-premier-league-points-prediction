@@ -40,7 +40,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from nbrun import run_range, stub_boosters_if_absent  # noqa: E402
 
 
-NOTEBOOK = 'final.ipynb'
+NOTEBOOK = 'fpl_pipeline.ipynb'
 IN_FILE = 'all_seasons_data_featured.csv'
 POSITIONS = ('GK', 'DEF', 'MID', 'FWD')
 

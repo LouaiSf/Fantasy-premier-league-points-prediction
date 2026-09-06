@@ -9,20 +9,20 @@ models, evaluated on seasons the models never saw.
 Test fold is **2024-25 and 2025-26**, 50,048 player-matches, held out entirely.
 Training stops at 2022-23; 2023-24 is the validation season.
 
-| position | best model | test R² | test MAE | vs. `rolling_5` |
-|---|---|---|---|---|
-| GK  | LightGBM   | 0.429 | 0.655 | **+0.110** |
-| DEF | LightGBM   | 0.284 | 1.137 | **+0.136** |
-| MID | LightGBM   | 0.339 | 1.031 | **+0.118** |
-| FWD | ElasticNet | 0.337 | 1.157 | **+0.113** |
+| position | best model | features | test R² | test MAE | vs. `rolling_5` |
+|---|---|---|---|---|---|
+| GK  | LightGBM | 66 | 0.456 | 0.637 | **+0.138** |
+| DEF | LightGBM | 74 | 0.303 | 1.127 | **+0.152** |
+| MID | LightGBM | 74 | 0.348 | 0.972 | **+0.125** |
+| FWD | XGBoost  | 74 | 0.353 | 1.064 | **+0.122** |
 
-Those are from the full 220-feature set. The default is now the 54-feature
-compact set, which costs 0.0004 R2 on average and improves MAE everywhere --
-see "Most of the features are redundant" below.
+74 features, not 220, and better than 220 at every position — the rebuilt
+fixture features are worth +0.009 to +0.027 R² over the old set while using a
+third of the columns.
 
 The last column is the one that matters. `rolling_5` — predict a player's mean
 over their last five matches — is the heuristic the whole model has to justify
-itself against. **+0.11 to +0.14 R² over it**, on 50,000 held-out rows.
+itself against. **+0.12 to +0.15 R² over it**, on 50,000 held-out rows.
 
 For scale: predicting from a single previous match (`prev_1`) scores *negative*
 R² at every position, worse than predicting the overall mean.
@@ -145,20 +145,22 @@ data/<season>/gws/merged_gw.csv          raw, from vaastav/Fantasy-Premier-Leagu
         |  build_dataset.py     merge 11 seasons, harmonise columns, map teams,
         |                       assign game_number, carry over FBref defensive
         v                       stats, re-apply the scoring rules
-all_seasons_data_final.csv               254,188 rows x 42 cols
+all_seasons_data_final.csv               254,179 rows x 47 cols
         |
-        |  build_features.py    lags 1-5, rolling 3/5/10, opponent strength,
-        v                       price momentum, availability
-all_seasons_data_featured.csv            254,188 rows x 289 cols
+        |  build_features.py    lags 1-5, rolling 3/5/10, price momentum,
+        v                       availability, expected goals, fixture edge
+all_seasons_data_featured.csv            254,179 rows x 365 cols
         |
         |  train.py             per-position models, season-holdout split,
         v                       TimeSeriesSplit hyperparameter search
 saved_models/ + model_metrics.json + baseline_metrics.json
 ```
 
-The heavy lifting still lives in `final.ipynb`. The scripts execute ranges of
-its cells rather than reimplementing them (`scripts/nbrun.py`), so the notebook
-stays the single source of truth and the scripts cannot drift from it.
+The whole pipeline lives in **`fpl_pipeline.ipynb`**, in the order it runs:
+load and merge, match index, features, split and train, two-stage models, save.
+The scripts execute ranges of its cells rather than reimplementing them
+(`scripts/nbrun.py`), so the notebook stays the single definition and the
+scripts cannot drift from it.
 
 ## Scripts
 
@@ -262,12 +264,18 @@ that needs a fetch and no code change.
 ## Layout
 
 ```
-final.ipynb              the pipeline: merge, features, models, squad optimiser
-FPL_Colab.ipynb          runs the whole pipeline on Colab
-scripts/                 the pipeline as runnable stages
+fpl_pipeline.ipynb       the pipeline, in the order it runs
+FPL_Colab.ipynb          runs the whole pipeline on Colab free tier
+scripts/                 each stage as a runnable script, plus the tools
+webapp/                  Flask UI over the tools
 data/<season>/           raw season data
 saved_models/direct/     per-position models, scalers, feature lists
 ```
+
+Earlier exploratory notebooks (`advanced_fpl_models`, `prediction_workflow`,
+`using_api`, `add_game_number`, `fetching_defensive_data`) have been removed:
+each was superseded, and each still carried the original bugs. They remain in
+git history if you need them.
 
 `advanced_fpl_models.ipynb`, `prediction_workflow.ipynb`,
 `fetching_defensive_data.ipynb`, `using_api.ipynb` and `add_game_number.ipynb`

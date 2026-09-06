@@ -1,6 +1,6 @@
 """Build all_seasons_data_featured.csv from all_seasons_data_final.csv.
 
-Runs final.ipynb's own feature-engineering cells (lagged previous-game stats,
+Runs fpl_pipeline.ipynb's own feature-engineering cells (lagged previous-game stats,
 opponent strength, rolling player form, context features) rather than
 reimplementing them, so this stays in step with the notebook.
 
@@ -25,7 +25,7 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from nbrun import run_range  # noqa: E402
 
-NOTEBOOK = 'final.ipynb'
+NOTEBOOK = 'fpl_pipeline.ipynb'
 IN_FILE = 'all_seasons_data_final.csv'
 OUT_FILE = 'all_seasons_data_featured.csv'
 
@@ -42,7 +42,7 @@ def main() -> int:
         )
 
     print("=" * 78)
-    print("FEATURE ENGINEERING  (final.ipynb cells 83..101)")
+    print("FEATURE ENGINEERING  (fpl_pipeline.ipynb cells 83..101)")
     print("=" * 78)
     print(f"input:  {IN_FILE} ({os.path.getsize(IN_FILE) / 1e6:.0f} MB)")
 

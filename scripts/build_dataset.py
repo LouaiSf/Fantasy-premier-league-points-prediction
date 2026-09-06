@@ -1,6 +1,6 @@
 """Rebuild all_seasons_data.csv and all_seasons_data_final.csv.
 
-Why this is not just "re-run final.ipynb"
+Why this is not just "re-run fpl_pipeline.ipynb"
 -----------------------------------------
 The notebook builds all_seasons_data_final.csv in two halves:
 
@@ -49,7 +49,7 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from nbrun import run_range  # noqa: E402
 
-NOTEBOOK = 'final.ipynb'
+NOTEBOOK = 'fpl_pipeline.ipynb'
 RAW_OUT = 'all_seasons_data.csv'
 FINAL_OUT = 'all_seasons_data_final.csv'
 
@@ -63,7 +63,7 @@ DEFENSIVE_COLS = ['tackles', 'recoveries', 'clearances_blocks_interceptions']
 JOIN_KEYS = ['season', 'element', 'fixture']
 
 
-# The two functions below are copied verbatim from final.ipynb step 5 so that
+# The two functions below are copied verbatim from fpl_pipeline.ipynb step 5 so that
 # recovered rows are scored by exactly the same rules as every other row.
 def calculate_defensive_contribution_row(row):
     """Calculate defensive contribution based on position"""
@@ -157,10 +157,71 @@ def load_extra_season(season: str, template: pd.DataFrame) -> pd.DataFrame | Non
     return df
 
 
+EXPECTED_COLS = ['expected_goals', 'expected_assists',
+                 'expected_goal_involvements', 'expected_goals_conceded']
+
+
+def add_expected_stats(df: pd.DataFrame) -> pd.DataFrame:
+    """Carry FPL's xG/xA through from the source gameweek files.
+
+    These are the strongest public signal for whether a player is about to
+    return, and the pipeline was dropping them: the merge cells keep only the
+    columns every season shares, and xG first appears in 2022-23.
+
+    Joined on (season, element, fixture) -- ids, not names. Seasons without the
+    columns get zeros and has_xg=0, so a model can tell "no shot taken" from
+    "this season predates the stat", which matters because those two mean
+    completely different things and only one of them is information.
+    """
+    print("\n--- carrying over xG / xA from source ---")
+    frames = []
+    for season in sorted(df['season'].unique()):
+        path = os.path.join('data', season, 'gws', 'merged_gw.csv')
+        if not os.path.exists(path):
+            continue
+        head = read_csv_tolerant(path, nrows=0)
+        available = [c for c in EXPECTED_COLS if c in head.columns]
+        if not available:
+            print(f"  {season}: no expected-goals columns in source")
+            continue
+        block = read_csv_tolerant(path, usecols=['element', 'fixture'] + available)
+        block['season'] = season
+        frames.append(block)
+        print(f"  {season}: {len(block):,} rows, {len(available)} columns")
+
+    for col in EXPECTED_COLS:
+        df[col] = 0.0
+    df['has_xg'] = 0
+
+    if not frames:
+        print("  nothing to join; has_xg = 0 everywhere")
+        return df
+
+    lookup = pd.concat(frames, ignore_index=True)
+    lookup = lookup.drop_duplicates(subset=JOIN_KEYS, keep='first')
+
+    before = len(df)
+    merged = df.drop(columns=EXPECTED_COLS).merge(
+        lookup, on=JOIN_KEYS, how='left', suffixes=('', '_src'))
+    assert len(merged) == before, f"join changed row count: {before} -> {len(merged)}"
+
+    for col in EXPECTED_COLS:
+        if col not in merged.columns:
+            merged[col] = np.nan
+    merged['has_xg'] = merged[EXPECTED_COLS].notna().any(axis=1).astype(int)
+    for col in EXPECTED_COLS:
+        merged[col] = pd.to_numeric(merged[col], errors='coerce').fillna(0.0)
+
+    covered = int(merged['has_xg'].sum())
+    print(f"  rows with xG: {covered:,} / {len(merged):,} "
+          f"({covered / len(merged) * 100:.0f}%)")
+    return merged
+
+
 def build_raw() -> pd.DataFrame:
     """Run the notebook's own season-merging cells (3..34), then cell 40."""
     print("=" * 78)
-    print("STAGE 1  merge every season  (final.ipynb cells 3..34)")
+    print("STAGE 1  merge every season  (fpl_pipeline.ipynb cells 3..34)")
     print("=" * 78)
     ns = run_range(
         NOTEBOOK,
@@ -193,7 +254,7 @@ def add_game_number(df: pd.DataFrame) -> pd.DataFrame:
     here, but it only needs all_seasons_df and kickoff_time. Without it the
     feature stage dies with KeyError: 'game_number'.
     """
-    print("\n--- assigning game_number (final.ipynb cell 40) ---")
+    print("\n--- assigning game_number (fpl_pipeline.ipynb cell 40) ---")
     anchor = "# Assign game_number using kickoff_time for ALL seasons"
     ns = run_range(
         NOTEBOOK, first=anchor, last=anchor,
@@ -425,6 +486,7 @@ def main() -> int:
             print(f"wrote {RAW_OUT}")
 
     final = build_final(raw, old_final_snapshot)
+    final = add_expected_stats(final)
     report(final)
 
     if args.write:

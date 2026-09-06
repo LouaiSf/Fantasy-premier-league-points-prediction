@@ -2,7 +2,7 @@
 
 The pipeline scripts deliberately do not reimplement the notebook's logic.
 They locate a range of cells by an anchor string and exec them in a shared
-namespace, so whatever final.ipynb does is exactly what runs -- including the
+namespace, so whatever fpl_pipeline.ipynb does is exactly what runs -- including the
 temporal splits and the coverage guard. Fixing a cell in the notebook fixes
 the pipeline with it, and the two cannot drift apart.
 """
