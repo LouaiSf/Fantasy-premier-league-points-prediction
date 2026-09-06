@@ -261,7 +261,17 @@ def build_final(raw: pd.DataFrame, old_final: str) -> pd.DataFrame:
     print("=" * 78)
 
     lookup = defensive_lookup(old_final)
-    df = raw.copy()
+
+    # The index must be a clean RangeIndex before anything below runs.
+    #
+    # add_game_number sorts the frame without resetting, so raw arrives with a
+    # scrambled index, while df.merge() returns a fresh RangeIndex. Mixing the
+    # two means `df.loc[mask, col] = values` aligns on index labels and writes
+    # into the wrong rows -- silently, since the shapes all still match. It
+    # corrupted both the coverage flag (45% of 2024-25 GW22-38 marked as having
+    # FBref data that does not exist for them) and the defensive values, which
+    # feed the +2 defensive-contribution bonus and so moved total_points itself.
+    df = raw.reset_index(drop=True)
 
     if lookup is not None:
         # The FBref merge only ever applied to MERGED_SEASONS. Every other
@@ -282,20 +292,28 @@ def build_final(raw: pd.DataFrame, old_final: str) -> pd.DataFrame:
         native = df.loc[~needs_fbref, DEFENSIVE_COLS].copy()
         df = df.drop(columns=[c for c in DEFENSIVE_COLS if c in df.columns])
         before = len(df)
-        df = df.merge(lookup, on=JOIN_KEYS, how='left')
+        # indicator gives an unambiguous answer to "did this row match?".
+        # Deriving it from notna() over the joined columns cannot tell a match
+        # apart from a column that merely holds a value, and got it wrong.
+        df = df.merge(lookup, on=JOIN_KEYS, how='left', indicator='_join')
         assert len(df) == before, f"join changed row count: {before} -> {len(df)}"
+        assert df.index.equals(pd.RangeIndex(len(df))), 'merge did not return a RangeIndex'
 
         if 'has_fbref_defensive' in df.columns:
             # Carried over from a previous run of this script.
             df['has_fbref_defensive'] = df['has_fbref_defensive'].fillna(0).astype(int)
         else:
-            matched = df[DEFENSIVE_COLS].notna().any(axis=1)
-            df['has_fbref_defensive'] = matched.astype(int)
+            df['has_fbref_defensive'] = (df['_join'] == 'both').astype(int)
+        df = df.drop(columns='_join')
 
-        # Put the native values back and mark them as real data.
+        # Put the native values back and mark them as real data. needs_fbref
+        # was built from the pre-merge frame, so it is realigned first.
+        needs_fbref = needs_fbref.reset_index(drop=True)
+        native = native.reset_index(drop=True)
+        keep_native = df.index[~needs_fbref]
         for col in DEFENSIVE_COLS:
-            df.loc[~needs_fbref, col] = native[col]
-        df.loc[~needs_fbref, 'has_fbref_defensive'] = 1
+            df.loc[keep_native, col] = native[col].to_numpy()
+        df.loc[keep_native, 'has_fbref_defensive'] = 1
 
         for col in DEFENSIVE_COLS:
             df[col] = df[col].fillna(0)

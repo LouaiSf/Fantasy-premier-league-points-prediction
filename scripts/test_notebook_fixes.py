@@ -422,6 +422,48 @@ def t_native_defensive_preserved():
 
 check('native defensive stats survive the FBref join', t_native_defensive_preserved)
 
+
+def t_scrambled_index_does_not_misroute():
+    """add_game_number sorts without resetting, so raw arrives shuffled.
+
+    df.merge() returns a clean RangeIndex, so `df.loc[mask, col] = values`
+    aligned on labels and wrote into the wrong rows -- corrupting both the
+    coverage flag and the defensive values, which feed the +2 bonus and so
+    moved total_points itself. Shapes matched throughout, so nothing complained.
+    """
+    sys.path.insert(0, 'scripts')
+    import build_dataset
+
+    raw = pd.DataFrame({
+        'season': ['2021-22', '2021-22', '2025-26', '2025-26'],
+        'element': [1, 2, 1, 2], 'fixture': [10, 11, 20, 21], 'GW': [1, 1, 1, 1],
+        'position': ['DEF'] * 4, 'total_points': [2, 2, 2, 2],
+        'tackles': [0, 0, 9, 9], 'recoveries': [0, 0, 9, 9],
+        'clearances_blocks_interceptions': [0, 0, 9, 9],
+        'defensive_contribution': [0, 0, 0, 0],
+    }, index=[3, 1, 0, 2])          # not a RangeIndex, as in the real pipeline
+
+    lookup = pd.DataFrame({
+        'season': ['2021-22'], 'element': [1], 'fixture': [10],
+        'tackles': [4], 'recoveries': [2], 'clearances_blocks_interceptions': [1]})
+
+    orig = build_dataset.defensive_lookup
+    build_dataset.defensive_lookup = lambda _p: lookup
+    try:
+        out = build_dataset.build_final(raw, 'ignored').set_index(['season', 'element'])
+    finally:
+        build_dataset.defensive_lookup = orig
+
+    assert out.loc[('2021-22', 1), 'tackles'] == 4, 'joined row lost its value'
+    assert out.loc[('2021-22', 2), 'tackles'] == 0, 'unmatched row invented a value'
+    assert out.loc[('2025-26', 1), 'tackles'] == 9, 'native value overwritten'
+    assert out.loc[('2025-26', 2), 'tackles'] == 9, 'native value overwritten'
+    assert out.loc[('2021-22', 2), 'has_fbref_defensive'] == 0,         'row with no lookup entry flagged as covered'
+
+
+check('scrambled index does not misroute defensive values',
+      t_scrambled_index_does_not_misroute)
+
 print()
 if failures:
     raise SystemExit(f"{len(failures)} test(s) failed: {failures}")
