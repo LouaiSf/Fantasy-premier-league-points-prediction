@@ -248,30 +248,30 @@ def show_squad(result: dict, budget: float) -> None:
 # ---------------------------------------------------------------------------
 # Transfers
 # ---------------------------------------------------------------------------
-def suggest_transfers(current: pd.DataFrame, players: pd.DataFrame,
-                      free: int, bank: float, max_transfers: int) -> None:
+def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
+                      free: int, bank: float, max_transfers: int) -> dict:
     """Best move for each transfer count, net of the points hit.
 
     More transfers always buy at least as many raw points, so comparing them
-    only means something after the -4 per extra transfer is charged. The table
-    shows every count so a marginal second or third transfer is visible rather
+    only means something after the -4 per extra transfer is charged. Every
+    count is returned so a marginal second or third transfer is visible rather
     than assumed.
+
+    Returns data only. suggest_transfers() prints it; the web layer renders the
+    same structure, so the two can never drift.
     """
     budget = current['value_m'].sum() + bank
     keep_idx = [i for i in current.index]
 
-    print(f"\n  squad value {current['value_m'].sum():.1f}m + bank {bank:.1f}m "
-          f"= {budget:.1f}m to spend")
-    print(f"  {free} free transfer(s); each extra costs {HIT_COST} points\n")
-
     baseline = None
     rows = []
+    failures = []
     for count in range(0, max_transfers + 1):
         result, status = solve_squad(
             players, budget,
             must_transfer_out=(keep_idx, SQUAD_SIZE - count))
         if result is None:
-            print(f"  {count} transfers: no legal squad ({status})")
+            failures.append({'transfers': count, 'status': status})
             continue
 
         xi_points = result['xi']['predicted_points'].sum()
@@ -284,18 +284,71 @@ def suggest_transfers(current: pd.DataFrame, players: pd.DataFrame,
         out = current[~current['name'].isin(result['squad']['name'])]
         into = result['squad'][~result['squad']['name'].isin(current['name'])]
         rows.append({
-            'transfers': count, 'gross': gross, 'hit': hit, 'net': gross - hit,
-            'gain': gross - hit - baseline,
-            'out': ', '.join(out['name'].str[:18]) or '-',
-            'in': ', '.join(into['name'].str[:18]) or '-',
+            'transfers': count,
+            'gross': round(float(gross), 2),
+            'hit': int(hit),
+            'net': round(float(gross - hit), 2),
+            'gain': round(float(gross - hit - baseline), 2),
+            'out': list(out['name']),
+            'in': list(into['name']),
+            'squad': squad_records(result['squad']),
+            'xi': squad_records(result['xi']),
         })
 
-    if not rows:
+    best = max(rows, key=lambda r: r['net']) if rows else None
+    return {
+        'squad_value': round(float(current['value_m'].sum()), 1),
+        'bank': round(float(bank), 1),
+        'budget': round(float(budget), 1),
+        'free': int(free),
+        'hit_cost': HIT_COST,
+        'rows': rows,
+        'failures': failures,
+        'best': best,
+    }
+
+
+def squad_records(frame: pd.DataFrame) -> list:
+    """Rows as plain dicts, for JSON and for templates."""
+    cols = [c for c in ('name', 'team', 'position', 'opponent_team', 'was_home',
+                        'value_m', 'predicted_points', 'points_per_million',
+                        'selected_by', 'status', 'has_prior_history')
+            if c in frame.columns]
+    out = []
+    for record in frame[cols].to_dict('records'):
+        clean = {}
+        for key, value in record.items():
+            if isinstance(value, (np.integer,)):
+                clean[key] = int(value)
+            elif isinstance(value, (np.floating,)):
+                clean[key] = round(float(value), 3)
+            elif isinstance(value, (np.bool_,)):
+                clean[key] = bool(value)
+            else:
+                clean[key] = value
+        out.append(clean)
+    return out
+
+
+def suggest_transfers(current: pd.DataFrame, players: pd.DataFrame,
+                      free: int, bank: float, max_transfers: int) -> None:
+    data = compute_transfers(current, players, free, bank, max_transfers)
+
+    print(f"\n  squad value {data['squad_value']:.1f}m + bank {data['bank']:.1f}m "
+          f"= {data['budget']:.1f}m to spend")
+    print(f"  {data['free']} free transfer(s); each extra costs "
+          f"{data['hit_cost']} points\n")
+
+    for failure in data['failures']:
+        print(f"  {failure['transfers']} transfers: no legal squad "
+              f"({failure['status']})")
+
+    if not data['rows']:
         raise SystemExit("no legal squad found at any transfer count")
 
     print(f"  {'moves':<7}{'gross':>8}{'hit':>6}{'net':>8}{'vs 0':>8}")
     print("  " + "-" * 40)
-    for row in rows:
+    for row in data['rows']:
         print(f"  {row['transfers']:<7}{row['gross']:>8.2f}{row['hit']:>6}"
               f"{row['net']:>8.2f}{row['gain']:>+8.2f}")
 
@@ -340,10 +393,43 @@ def fixture_calendar(season: str, first_gw: int, horizon: int) -> pd.DataFrame:
             .reset_index())
 
 
-def chip_advice(squad: pd.DataFrame | None, season: str, first_gw: int,
-                horizon: int, players: pd.DataFrame) -> None:
-    teams_path = os.path.join('data', season, 'teams.csv')
-    teams = pd.read_csv(teams_path)
+def best_legal_xi_points(squad: pd.DataFrame) -> float | None:
+    """Points from the best XI this squad can legally field.
+
+    Not the same as the top eleven by predicted points, which is what this used
+    to compare against: that ignores formation, so it happily fields no
+    goalkeeper and five forwards. The number came out above what a legal XI can
+    reach, and the wildcard gap then printed as negative -- "your squad is
+    -0.48 points off optimal", which reads as nonsense because it is.
+
+    Solving with squad_size = len(squad) forces every player in, leaving the LP
+    to choose only the XI, under the same formation rules as everywhere else.
+    """
+    if squad is None or len(squad) < XI_SIZE:
+        return None
+    result, _status = solve_squad(
+        squad, budget=float(squad['value_m'].sum()) + 1.0,
+        squad_size=len(squad), captain=False)
+    if result is None:
+        # An illegal 15 (wrong shape, or four from one club) cannot field a
+        # legal XI either. Better to say nothing than to invent a number.
+        return None
+    return float(result['xi']['predicted_points'].sum())
+
+
+def compute_chips(squad, season: str, first_gw: int, horizon: int,
+                  players: pd.DataFrame) -> dict:
+    """Fixture-driven chip timing over a window of gameweeks.
+
+    Returns data only, so the CLI and the web layer render the same numbers.
+
+    One honest caveat travels with this: the model's per-player prediction does
+    not vary by gameweek. Its features are current form, and the opponent
+    features were measured and dropped for adding nothing. So the variation
+    below comes from fixture count and difficulty, not from the model -- this
+    is a fixture ticker with a form weighting, not a per-gameweek projection.
+    """
+    teams = pd.read_csv(os.path.join('data', season, 'teams.csv'))
     name_to_id = dict(zip(teams['name'], teams['id']))
 
     calendar = fixture_calendar(season, first_gw, horizon)
@@ -354,148 +440,210 @@ def chip_advice(squad: pd.DataFrame | None, season: str, first_gw: int,
                for gw, row in counts.iterrows()}
     blanks = {int(gw): [int(t) for t in row.index if row[t] == 0]
               for gw, row in counts.iterrows()}
-
-    print(f"\n{'=' * 78}")
-    print(f"CHIP TIMING   GW{first_gw}-{first_gw + horizon - 1}")
-    print("=" * 78)
-
     any_dgw = any(doubles.values())
     any_bgw = any(v for v in blanks.values())
-    if not any_dgw and not any_bgw:
+
+    squad_teams = None
+    unmapped = []
+    if squad is not None and len(squad):
+        squad_teams = squad['team'].map(name_to_id)
+        if squad_teams.isna().any():
+            unmapped = sorted(squad.loc[squad_teams.isna(), 'team'].unique())
+            squad_teams = squad_teams.dropna()
+
+    rows = []
+    for gw in sorted(counts.index):
+        gw_counts = counts.loc[gw]
+        gw_diff = calendar[calendar['event'] == gw].set_index('team')['difficulty']
+        # gw_counts is fixtures per team, so each match is counted twice.
+        entry = {
+            'gw': int(gw),
+            'matches': int(gw_counts.sum() // 2),
+            'dgw_teams': len(doubles[int(gw)]),
+            'blank_teams': len(blanks[int(gw)]),
+        }
+        if squad_teams is not None and len(squad_teams):
+            played = squad_teams.map(gw_counts).fillna(0)
+            entry['squad_playing'] = int((played > 0).sum())
+            entry['squad_blanks'] = int((played == 0).sum())
+            entry['avg_fdr'] = round(float(squad_teams.map(gw_diff).mean()), 2)
+        else:
+            entry['avg_fdr'] = round(float(gw_diff.mean()), 2)
+        rows.append(entry)
+
+    recommendations = []
+    if any_dgw:
+        best = max(rows, key=lambda r: r['dgw_teams'])
+        recommendations.append({
+            'chip': 'Bench Boost / Triple Captain', 'gw': best['gw'],
+            'reason': f"{best['dgw_teams']} teams play twice",
+            'confidence': 'high',
+        })
+    else:
+        if squad_teams is not None and len(squad_teams):
+            best = sorted(rows, key=lambda r: (-r['squad_playing'], r['avg_fdr']))[0]
+            recommendations.append({
+                'chip': 'Bench Boost', 'gw': best['gw'],
+                'reason': (f"{best['squad_playing']}/{len(squad)} of your squad play, "
+                           f"avg FDR {best['avg_fdr']}"),
+                'confidence': 'low',
+            })
+        easiest = min(rows, key=lambda r: r['avg_fdr'])
+        recommendations.append({
+            'chip': 'Triple Captain', 'gw': easiest['gw'],
+            'reason': f"easiest fixtures, avg FDR {easiest['avg_fdr']}",
+            'confidence': 'low',
+            'note': 'no double gameweek scheduled -- a fixture call, not a projection',
+        })
+
+    if any_bgw:
+        worst = max(rows, key=lambda r: r.get('squad_blanks', r['blank_teams']))
+        recommendations.append({
+            'chip': 'Free Hit', 'gw': worst['gw'],
+            'reason': (f"{worst.get('squad_blanks', worst['blank_teams'])} "
+                       f"of your squad blank"),
+            'confidence': 'high',
+        })
+    else:
+        recommendations.append({
+            'chip': 'Free Hit', 'gw': None,
+            'reason': 'hold -- its value is covering a blank gameweek, and none '
+                      'is scheduled in this window',
+            'confidence': 'high',
+        })
+
+    hardest = max(rows, key=lambda r: r['avg_fdr'])
+    wildcard = {
+        'chip': 'Wildcard', 'gw': hardest['gw'],
+        'reason': f"hardest run, avg FDR {hardest['avg_fdr']}",
+        'confidence': 'low',
+    }
+
+    if squad is not None and len(squad):
+        optimal, _ = solve_squad(players, squad['value_m'].sum() + 0.5)
+        current_xi = best_legal_xi_points(squad)
+        if optimal and current_xi is not None:
+            gap = float(optimal['xi']['predicted_points'].sum() - current_xi)
+            wildcard['squad_gap'] = round(gap, 2)
+            wildcard['reason'] += (f"; your squad is {gap:.2f} points off an "
+                                   f"optimal one at the same value")
+            if gap > 8:
+                wildcard['note'] = 'that is a wide gap -- a wildcard would pay for itself'
+    recommendations.append(wildcard)
+
+    return {
+        'first_gw': first_gw,
+        'last_gw': first_gw + horizon - 1,
+        'any_dgw': any_dgw,
+        'any_bgw': any_bgw,
+        'rows': rows,
+        'recommendations': recommendations,
+        'unmapped_teams': unmapped,
+        'has_squad': squad is not None and len(squad) > 0,
+    }
+
+
+def chip_advice(squad: pd.DataFrame | None, season: str, first_gw: int,
+                horizon: int, players: pd.DataFrame) -> None:
+    data = compute_chips(squad, season, first_gw, horizon, players)
+
+    print(f"\n{'=' * 78}")
+    print(f"CHIP TIMING   GW{data['first_gw']}-{data['last_gw']}")
+    print("=" * 78)
+
+    if not data['any_dgw'] and not data['any_bgw']:
         print("\n  No double or blank gameweeks are scheduled in this window.")
         print("  They appear only once cup runs force postponements, usually from")
         print("  around GW18. Until then Bench Boost and Free Hit have no fixture")
         print("  edge to aim at, and the ranking below reflects fixture difficulty")
         print("  and your squad's form alone.")
 
-    # Predicted points are form-based and, since the opponent features were
-    # dropped for measuring nothing, identical across future gameweeks. The
-    # per-gameweek variation below therefore comes from fixture count and
-    # difficulty, not from the model. Saying so matters: it is the difference
-    # between a projection and a fixture ticker.
     print("\n  Note: the model's per-player number does not vary by gameweek --")
     print("  its features are current form, and opponent strength was measured")
     print("  and dropped. Ranking below combines that form with fixture count")
     print("  and FDR, which is where the gameweek-to-gameweek signal comes from.")
 
-    squad_teams = None
-    if squad is not None:
-        squad_teams = squad['team'].map(name_to_id)
-        if squad_teams.isna().any():
-            unknown = squad.loc[squad_teams.isna(), 'team'].unique()
-            print(f"\n  could not map teams to ids: {list(unknown)}")
-            squad_teams = squad_teams.dropna()
+    if data['unmapped_teams']:
+        print(f"\n  could not map teams to ids: {data['unmapped_teams']}")
 
-    rows = []
-    for gw in sorted(counts.index):
-        gw_counts = counts.loc[gw]
-        # gw_counts is fixtures per team, so it counts each match twice.
-        entry = {'GW': int(gw),
-                 'matches': int(gw_counts.sum() // 2),
-                 'DGW teams': len(doubles[int(gw)]),
-                 'blank teams': len(blanks[int(gw)])}
-
-        gw_diff = calendar[calendar['event'] == gw].set_index('team')['difficulty']
-
-        if squad is not None and squad_teams is not None and len(squad_teams):
-            played = squad_teams.map(gw_counts).fillna(0)
-            entry['squad playing'] = int((played > 0).sum())
-            entry['squad blanks'] = int((played == 0).sum())
-            entry['avg FDR'] = round(float(squad_teams.map(gw_diff).mean()), 2)
-        else:
-            entry['avg FDR'] = round(float(gw_diff.mean()), 2)
-        rows.append(entry)
-
-    table = pd.DataFrame(rows)
     print()
-    print(table.to_string(index=False))
+    print(pd.DataFrame(data['rows']).to_string(index=False))
 
     print(f"\n{'-' * 78}")
     print("RECOMMENDATIONS")
     print("-" * 78)
-
-    def rank(metric, reverse=True, top=3):
-        ordered = sorted(rows, key=lambda r: r.get(metric, 0), reverse=reverse)
-        return [r for r in ordered[:top]]
-
-    if any_dgw:
-        best = rank('DGW teams')
-        print(f"\n  Bench Boost / Triple Captain -> "
-              f"GW{best[0]['GW']} ({best[0]['DGW teams']} teams play twice)")
-    else:
-        if squad is not None and 'squad playing' in table.columns:
-            best = sorted(rows, key=lambda r: (-r['squad playing'], r['avg FDR']))
-            print(f"\n  Bench Boost -> GW{best[0]['GW']}: "
-                  f"{best[0]['squad playing']}/{len(squad)} of your squad play, "
-                  f"avg FDR {best[0]['avg FDR']}")
-        easiest = sorted(rows, key=lambda r: r['avg FDR'])[0]
-        print(f"  Triple Captain -> GW{easiest['GW']} (easiest fixtures, "
-              f"avg FDR {easiest['avg FDR']})")
-        print("    with no double gameweek scheduled, this is a fixture call, not")
-        print("    a projection -- worth holding the chip if you can")
-
-    if any_bgw:
-        worst = sorted(rows, key=lambda r: r.get('squad blanks', r['blank teams']),
-                       reverse=True)[0]
-        print(f"\n  Free Hit -> GW{worst['GW']} "
-              f"({worst.get('squad blanks', worst['blank teams'])} of your squad blank)")
-    else:
-        print("\n  Free Hit -> hold. Its value is covering a blank gameweek, and")
-        print("    none is scheduled in this window.")
-
-    hardest = sorted(rows, key=lambda r: r['avg FDR'], reverse=True)[0]
-    print(f"\n  Wildcard -> consider before GW{hardest['GW']} "
-          f"(hardest run, avg FDR {hardest['avg FDR']})")
-
-    if squad is not None:
-        optimal, _ = solve_squad(players, squad['value_m'].sum() + 0.5)
-        if optimal:
-            current_xi = squad.nlargest(XI_SIZE, 'predicted_points')['predicted_points'].sum()
-            gap = optimal['xi']['predicted_points'].sum() - current_xi
-            print(f"    your squad is {gap:.2f} points off an optimal one at the "
-                  f"same value")
-            if gap > 8:
-                print("    that is a wide gap -- a wildcard would pay for itself")
+    for rec in data['recommendations']:
+        target = f"GW{rec['gw']}" if rec['gw'] else "hold"
+        print(f"\n  {rec['chip']} -> {target}")
+        print(f"    {rec['reason']}")
+        if rec.get('note'):
+            print(f"    {rec['note']}")
 
 
 # ---------------------------------------------------------------------------
 # Watchlist
 # ---------------------------------------------------------------------------
-def watchlist(players: pd.DataFrame, max_ownership: float, top: int) -> None:
-    print(f"\n{'=' * 78}")
-    print("WATCHLIST")
-    print("=" * 78)
-
+def compute_watchlist(players: pd.DataFrame, max_ownership: float,
+                      top: int) -> dict:
     show = ['name', 'team', 'position', 'value_m', 'predicted_points',
             'points_per_million']
     show = [c for c in show if c in players.columns]
 
-    print(f"\nBest value (points per million):")
-    value = players[players['predicted_points'] > 1].nlargest(top, 'points_per_million')
-    print(value[show].to_string(index=False))
+    out = {
+        'value': squad_records(
+            players[players['predicted_points'] > 1].nlargest(top, 'points_per_million')),
+        'overpriced': squad_records(
+            players[players['value_m'] >= 8].nsmallest(top, 'points_per_million')),
+        'differentials': [],
+        'no_history': [],
+        'has_ownership': 'selected_by' in players.columns,
+        'max_ownership': max_ownership,
+    }
 
-    if 'selected_by' in players.columns:
-        cheap = players[pd.to_numeric(players['selected_by'], errors='coerce')
-                        .fillna(100) <= max_ownership]
+    if out['has_ownership']:
+        owned = pd.to_numeric(players['selected_by'], errors='coerce').fillna(100)
+        cheap = players[owned <= max_ownership]
         if len(cheap):
-            print(f"\nDifferentials (owned by {max_ownership}% or fewer):")
-            print(cheap.nlargest(top, 'predicted_points')[show + ['selected_by']]
-                  .to_string(index=False))
-    else:
-        print(f"\n(ownership not in {PREDICTIONS}; differentials need "
-              f"selected_by -- re-run predict_gameweek.py)")
+            out['differentials'] = squad_records(cheap.nlargest(top, 'predicted_points'))
 
     if 'has_prior_history' in players.columns:
         unknown = players[~players['has_prior_history'].astype(bool)]
         if len(unknown):
-            print(f"\n{len(unknown)} players have no prior data; their numbers come "
-                  f"from no evidence:")
-            print(unknown.nlargest(min(5, len(unknown)), 'predicted_points')[show]
-                  .to_string(index=False))
+            out['no_history'] = squad_records(
+                unknown.nlargest(min(5, len(unknown)), 'predicted_points'))
+            out['no_history_total'] = int(len(unknown))
 
-    print(f"\nPriciest players not worth their cost:")
-    pricey = players[players['value_m'] >= 8].nsmallest(top, 'points_per_million')
-    print(pricey[show].to_string(index=False))
+    return out
+
+
+def watchlist(players: pd.DataFrame, max_ownership: float, top: int) -> None:
+    data = compute_watchlist(players, max_ownership, top)
+
+    print(f"\n{'=' * 78}")
+    print("WATCHLIST")
+    print("=" * 78)
+
+    def table(records):
+        return pd.DataFrame(records).to_string(index=False) if records else '  (none)'
+
+    print("\nBest value (points per million):")
+    print(table(data['value']))
+
+    if data['has_ownership']:
+        if data['differentials']:
+            print(f"\nDifferentials (owned by {data['max_ownership']}% or fewer):")
+            print(table(data['differentials']))
+    else:
+        print(f"\n(ownership not in {PREDICTIONS}; differentials need "
+              f"selected_by -- re-run predict_gameweek.py)")
+
+    if data['no_history']:
+        print(f"\n{data['no_history_total']} players have no prior data; their "
+              f"numbers come from no evidence:")
+        print(table(data['no_history']))
+
+    print("\nPriciest players not worth their cost:")
+    print(table(data['overpriced']))
 
 
 def main() -> int:

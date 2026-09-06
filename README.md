@@ -54,6 +54,25 @@ better than the obvious alternative, nowhere near the ceiling. Note this picks
 a fresh XI each week with no transfer limit and no captain, so it measures
 ranking quality rather than achievable FPL performance.
 
+## The web UI
+
+```bash
+python webapp/app.py       # then open http://127.0.0.1:5000
+```
+
+Four tools in one page:
+
+| tab | what it answers |
+|---|---|
+| **Squad builder** | Best legal 15 for a budget, solved as one LP with the XI and captain. Lock players in, exclude others, see the result laid out on a pitch. |
+| **Transfers** | How many moves are worth making, with the −4 hit charged before comparing. Your squad is saved in the browser. |
+| **Chips** | When to play Bench Boost, Triple Captain, Free Hit and Wildcard, from the fixture calendar and your squad's blanks. |
+| **Watchlist** | Value per million, low-ownership differentials, and expensive players the model does not rate. |
+
+It calls `scripts/optimise.py` directly rather than reimplementing anything, so
+the browser and the CLI cannot disagree — the same `solve_squad` produces both.
+Needs `predictions_next_gw.csv` from `scripts/predict_gameweek.py`.
+
 ## Quick start
 
 ```bash
@@ -155,6 +174,9 @@ stays the single source of truth and the scripts cannot drift from it.
 | `predict_gameweek.py` | rank every player for the upcoming gameweek |
 | `validate_selection.py` | score the XI the model picks against a rolling-average XI |
 | `optimise.py` | squad, transfers, chip timing and watchlist |
+| `predict_gameweek.py` | predict the upcoming gameweek from the live FPL API |
+| `optimise.py` | squad, transfers, chips, watchlist |
+| `validate_selection.py` | score the picked XI against a rolling-average XI |
 | `summarise_run.py` | render `model_metrics.json` as a table |
 | `test_notebook_fixes.py` | 25 regression tests over the split, guards and features |
 | `make_colab_bundle.py` | package the 122 files Colab needs (24 MB, not 17,000 files) |
