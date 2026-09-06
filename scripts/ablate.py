@@ -37,43 +37,8 @@ from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from nbrun import run_range  # noqa: E402
+from nbrun import run_range, stub_boosters_if_absent  # noqa: E402
 
-
-def stub_boosters_if_absent() -> None:
-    """Let the preprocessing cells import xgboost/lightgbm when they are absent.
-
-    The cell range this script runs stops before any model is trained, but it
-    passes through the notebook's import cell. This script only ever fits Ridge
-    and ElasticNet, so a placeholder that satisfies the import is enough -- and
-    it means the ablation runs on a laptop without a booster toolchain.
-
-    Nothing here is ever fitted. If that changes, this must go.
-    """
-    for name in ('xgboost', 'lightgbm'):
-        try:
-            __import__(name)
-            continue
-        except ImportError:
-            pass
-
-        import types
-
-        class _Unusable:
-            def __init__(self, *_args, **_kwargs):
-                raise RuntimeError(
-                    f"{name} is not installed. scripts/ablate.py only fits "
-                    f"linear models; use scripts/train.py on Colab for boosters."
-                )
-
-        module = types.ModuleType(name)
-        if name == 'xgboost':
-            module.XGBRegressor = _Unusable
-        else:
-            module.LGBMRegressor = _Unusable
-        sys.modules[name] = module
-        print(f"note: {name} not installed -- import placeholder in use "
-              f"(this script fits linear models only)")
 
 NOTEBOOK = 'final.ipynb'
 IN_FILE = 'all_seasons_data_featured.csv'
