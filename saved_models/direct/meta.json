@@ -1,7 +1,7 @@
 {
   "GK": {
     "best_model": "LightGBM",
-    "best_test_r2": 0.4561784654004124,
+    "best_test_r2": 0.45857419660438536,
     "features_count": 66,
     "models_saved": [
       "Ridge",
@@ -12,7 +12,7 @@
   },
   "DEF": {
     "best_model": "LightGBM",
-    "best_test_r2": 0.3033460997617822,
+    "best_test_r2": 0.30299674252593645,
     "features_count": 74,
     "models_saved": [
       "Ridge",
@@ -23,7 +23,7 @@
   },
   "MID": {
     "best_model": "LightGBM",
-    "best_test_r2": 0.34801702126442324,
+    "best_test_r2": 0.348294107918907,
     "features_count": 74,
     "models_saved": [
       "Ridge",
@@ -33,8 +33,8 @@
     ]
   },
   "FWD": {
-    "best_model": "XGBoost",
-    "best_test_r2": 0.3530921936035156,
+    "best_model": "LightGBM",
+    "best_test_r2": 0.3478951564925754,
     "features_count": 74,
     "models_saved": [
       "Ridge",
