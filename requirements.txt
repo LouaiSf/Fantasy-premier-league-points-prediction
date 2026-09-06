@@ -14,6 +14,9 @@ pulp>=2.7
 # Live FPL API pull (using_api.ipynb, advanced_fpl_models.ipynb)
 requests>=2.31
 
+# Web UI (webapp/app.py). Wraps scripts/optimise.py; no extra modelling deps.
+flask>=3.0
+
 # FBref defensive-stat scraping (fetching_defensive_data.ipynb).
 # Only needed if you re-fetch defensive data; build_dataset.py carries the
 # existing columns over instead.

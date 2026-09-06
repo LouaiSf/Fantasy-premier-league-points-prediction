@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FPL Assistant</title>
+<style>
+  :root {
+    --bg: #0f1219;
+    --surface: #171b26;
+    --surface-2: #1e2330;
+    --line: #2a3040;
+    --text: #e8eaf0;
+    --muted: #9aa3b8;
+    --accent: #00e6a0;
+    --accent-dim: #00b37d;
+    --warn: #ffb648;
+    --bad: #ff6b6b;
+    --pitch-a: #1a6b3c;
+    --pitch-b: #176036;
+    --radius: 12px;
+    --gk: #f0d264;
+    --def: #5ac8fa;
+    --mid: #00e6a0;
+    --fwd: #ff7ab6;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f4f6fa; --surface: #ffffff; --surface-2: #f0f3f8;
+      --line: #dde2ec; --text: #131722; --muted: #5c6579;
+      --accent: #00a877; --accent-dim: #008c63;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 80px; }
+
+  header { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
+  h1 { font-size: 24px; margin: 0; letter-spacing: -0.02em; }
+  h1 span { color: var(--accent); }
+  .sub { color: var(--muted); font-size: 13px; }
+  .modelbar {
+    display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0 22px;
+  }
+  .pill {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 999px; padding: 4px 12px; font-size: 12px; color: var(--muted);
+  }
+  .pill b { color: var(--text); font-weight: 600; }
+
+  nav { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 22px; flex-wrap: wrap; }
+  nav button {
+    background: none; border: 0; border-bottom: 2px solid transparent;
+    color: var(--muted); padding: 10px 16px; font-size: 14px; font-weight: 500;
+    cursor: pointer; font-family: inherit;
+  }
+  nav button:hover { color: var(--text); }
+  nav button.on { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .panel { display: none; }
+  .panel.on { display: block; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 18px; margin-bottom: 16px;
+  }
+  .card h2 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+  .card .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 14px; }
+
+  .controls { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 12px; color: var(--muted); font-weight: 500; }
+  input[type="number"], input[type="text"], select {
+    background: var(--surface-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 8px; padding: 8px 10px; font-size: 14px; font-family: inherit;
+    min-width: 90px;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent-dim); outline-offset: -1px; }
+  button.go {
+    background: var(--accent); color: #05231a; border: 0; border-radius: 8px;
+    padding: 9px 20px; font-size: 14px; font-weight: 600; cursor: pointer;
+    font-family: inherit;
+  }
+  button.go:hover { background: var(--accent-dim); }
+  button.go:disabled { opacity: .5; cursor: not-allowed; }
+  button.ghost {
+    background: none; border: 1px solid var(--line); color: var(--muted);
+    border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer;
+    font-family: inherit;
+  }
+  button.ghost:hover { color: var(--text); border-color: var(--muted); }
+
+  /* pitch */
+  .pitch {
+    background: repeating-linear-gradient(
+      to bottom, var(--pitch-a) 0 44px, var(--pitch-b) 44px 88px);
+    border-radius: var(--radius); padding: 22px 12px; position: relative;
+    border: 1px solid rgba(255,255,255,.08);
+  }
+  .pitch::before {
+    content: ''; position: absolute; left: 50%; top: 12px; bottom: 12px;
+    width: 1px; background: rgba(255,255,255,.12);
+  }
+  .row { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+  .row:last-child { margin-bottom: 0; }
+  .plr {
+    background: rgba(6,20,14,.82); border: 1px solid rgba(255,255,255,.14);
+    border-radius: 9px; padding: 7px 9px; width: 104px; text-align: center;
+    position: relative;
+  }
+  .plr .nm {
+    font-size: 11.5px; font-weight: 600; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; color: #fff;
+  }
+  .plr .meta { font-size: 10px; color: rgba(255,255,255,.6); margin-top: 1px; }
+  .plr .pts { font-size: 14px; font-weight: 700; color: var(--accent); margin-top: 3px; }
+  .plr .cap {
+    position: absolute; top: -7px; right: -7px; background: var(--accent);
+    color: #05231a; font-size: 10px; font-weight: 800; border-radius: 50%;
+    width: 20px; height: 20px; line-height: 20px;
+  }
+  .plr.gk { border-top: 3px solid var(--gk); }
+  .plr.def { border-top: 3px solid var(--def); }
+  .plr.mid { border-top: 3px solid var(--mid); }
+  .plr.fwd { border-top: 3px solid var(--fwd); }
+  .benchbar {
+    display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+    margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line);
+  }
+  .benchbar .plr { background: var(--surface-2); border-color: var(--line); }
+  .benchbar .plr .nm { color: var(--text); }
+  .benchbar .plr .meta { color: var(--muted); }
+
+  .stats { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 14px; }
+  .stat .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .stat .v { font-size: 20px; font-weight: 700; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:hover { background: var(--surface-2); }
+  .scroll { overflow-x: auto; }
+
+  .tag { font-size: 10.5px; padding: 1px 7px; border-radius: 999px; font-weight: 600; }
+  .tag.GK { background: rgba(240,210,100,.16); color: var(--gk); }
+  .tag.DEF { background: rgba(90,200,250,.16); color: var(--def); }
+  .tag.MID { background: rgba(0,230,160,.16); color: var(--mid); }
+  .tag.FWD { background: rgba(255,122,182,.16); color: var(--fwd); }
+
+  .picker { position: relative; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .chip {
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px;
+    padding: 4px 10px 4px 12px; font-size: 12.5px; display: flex; align-items: center; gap: 7px;
+  }
+  .chip button { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 0; }
+  .chip button:hover { color: var(--bad); }
+  .count { font-size: 12px; color: var(--muted); }
+  .count.full { color: var(--accent); }
+
+  .recs { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .rec { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .rec .chipname { font-size: 13px; font-weight: 600; }
+  .rec .gw { font-size: 26px; font-weight: 800; color: var(--accent); margin: 4px 0; }
+  .rec .why { font-size: 12px; color: var(--muted); }
+  .rec .conf { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; margin-top: 8px; }
+  .rec .conf.low { color: var(--warn); }
+  .rec .conf.high { color: var(--accent); }
+
+  .note {
+    background: rgba(255,182,72,.09); border: 1px solid rgba(255,182,72,.28);
+    border-radius: 9px; padding: 11px 14px; font-size: 12.5px; color: var(--text);
+    margin-bottom: 14px;
+  }
+  .note b { color: var(--warn); }
+  .err {
+    background: rgba(255,107,107,.1); border: 1px solid rgba(255,107,107,.3);
+    border-radius: 9px; padding: 12px 14px; font-size: 13px; margin-bottom: 14px;
+  }
+  .spinner { color: var(--muted); font-size: 13px; padding: 18px 0; }
+  .empty { color: var(--muted); font-size: 13px; padding: 14px 0; }
+  footer { margin-top: 40px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>FPL <span>Assistant</span></h1>
+    <div class="sub">{{ season }} &middot; gameweek {{ gameweek }} &middot; {{ player_count }} available players</div>
+  </header>
+
+  <div class="modelbar">
+    {% for pos, info in model.items() %}
+      <span class="pill">{{ pos }} <b>{{ info.model }}</b> &middot; {{ info.features }}f &middot; R&sup2; {{ info.test_r2 }}</span>
+    {% endfor %}
+  </div>
+
+  {% if error %}
+    <div class="err">{{ error }}</div>
+  {% endif %}
+
+  <nav>
+    <button class="on" data-tab="squad">Squad builder</button>
+    <button data-tab="transfers">Transfers</button>
+    <button data-tab="chips">Chips</button>
+    <button data-tab="watchlist">Watchlist</button>
+  </nav>
+
+  <!-- ── SQUAD ─────────────────────────────────────────────── -->
+  <section class="panel on" id="tab-squad">
+    <div class="card">
+      <h2>Best squad for the budget</h2>
+      <p class="hint">Maximises predicted points for the starting XI under the real FPL rules: 2/5/5/3, £100.0m, max 3 per club, a legal formation.</p>
+      <div class="controls">
+        <div class="field">
+          <label for="budget">Budget (&pound;m)</label>
+          <input type="number" id="budget" value="100.0" step="0.5" min="20" max="200">
+        </div>
+        <div class="field" style="flex:1; min-width:220px">
+          <label for="lockPick">Must include</label>
+          <input type="text" id="lockPick" list="playerList" placeholder="type a name, press Enter">
+        </div>
+        <div class="field" style="flex:1; min-width:220px">
+          <label for="banPick">Exclude</label>
+          <input type="text" id="banPick" list="playerList" placeholder="type a name, press Enter">
+        </div>
+        <button class="go" id="runSquad">Optimise</button>
+      </div>
+      <div class="chips" id="lockChips"></div>
+      <div class="chips" id="banChips"></div>
+    </div>
+    <div id="squadOut"></div>
+  </section>
+
+  <!-- ── TRANSFERS ─────────────────────────────────────────── -->
+  <section class="panel" id="tab-transfers">
+    <div class="card">
+      <h2>Your squad</h2>
+      <p class="hint">Enter all 15. Saved in this browser, so you only do it once.</p>
+      <div class="controls">
+        <div class="field" style="flex:1; min-width:260px">
+          <label for="squadPick">Add player</label>
+          <input type="text" id="squadPick" list="playerList" placeholder="type a name, press Enter">
+        </div>
+        <button class="ghost" id="clearSquad">Clear</button>
+        <span class="count" id="squadCount">0 / 15</span>
+      </div>
+      <div class="chips" id="squadChips"></div>
+    </div>
+
+    <div class="card">
+      <h2>How many transfers are worth making?</h2>
+      <p class="hint">Each move beyond your free ones costs 4 points. The table charges that before comparing, so a marginal second or third transfer shows up as a loss rather than a gain.</p>
+      <div class="controls">
+        <div class="field">
+          <label for="free">Free transfers</label>
+          <input type="number" id="free" value="1" min="0" max="5">
+        </div>
+        <div class="field">
+          <label for="bank">In the bank (&pound;m)</label>
+          <input type="number" id="bank" value="0.0" step="0.1" min="0">
+        </div>
+        <div class="field">
+          <label for="maxT">Consider up to</label>
+          <input type="number" id="maxT" value="3" min="0" max="5">
+        </div>
+        <button class="go" id="runTransfers">Analyse</button>
+      </div>
+    </div>
+    <div id="transfersOut"></div>
+  </section>
+
+  <!-- ── CHIPS ─────────────────────────────────────────────── -->
+  <section class="panel" id="tab-chips">
+    <div class="card">
+      <h2>When to play your chips</h2>
+      <p class="hint">Uses your squad from the Transfers tab if you have entered one. Without it, the ranking is league-wide fixture difficulty.</p>
+      <div class="controls">
+        <div class="field">
+          <label for="horizon">Look ahead (gameweeks)</label>
+          <input type="number" id="horizon" value="8" min="1" max="38">
+        </div>
+        <button class="go" id="runChips">Analyse</button>
+      </div>
+    </div>
+    <div id="chipsOut"></div>
+  </section>
+
+  <!-- ── WATCHLIST ─────────────────────────────────────────── -->
+  <section class="panel" id="tab-watchlist">
+    <div class="card">
+      <h2>Watchlist</h2>
+      <p class="hint">Value per million, low-ownership differentials, and expensive players the model does not rate.</p>
+      <div class="controls">
+        <div class="field">
+          <label for="maxOwn">Differential ceiling (% owned)</label>
+          <input type="number" id="maxOwn" value="10" step="1" min="0" max="100">
+        </div>
+        <div class="field">
+          <label for="topN">Rows per table</label>
+          <input type="number" id="topN" value="12" min="3" max="50">
+        </div>
+        <button class="go" id="runWatch">Refresh</button>
+      </div>
+    </div>
+    <div id="watchOut"></div>
+  </section>
+
+  <footer>
+    Predicted points carry a test MAE of roughly one point per player, so small gaps between
+    players are noise. The model has no team-news feature: check injuries and rotation before acting.
+    Chip timing is driven by fixture count and difficulty, not by a per-gameweek projection.
+  </footer>
+</div>
+
+<datalist id="playerList"></datalist>
+
+<script>
+const $ = s => document.querySelector(s);
+const el = (t, c, txt) => { const e = document.createElement(t); if (c) e.className = c; if (txt != null) e.textContent = txt; return e; };
+const fmt = (n, d = 2) => (n == null || isNaN(n)) ? '-' : Number(n).toFixed(d);
+
+let PLAYERS = [];
+let LOCK = [], BAN = [], SQUAD = [];
+
+/* ---- tabs ---- */
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.panel').forEach(p =>
+    p.classList.toggle('on', p.id === 'tab-' + b.dataset.tab));
+});
+
+/* ---- api ---- */
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const j = await r.json().catch(() => ({ ok: false, error: 'server returned non-JSON' }));
+  if (!r.ok || j.ok === false) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+const busy = (node, msg) => { node.innerHTML = ''; node.append(el('div', 'spinner', msg || 'working…')); };
+const oops = (node, e) => { node.innerHTML = ''; const d = el('div', 'err'); d.textContent = e.message; node.append(d); };
+
+/* ---- player list ---- */
+(async () => {
+  try {
+    const d = await api('/api/players');
+    PLAYERS = d.players;
+    const dl = $('#playerList');
+    PLAYERS.forEach(p => {
+      const o = el('option');
+      o.value = p.name;
+      o.label = `${p.position} · ${p.team} · £${fmt(p.value_m, 1)}m`;
+      dl.append(o);
+    });
+  } catch (e) { console.error(e); }
+})();
+
+const known = n => PLAYERS.some(p => p.name === n);
+const info = n => PLAYERS.find(p => p.name === n) || {};
+
+/* ---- chip lists ---- */
+function renderChips(node, list, onRemove) {
+  node.innerHTML = '';
+  list.forEach(n => {
+    const c = el('div', 'chip');
+    const p = info(n);
+    c.append(el('span', null, p.position ? `${n} · ${p.position} · £${fmt(p.value_m, 1)}m` : n));
+    const x = el('button', null, '×');
+    x.onclick = () => onRemove(n);
+    c.append(x);
+    node.append(c);
+  });
+}
+function bindPicker(inputSel, list, render, limit) {
+  $(inputSel).addEventListener('keydown', ev => {
+    if (ev.key !== 'Enter') return;
+    ev.preventDefault();
+    const v = ev.target.value.trim();
+    if (!v) return;
+    if (!known(v)) { alert(`"${v}" is not in the prediction set. Pick from the suggestions.`); return; }
+    if (list.includes(v)) { ev.target.value = ''; return; }
+    if (limit && list.length >= limit) { alert(`That is already ${limit} players.`); return; }
+    list.push(v); ev.target.value = ''; render();
+  });
+}
+
+const drawLock = () => renderChips($('#lockChips'), LOCK, n => { LOCK = LOCK.filter(x => x !== n); drawLock(); });
+const drawBan = () => renderChips($('#banChips'), BAN, n => { BAN = BAN.filter(x => x !== n); drawBan(); });
+function drawSquad() {
+  renderChips($('#squadChips'), SQUAD, n => { SQUAD = SQUAD.filter(x => x !== n); drawSquad(); });
+  const c = $('#squadCount');
+  c.textContent = `${SQUAD.length} / 15`;
+  c.classList.toggle('full', SQUAD.length === 15);
+  localStorage.setItem('fpl_squad', JSON.stringify(SQUAD));
+}
+bindPicker('#lockPick', LOCK, drawLock, 15);
+bindPicker('#banPick', BAN, drawBan);
+bindPicker('#squadPick', SQUAD, drawSquad, 15);
+$('#clearSquad').onclick = () => { SQUAD.length = 0; drawSquad(); };
+try { SQUAD = JSON.parse(localStorage.getItem('fpl_squad') || '[]'); } catch (e) { SQUAD = []; }
+drawSquad();
+
+/* ---- pitch ---- */
+function playerCard(p, isCaptain) {
+  const d = el('div', 'plr ' + (p.position || '').toLowerCase());
+  if (isCaptain) d.append(el('div', 'cap', 'C'));
+  d.append(el('div', 'nm', p.name));
+  d.append(el('div', 'meta', `${p.team} · £${fmt(p.value_m, 1)}m`));
+  d.append(el('div', 'pts', fmt(p.predicted_points)));
+  return d;
+}
+function renderSquad(d) {
+  const out = $('#squadOut');
+  out.innerHTML = '';
+  const card = el('div', 'card');
+  card.append(el('h2', null, `Optimal XI — ${d.formation || ''}`));
+
+  const pitch = el('div', 'pitch');
+  ['GK', 'DEF', 'MID', 'FWD'].forEach(pos => {
+    const line = d.xi.filter(p => p.position === pos);
+    if (!line.length) return;
+    const row = el('div', 'row');
+    line.sort((a, b) => b.predicted_points - a.predicted_points)
+        .forEach(p => row.append(playerCard(p, d.captain && p.name === d.captain.name)));
+    pitch.append(row);
+  });
+  card.append(pitch);
+
+  const bench = el('div', 'benchbar');
+  bench.append(el('div', 'count', 'Bench'));
+  d.bench.forEach(p => bench.append(playerCard(p, false)));
+  card.append(bench);
+
+  const stats = el('div', 'stats');
+  [['XI predicted', fmt(d.xi_points)], ['Spend', '£' + fmt(d.spend, 1) + 'm'],
+   ['Budget', '£' + fmt(d.budget, 1) + 'm'],
+   ['Captain', d.captain ? d.captain.name : '-']].forEach(([k, v]) => {
+    const s = el('div', 'stat'); s.append(el('div', 'k', k), el('div', 'v', v)); stats.append(s);
+  });
+  card.append(stats);
+  out.append(card);
+}
+
+$('#runSquad').onclick = async () => {
+  const out = $('#squadOut');
+  busy(out, 'solving…');
+  try {
+    renderSquad(await api('/api/squad', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ budget: parseFloat($('#budget').value), lock: LOCK, ban: BAN })
+    }));
+  } catch (e) { oops(out, e); }
+};
+
+/* ---- tables ---- */
+function table(cols, rows) {
+  const wrap = el('div', 'scroll'), t = el('table');
+  const hr = el('tr');
+  cols.forEach(c => { const th = el('th', c.num ? 'num' : null, c.label); hr.append(th); });
+  t.append(el('thead')).firstChild.append(hr);
+  const tb = el('tbody');
+  rows.forEach(r => {
+    const tr = el('tr');
+    cols.forEach(c => {
+      const td = el('td', c.num ? 'num' : null);
+      const v = c.get(r);
+      if (c.html) td.append(v); else td.textContent = v;
+      tr.append(td);
+    });
+    tb.append(tr);
+  });
+  t.append(tb); wrap.append(t);
+  return wrap;
+}
+const posTag = p => { const s = el('span', 'tag ' + p.position, p.position); return s; };
+const playerCols = [
+  { label: 'Player', get: r => r.name },
+  { label: 'Pos', html: true, get: posTag },
+  { label: 'Team', get: r => r.team },
+  { label: '£m', num: true, get: r => fmt(r.value_m, 1) },
+  { label: 'Pred', num: true, get: r => fmt(r.predicted_points) },
+  { label: 'Per £m', num: true, get: r => fmt(r.points_per_million, 3) },
+];
+
+/* ---- transfers ---- */
+$('#runTransfers').onclick = async () => {
+  const out = $('#transfersOut');
+  if (SQUAD.length !== 15) { oops(out, new Error(`Enter all 15 players first — you have ${SQUAD.length}.`)); return; }
+  busy(out, 'solving each transfer count…');
+  try {
+    const d = await api('/api/transfers', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        squad: SQUAD, free: parseInt($('#free').value),
+        bank: parseFloat($('#bank').value), max: parseInt($('#maxT').value)
+      })
+    });
+    out.innerHTML = '';
+    const card = el('div', 'card');
+    card.append(el('h2', null, 'Transfer options'));
+    card.append(el('p', 'hint',
+      `Squad £${fmt(d.squad_value, 1)}m + £${fmt(d.bank, 1)}m bank = £${fmt(d.budget, 1)}m. ` +
+      `${d.free} free; each extra costs ${d.hit_cost} points.`));
+
+    card.append(table([
+      { label: 'Moves', num: true, get: r => r.transfers },
+      { label: 'Gross', num: true, get: r => fmt(r.gross) },
+      { label: 'Hit', num: true, get: r => r.hit ? '−' + r.hit : '0' },
+      { label: 'Net', num: true, get: r => fmt(r.net) },
+      { label: 'vs 0', num: true, get: r => (r.gain >= 0 ? '+' : '') + fmt(r.gain) },
+      { label: 'Out', get: r => r.out.join(', ') || '—' },
+      { label: 'In', get: r => r.in.join(', ') || '—' },
+    ], d.rows));
+
+    if (d.best) {
+      const n = el('div', 'note');
+      n.innerHTML = d.best.transfers === 0
+        ? '<b>Hold.</b> No transfer gains enough to cover its cost this week.'
+        : `<b>Best: ${d.best.transfers} transfer(s)</b> for ${fmt(d.best.gain)} net points. ` +
+          `Out ${d.best.out.join(', ')} → in ${d.best.in.join(', ')}.`;
+      card.append(n);
+    }
+    out.append(card);
+  } catch (e) { oops(out, e); }
+};
+
+/* ---- chips ---- */
+$('#runChips').onclick = async () => {
+  const out = $('#chipsOut');
+  busy(out, 'reading the fixture calendar…');
+  try {
+    const d = await api('/api/chips', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ squad: SQUAD.length === 15 ? SQUAD : [], horizon: parseInt($('#horizon').value) })
+    });
+    out.innerHTML = '';
+
+    const rc = el('div', 'card');
+    rc.append(el('h2', null, `Recommendations — GW${d.first_gw} to GW${d.last_gw}`));
+    if (!d.any_dgw && !d.any_bgw) {
+      const n = el('div', 'note');
+      n.innerHTML = '<b>No doubles or blanks in this window.</b> They appear once cup runs force ' +
+        'postponements, usually from around GW18. Bench Boost and Free Hit have no fixture edge to ' +
+        'aim at yet, so these are fixture-difficulty calls — worth holding the chips if you can.';
+      rc.append(n);
+    }
+    const recs = el('div', 'recs');
+    d.recommendations.forEach(r => {
+      const c = el('div', 'rec');
+      c.append(el('div', 'chipname', r.chip));
+      c.append(el('div', 'gw', r.gw ? 'GW' + r.gw : 'Hold'));
+      c.append(el('div', 'why', r.reason));
+      if (r.note) c.append(el('div', 'why', r.note));
+      c.append(el('div', 'conf ' + (r.confidence || ''), (r.confidence || '') + ' confidence'));
+      recs.append(c);
+    });
+    rc.append(recs);
+    out.append(rc);
+
+    const tc = el('div', 'card');
+    tc.append(el('h2', null, 'Gameweek by gameweek'));
+    const cols = [
+      { label: 'GW', num: true, get: r => r.gw },
+      { label: 'Matches', num: true, get: r => r.matches },
+      { label: 'DGW teams', num: true, get: r => r.dgw_teams },
+      { label: 'Blank teams', num: true, get: r => r.blank_teams },
+      { label: 'Avg FDR', num: true, get: r => fmt(r.avg_fdr) },
+    ];
+    if (d.has_squad) {
+      cols.splice(4, 0,
+        { label: 'Your XI playing', num: true, get: r => r.squad_playing },
+        { label: 'Your blanks', num: true, get: r => r.squad_blanks });
+    }
+    tc.append(table(cols, d.rows));
+    out.append(tc);
+  } catch (e) { oops(out, e); }
+};
+
+/* ---- watchlist ---- */
+async function loadWatch() {
+  const out = $('#watchOut');
+  busy(out, 'ranking…');
+  try {
+    const d = await api(`/api/watchlist?max_ownership=${$('#maxOwn').value}&top=${$('#topN').value}`);
+    out.innerHTML = '';
+    const section = (title, hint, rows, extra) => {
+      const c = el('div', 'card');
+      c.append(el('h2', null, title));
+      if (hint) c.append(el('p', 'hint', hint));
+      if (!rows.length) { c.append(el('div', 'empty', 'Nothing to show.')); }
+      else c.append(table(extra ? playerCols.concat(extra) : playerCols, rows));
+      out.append(c);
+    };
+    section('Best value', 'Predicted points per £m, among players the model expects to return something.', d.value);
+    if (d.has_ownership) {
+      section(`Differentials — ${d.max_ownership}% owned or less`,
+              'Low-ownership players the model rates. Upside if they return, and few rivals hurt if they do.',
+              d.differentials, [{ label: 'Owned %', num: true, get: r => fmt(r.selected_by, 1) }]);
+    }
+    if (d.no_history && d.no_history.length) {
+      const c = el('div', 'card');
+      c.append(el('h2', null, 'No prior data'));
+      const n = el('div', 'note');
+      n.innerHTML = `<b>${d.no_history_total} players have never appeared in the training data.</b> ` +
+        'Their predictions come from zero-filled features — that is an absence of evidence, not a forecast. Ignore them.';
+      c.append(n);
+      c.append(table(playerCols, d.no_history));
+      out.append(c);
+    }
+    section('Priciest, least productive', 'Expensive players the model does not rate. Candidates to sell.', d.overpriced);
+  } catch (e) { oops(out, e); }
+}
+$('#runWatch').onclick = loadWatch;
+loadWatch();
+</script>
+</body>
+</html>
