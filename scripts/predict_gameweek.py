@@ -274,10 +274,19 @@ def build_placeholder_rows(season: str, gameweek: int, pairs, bootstrap,
         if col not in playing.columns:
             playing[col] = 0
 
+    # A player the data has never seen gets features of zero, which the models
+    # score well below average -- the honest answer for someone with no
+    # recorded form, but worth marking so it is not mistaken for a prediction
+    # made from evidence.
+    playing['has_prior_history'] = playing['name'].isin(set(history['name']))
+
     print(f"  {len(playing):,} players across {len(pairs)} fixtures")
     unknown = playing['element'].map(element_to_name).isna().sum()
     if unknown:
         print(f"  {unknown} not in this season's history yet (new signings, no form)")
+    no_history = int((~playing['has_prior_history']).sum())
+    if no_history:
+        print(f"  {no_history} have no prior data at all; flagged has_prior_history=False")
     return playing
 
 
@@ -513,7 +522,8 @@ def main() -> int:
     predictions = predictions.sort_values('predicted_points', ascending=False)
 
     cols = ['name', 'team', 'position', 'opponent_team', 'was_home', 'value_m',
-            'predicted_points', 'points_per_million', 'status', 'model']
+            'predicted_points', 'points_per_million', 'has_prior_history',
+            'status', 'model']
     cols = [c for c in cols if c in predictions.columns]
     predictions[cols].to_csv(args.out, index=False)
 
