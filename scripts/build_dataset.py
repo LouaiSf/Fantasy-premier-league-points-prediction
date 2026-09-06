@@ -225,7 +225,7 @@ def build_raw() -> pd.DataFrame:
     print("=" * 78)
     ns = run_range(
         NOTEBOOK,
-        first="data_merged_gw_2016_17 = pd.read_csv",
+        first="# What differs between seasons",
         last="# save all seasons data to a csv file",
         namespace={'pd': pd, 'np': np},
     )
