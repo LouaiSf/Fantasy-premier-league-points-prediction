@@ -80,7 +80,7 @@ def models_section():
     metrics = json.load(open('model_metrics.json'))
 
     rows = []
-    for approach in ('direct', 'pca'):
+    for approach in ('direct',):
         for position, res in metrics.get(approach, {}).items():
             for name, m in res['models'].items():
                 rows.append({
@@ -106,7 +106,7 @@ def models_section():
     print(best.to_string(index=False))
 
     # A split recorded once is enough; they are identical across positions.
-    for approach in ('direct', 'pca'):
+    for approach in ('direct',):
         for res in metrics.get(approach, {}).values():
             split = res.get('split')
             if split:
@@ -123,7 +123,7 @@ def saved_section():
     if not os.path.isdir(base):
         print(f"  MISSING {base}/")
         return
-    for kind in ('direct', 'pca_models'):
+    for kind in ('direct',):
         meta = os.path.join(base, kind, 'meta.json')
         if os.path.exists(meta):
             print(f"  {kind}/meta.json:")
