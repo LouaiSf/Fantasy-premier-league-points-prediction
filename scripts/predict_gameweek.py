@@ -185,6 +185,26 @@ def build_placeholder_rows(season: str, gameweek: int, pairs, bootstrap,
     id_to_name = dict(zip(teams['id'], teams['name']))
 
     season_hist = history[history['season'] == season]
+
+    # A stale history file is the quietest way to get plausible-looking
+    # nonsense out of this script: every feature is built from a player's
+    # recent matches, so history that stops months ago produces predictions
+    # from months-old form without anything looking wrong. This happened --
+    # a branch checkout reverted all_seasons_data_final.csv to a version
+    # missing an entire season, and only a change in file size gave it away.
+    if season_hist.empty:
+        print(f"\n  WARNING: {HISTORY} contains no {season} rows at all.")
+        print(f"  Every player's form will come from earlier seasons, and new")
+        print(f"  players will have none. Run scripts/build_dataset.py --write")
+        print(f"  after fetching, unless predicting the first fixture of a season.")
+    else:
+        latest_gw = int(season_hist['GW'].max())
+        if latest_gw < gameweek - 1:
+            print(f"\n  WARNING: history for {season} stops at GW{latest_gw}, but "
+                  f"GW{gameweek} is being predicted.")
+            print(f"  Form features will be {gameweek - 1 - latest_gw} gameweek(s) "
+                  f"out of date. Run scripts/fetch_data.py then "
+                  f"scripts/build_dataset.py --write.")
     # element ids are only stable within a season, which is exactly the scope
     # needed to turn a bootstrap id into the name the history uses.
     element_to_name = (season_hist.drop_duplicates('element', keep='last')
