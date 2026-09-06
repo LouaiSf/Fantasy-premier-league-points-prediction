@@ -264,8 +264,12 @@ def main() -> int:
                          'each group is measured separately against the full set '
                          'in a single preprocessing pass')
     ap.add_argument('--positions', nargs='+', default=list(POSITIONS))
-    ap.add_argument('--models', nargs='+', default=['Ridge', 'ElasticNet'],
-                    choices=sorted(BUILDERS))
+    ap.add_argument('--models', nargs='+', default=['Ridge'],
+                    choices=sorted(BUILDERS),
+                    help='Ridge by default: it has a closed-form solution and '
+                         'fits in seconds. ElasticNet is coordinate descent and '
+                         'takes minutes per fit at this width, which multiplies '
+                         'badly across groups x positions x three fits each.')
     ap.add_argument('--keep-only', nargs='+', default=None, metavar='PREFIX',
                     help='instead of ablating, train on the union of these '
                          'prefixes and compare against the full feature set')
@@ -279,6 +283,10 @@ def main() -> int:
     print("=" * 78)
     print(f"ABLATING {args.prefix}*  (same rows, same split, same seed)")
     print("=" * 78)
+
+    # The notebook now trims to the compact set by default. Ablation has to see
+    # every feature, or the groups it is asked to measure will already be gone.
+    os.environ['FPL_FEATURE_SET'] = 'full'
     stub_boosters_if_absent()
 
     started = time.time()

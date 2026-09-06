@@ -201,6 +201,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--notebook', default=NOTEBOOK)
+    ap.add_argument('--features', choices=('compact', 'full'), default='compact',
+                    help="compact (default) keeps only the feature families that "
+                         "measurably carry signal -- about 40 columns rather than "
+                         "220, for roughly 0.003 R2. full restores all of them.")
     ap.add_argument('--with-pca', action='store_true',
                     help='also train the PCA branch (off by default -- it loses '
                          'to the direct models at every position)')
@@ -209,6 +213,9 @@ def main() -> int:
     args = ap.parse_args()
 
     preflight()
+
+    # The notebook's feature cell reads this.
+    os.environ['FPL_FEATURE_SET'] = args.features
 
     print("=" * 78)
     print("TRAINING  (final.ipynb cells 103..150)")

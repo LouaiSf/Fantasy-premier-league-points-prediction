@@ -16,6 +16,10 @@ Training stops at 2022-23; 2023-24 is the validation season.
 | MID | LightGBM   | 0.339 | 1.031 | **+0.118** |
 | FWD | ElasticNet | 0.337 | 1.157 | **+0.113** |
 
+Those are from the full 220-feature set. The default is now the 54-feature
+compact set, which costs 0.0004 R2 on average and improves MAE everywhere --
+see "Most of the features are redundant" below.
+
 The last column is the one that matters. `rolling_5` — predict a player's mean
 over their last five matches — is the heuristic the whole model has to justify
 itself against. **+0.11 to +0.14 R² over it**, on 50,000 held-out rows.
@@ -35,6 +39,8 @@ python scripts/rebuild_merged_gw.py     # audit merged_gw.csv against its parts
 python scripts/build_dataset.py --write # -> all_seasons_data_final.csv
 python scripts/build_features.py        # -> all_seasons_data_featured.csv
 python scripts/train.py                 # -> saved_models/, model_metrics.json
+python scripts/train.py --features full # all 220 features instead of 54
+python scripts/ablate.py --prefix avail_ opponent_   # what a group is worth
 ```
 
 Training needs `xgboost` and `lightgbm` and takes about an hour on a laptop
@@ -119,13 +125,21 @@ alone:
 | `recoveries*` | 5 | −0.0001 | 0.081 |
 | `opponent_*` | 17 | +0.0012 | −0.009 |
 
-Minutes history alone reaches 0.326 against the full model's 0.339. Keeping
-only `minutes`, `avail_`, `total_points_` and `bps` — **40 features instead of
-220** — costs 0.003 R² on average and is *better* for forwards:
+Minutes history alone reaches 0.326 against the full model's 0.339.
 
-```
-python scripts/ablate.py --keep-only minutes avail_ total_points_ bps
-```
+**So the compact set is now the default**: `minutes`, `avail_`,
+`total_points_`, `bps`, `value`, `ict_index` — **54 features instead of 220**,
+chosen by searching five candidate sets. Ridge, against the full set:
+
+| position | features | R² | vs. full | MAE | vs. full |
+|---|---|---|---|---|---|
+| GK  | 159 → 46 | 0.4250 | **+0.0015** | 0.663 | **−0.040** |
+| DEF | 220 → 54 | 0.2749 | −0.0044 | 1.145 | **−0.014** |
+| MID | 220 → 54 | 0.3346 | −0.0046 | 0.991 | **−0.014** |
+| FWD | 220 → 54 | 0.3381 | **+0.0061** | 1.110 | **−0.040** |
+
+Mean R² cost is 0.0004, and **MAE improves at every position** — the dropped
+columns were adding variance, not signal. `--features full` restores all 220.
 
 Two consequences worth taking seriously. The 17 opponent-strength and
 fixture-difficulty features score *below* the mean on their own and add
@@ -133,6 +147,17 @@ fixture-difficulty features score *below* the mean on their own and add
 matcher plus a scrape of roughly 380 requests per season — produces features
 worth −0.0001 marginally. This is fundamentally a model of whether a player
 will be on the pitch.
+
+The FBref *data* stays regardless: `defensive_contribution` decides a +2 point
+bonus on 10,604 rows, so it is part of the target even though it is nearly
+worthless as a feature. Only the derived columns are dropped.
+
+To re-run the search:
+
+```bash
+python scripts/ablate.py --prefix minutes avail_ opponent_ bps ict_index
+python scripts/ablate.py --keep-only minutes avail_ total_points_ bps value ict_index
+```
 
 **2026-27 contributes nothing yet.** Only GW1 exists upstream, and rolling
 features need five matches, so every row is dropped. It will start counting
