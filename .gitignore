@@ -55,3 +55,6 @@ all_seasons_data_final.csv
 
 # Colab upload bundles (rebuild with scripts/make_colab_bundle.py)
 *.zip
+
+# Your own squad file; example_squad.txt is the template
+my_squad.txt

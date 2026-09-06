@@ -1,0 +1,26 @@
+# Your current FPL squad: one player per line, 15 names.
+#
+# Matching is case-insensitive and substring-based against the name column
+# of predictions_next_gw.csv, so a surname is usually enough. If a name is
+# ambiguous the script lists the candidates rather than guessing.
+#
+# Blank lines and lines starting with # are ignored.
+#
+#   python scripts/optimise.py transfers --squad example_squad.txt --free 1 --bank 0.5
+#   python scripts/optimise.py chips --squad example_squad.txt --horizon 8
+
+Bruno Borges Fernandes
+Nobel Mendy
+Cole Palmer
+Marc Guéhi
+Semi Ajayi
+Martin Ødegaard
+Dominik Szoboszlai
+Mamadou Sangaré
+Joško Gvardiol
+João Pedro Junqueira de Jesus
+Konstantinos Tzolakis
+Bart Verbruggen
+Emersonn Correia da Silva
+Dara O'Shea
+Brandon Thomas-Asante
