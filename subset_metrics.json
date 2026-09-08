@@ -1,0 +1,50 @@
+{
+  "keep_only": [
+    "minutes",
+    "avail_",
+    "total_points_",
+    "bps"
+  ],
+  "rows": [
+    {
+      "pos": "GK",
+      "model": "Ridge",
+      "full_n": 159,
+      "full_R2": 0.4235,
+      "subset_n": 40,
+      "subset_R2": 0.4233,
+      "cost": -0.0002,
+      "retained": "99.9%"
+    },
+    {
+      "pos": "DEF",
+      "model": "Ridge",
+      "full_n": 220,
+      "full_R2": 0.2793,
+      "subset_n": 40,
+      "subset_R2": 0.272,
+      "cost": -0.0072,
+      "retained": "97.4%"
+    },
+    {
+      "pos": "MID",
+      "model": "Ridge",
+      "full_n": 220,
+      "full_R2": 0.3392,
+      "subset_n": 40,
+      "subset_R2": 0.3259,
+      "cost": -0.0133,
+      "retained": "96.1%"
+    },
+    {
+      "pos": "FWD",
+      "model": "Ridge",
+      "full_n": 220,
+      "full_R2": 0.332,
+      "subset_n": 40,
+      "subset_R2": 0.3393,
+      "cost": 0.0073,
+      "retained": "102.2%"
+    }
+  ]
+}

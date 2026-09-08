@@ -49,3 +49,12 @@ defensive_stats_raw.csv
 backtest_summary.csv
 model_results_predictive.csv
 all_seasons_data_final.csv
+# Backups of files repaired by scripts/
+*.bak
+*.prev
+
+# Colab upload bundles (rebuild with scripts/make_colab_bundle.py)
+*.zip
+
+# Your own squad file; example_squad.txt is the template
+my_squad.txt
