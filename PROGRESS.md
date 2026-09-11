@@ -211,9 +211,10 @@ because both models already exist and only need wiring.
 
 ### 4. Data
 
-- [ ] **2026-27 contributes nothing yet** — only GW1 exists upstream, and
-      rolling features need five matches, so every row is dropped. It starts
-      counting around GW6. Needs a `fetch_data.py` run, no code change
+- [ ] **2026-27 contributes nothing yet** — GW1 is now committed (all that
+      exists upstream as of 2026-09-11), but rolling features need five
+      matches, so every row is still dropped. It starts counting around GW6.
+      Re-run `fetch_data.py` as gameweeks land; no code change needed
 - [ ] The FBref merge covers 2024-25 only through GW21; later rows carry
       `has_fbref_defensive=0` and honest zeros. Extend it or retire it
 - [ ] **`all_seasons_data_final.csv` is load-bearing and has no backup.** It is
