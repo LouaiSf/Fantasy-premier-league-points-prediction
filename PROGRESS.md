@@ -12,20 +12,24 @@ tracks the work around it.
 
 | branch | state |
 |---|---|
-| `pipeline-for-public` (local) | **all 29 commits of work** — this is the real project |
-| `public/fix/training-pipeline` | identical to the above, already pushed |
-| `public/main` | 29 commits behind — the merge has not happened yet |
-| `main` (local) | the inherited baseline, one commit |
+| `pipeline-for-public` (local) | where the work is committed |
+| `public/fix/training-pipeline` | identical to the above, always pushed first |
+| `public/main` | **has the work**, merged via PRs #22, #23 and #24 |
+| `main` (local) | the inherited baseline, one commit — not the project |
 
 Two things to be aware of before picking this up again:
 
 1. The working tree is currently checked out on local `main`, which is the
-   **inherited baseline** — old notebooks, no `scripts/`, no `webapp/`.
-   `git switch pipeline-for-public` first. (`data/2024-25/`, `data/2025-26/`
-   and `fpl_colab.zip` are sitting untracked in the folder and will need
-   stashing or removing, since the target branch tracks those paths.)
-2. Merging into `public/main` is a clean fast-forward — zero conflicts, no
-   rebase needed. It was deliberately deferred until the work was finished.
+   **inherited baseline** — old notebooks, no `scripts/`, no `webapp/`, and
+   only the 2018-19 season. `git switch pipeline-for-public` first.
+   (`data/2024-25/`, `data/2025-26/`, `data/2026-27/` and `fpl_colab.zip` sit
+   untracked in the folder and need stashing, since the branch tracks those
+   paths.) Committing while on `main` also uses the *inherited* `.gitignore`,
+   which lacks the `*.zip`, `*.prev` and `*.bak` rules — a `git add .` there
+   once swept a 25 MB Colab bundle into a commit.
+2. A bare `git push` targets `origin` (`mohameddddt/…`), a private repo the
+   branch was published to by mistake early on. The public repo is the remote
+   named `public`: `git push public HEAD:fix/training-pipeline`.
 
 ---
 
@@ -169,10 +173,14 @@ FBref *data* stays regardless — `defensive_contribution` decides a +2 bonus on
 
 ### 1. Release
 
+- [x] Merged into `public/main` — PRs #22 and #23 carried the pipeline, the
+      progress doc and the data removal; #24 the requirements doc and 2026-27
 - [ ] `git switch pipeline-for-public` (the working tree is on the baseline)
-- [ ] Merge into `public/main` — clean fast-forward, deliberately deferred
-- [ ] Delete the stale remote branches on `public/` once main has the work
+- [ ] Delete the stale remote branches on `public/` now that main has the work
       (about 20 remain from the original group project)
+- [ ] Add a repository description and topics on GitHub; consider GitHub Pages
+      off `docs/` so `website_requirements.html` renders instead of showing
+      source
 
 ### 2. Website — from the requirements document
 
@@ -211,9 +219,10 @@ because both models already exist and only need wiring.
 
 ### 4. Data
 
-- [ ] **2026-27 contributes nothing yet** — only GW1 exists upstream, and
-      rolling features need five matches, so every row is dropped. It starts
-      counting around GW6. Needs a `fetch_data.py` run, no code change
+- [ ] **2026-27 contributes nothing yet** — GW1 is now committed (all that
+      exists upstream as of 2026-09-11), but rolling features need five
+      matches, so every row is still dropped. It starts counting around GW6.
+      Re-run `fetch_data.py` as gameweeks land; no code change needed
 - [ ] The FBref merge covers 2024-25 only through GW21; later rows carry
       `has_fbref_defensive=0` and honest zeros. Extend it or retire it
 - [ ] **`all_seasons_data_final.csv` is load-bearing and has no backup.** It is

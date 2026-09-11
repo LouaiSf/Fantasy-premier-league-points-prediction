@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+</style>
+<title>FPL Assistant Requirements</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground:      #f4f6f8;
+    --surface:     #ffffff;
+    --surface-2:   #eef1f5;
+    --line:        #dde3ea;
+    --line-strong: #c4cdd8;
+    --ink:         #111722;
+    --ink-2:       #3d4756;
+    --muted:       #626e80;
+    --faint:       #8b95a4;
+    --accent:      #0b6e4f;
+    --accent-ink:  #ffffff;
+    --accent-wash: #e3f1ec;
+
+    /* FPL's own fixture-difficulty scale, 1 (easy) to 5 (hard). Semantic,
+       and deliberately not the accent hue. */
+    --fdr-1: #2e9e63;
+    --fdr-2: #7cb648;
+    --fdr-3: #d9a036;
+    --fdr-4: #c96a3c;
+    --fdr-5: #c64b4b;
+
+    --display: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+    --body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #0d1117;
+      --surface:     #151b24;
+      --surface-2:   #1c2430;
+      --line:        #27313f;
+      --line-strong: #3a4657;
+      --ink:         #e8edf4;
+      --ink-2:       #c3ccd8;
+      --muted:       #8e9aab;
+      --faint:       #6b7788;
+      --accent:      #35c793;
+      --accent-ink:  #062018;
+      --accent-wash: #12302a;
+
+      --fdr-1: #3fb875;
+      --fdr-2: #8fc95c;
+      --fdr-3: #e0ae4c;
+      --fdr-4: #d67d4e;
+      --fdr-5: #dd6060;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #0d1117;
+    --surface:     #151b24;
+    --surface-2:   #1c2430;
+    --line:        #27313f;
+    --line-strong: #3a4657;
+    --ink:         #e8edf4;
+    --ink-2:       #c3ccd8;
+    --muted:       #8e9aab;
+    --faint:       #6b7788;
+    --accent:      #35c793;
+    --accent-ink:  #062018;
+    --accent-wash: #12302a;
+
+    --fdr-1: #3fb875;
+    --fdr-2: #8fc95c;
+    --fdr-3: #e0ae4c;
+    --fdr-4: #d67d4e;
+    --fdr-5: #dd6060;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    padding-inline: 22px;
+    padding-block: 44px 96px;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead { border-bottom: 2px solid var(--ink); padding-bottom: 26px; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .eyebrow span::after { content: ' ·'; color: var(--line-strong); }
+  .eyebrow span:last-child::after { content: ''; }
+
+  h1 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: clamp(38px, 7vw, 58px);
+    letter-spacing: -.034em;
+    line-height: 1.02;
+    margin: 14px 0 0;
+    text-wrap: balance;
+  }
+
+  .standfirst {
+    font-size: 18px;
+    color: var(--ink-2);
+    margin: 14px 0 0;
+    max-width: 60ch;
+  }
+
+  /* ---------- model facts ---------- */
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    margin-top: 30px;
+  }
+  .fact { background: var(--surface); padding: 13px 15px; }
+  .fact dt {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0;
+  }
+  .fact dd {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 25px;
+    letter-spacing: -.02em;
+    margin: 3px 0 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .fact dd small {
+    font-family: var(--body);
+    font-weight: 400;
+    font-size: 12.5px;
+    color: var(--muted);
+    letter-spacing: 0;
+  }
+
+  /* ---------- sections ---------- */
+  section { margin-top: 58px; }
+
+  h2 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 27px;
+    letter-spacing: -.022em;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+  .lede { color: var(--muted); margin: 0 0 26px; max-width: 62ch; font-size: 15.5px; }
+
+  h3 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 17.5px;
+    letter-spacing: -.012em;
+    margin: 0;
+  }
+
+  p { margin: 0 0 14px; max-width: 66ch; }
+  p:last-child { margin-bottom: 0; }
+
+  a { color: var(--accent); text-underline-offset: 3px; }
+
+  code, .mono { font-family: var(--mono); font-size: .875em; }
+  code {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: var(--ink-2);
+    overflow-wrap: anywhere;
+  }
+
+  /* ---------- spec blocks ---------- */
+  .spec {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--line-strong);
+    padding: 19px 21px;
+    margin-bottom: 14px;
+  }
+  .spec.built     { border-left-color: var(--fdr-1); }
+  .spec.tobuild   { border-left-color: var(--accent); }
+  .spec.proposed  { border-left-color: var(--line-strong); }
+
+  .spec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 11px;
+    flex-wrap: wrap;
+    margin-bottom: 9px;
+  }
+  .spec-head .id {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--faint);
+    letter-spacing: .04em;
+  }
+  .spec p { font-size: 15px; }
+
+  .chip {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 2px;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  .chip.built    { background: var(--accent-wash); color: var(--accent); }
+  .chip.tobuild  { background: var(--accent); color: var(--accent-ink); }
+  .chip.proposed { background: transparent; color: var(--muted); border: 1px solid var(--line-strong); }
+  .chip.high     { background: transparent; color: var(--fdr-5); border: 1px solid currentColor; }
+  .chip.med      { background: transparent; color: var(--fdr-3); border: 1px solid currentColor; }
+  .chip.low      { background: transparent; color: var(--muted); border: 1px solid var(--line-strong); }
+
+  /* ---------- requirement lists ---------- */
+  ul.reqs { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 7px; }
+  ul.reqs li {
+    display: grid;
+    grid-template-columns: 62px 1fr;
+    gap: 12px;
+    font-size: 14.5px;
+    align-items: start;
+  }
+  ul.reqs .rid {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--accent);
+    padding-top: 3px;
+    letter-spacing: .02em;
+  }
+  ul.reqs .rtext { color: var(--ink-2); }
+
+  ul.plain { margin: 0 0 14px; padding-left: 20px; }
+  ul.plain li { margin-bottom: 6px; color: var(--ink-2); max-width: 64ch; }
+
+  /* ---------- tables ---------- */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 460px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: 0; }
+  th {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td strong { font-weight: 600; }
+
+  /* ---------- callout ---------- */
+  .note {
+    background: var(--accent-wash);
+    border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+    padding: 15px 18px;
+    margin: 20px 0;
+  }
+  .note .label {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 5px;
+  }
+  .note p { font-size: 14.5px; margin-bottom: 0; color: var(--ink-2); }
+
+  /* ---------- fdr scale ---------- */
+  .fdr { display: flex; gap: 4px; margin: 14px 0 6px; flex-wrap: wrap; }
+  .fdr div {
+    flex: 1 1 60px;
+    text-align: center;
+    padding: 7px 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: #fff;
+    font-weight: 500;
+  }
+  .fdr div:nth-child(1) { background: var(--fdr-1); }
+  .fdr div:nth-child(2) { background: var(--fdr-2); }
+  .fdr div:nth-child(3) { background: var(--fdr-3); color: #2b2000; }
+  .fdr div:nth-child(4) { background: var(--fdr-4); }
+  .fdr div:nth-child(5) { background: var(--fdr-5); }
+  .caption { font-size: 13px; color: var(--muted); margin: 0; }
+
+  footer {
+    margin-top: 64px;
+    padding-top: 22px;
+    border-top: 1px solid var(--line);
+    font-size: 13.5px;
+    color: var(--muted);
+  }
+  footer p { max-width: 66ch; }
+
+  @media (max-width: 520px) {
+    ul.reqs li { grid-template-columns: 1fr; gap: 2px; }
+    ul.reqs .rid { padding-top: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">
+      <span>Requirements</span><span>v1</span><span>September 2026</span><span>2026–27 season</span>
+    </div>
+    <h1>FPL Assistant</h1>
+    <p class="standfirst">
+      A web interface for a Premier League points model. What is built, what to build
+      next, and what the model can honestly support.
+    </p>
+
+    <dl class="facts">
+      <div class="fact"><dt>Test MAE</dt><dd>1.0 <small>pts</small></dd></div>
+      <div class="fact"><dt>Test R²</dt><dd>0.35</dd></div>
+      <div class="fact"><dt>Held out</dt><dd>48k <small>rows</small></dd></div>
+      <div class="fact"><dt>Features</dt><dd>74</dd></div>
+      <div class="fact"><dt>Solve time</dt><dd>0.3 <small>s</small></dd></div>
+    </dl>
+  </header>
+
+  <section>
+    <h2>Purpose</h2>
+    <p class="lede">Why this exists and who opens it.</p>
+    <p>
+      The model predicts how many points each player will score in the coming gameweek.
+      On its own that is a CSV. The site is how a decision gets made from it — which
+      fifteen to own, which transfer is worth a −4, which week to burn a chip.
+    </p>
+    <p>Three people open it, and they want different things:</p>
+    <ul class="plain">
+      <li><strong>An FPL manager</strong> wants an answer before the deadline: who to buy, who to captain, whether to hold.</li>
+      <li><strong>A reviewer</strong> — a marker, an interviewer — wants to see that the model works and that its limits are understood.</li>
+      <li><strong>Us</strong>, testing the model visually. A ranked CSV hides a bad prediction; a pitch view with a £4.0m unknown at centre-forward does not.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>What the model provides</h2>
+    <p class="lede">
+      Every page has to be backed by something the model actually outputs. This is the
+      full list, and where each output surfaces today.
+    </p>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Model output</th><th>Quality</th><th>Surfaced in</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Predicted points</strong><br><span style="color:var(--muted);font-size:13px">per player, per gameweek</span></td>
+            <td class="num">MAE 1.0<br>R² 0.35</td>
+            <td>Squad builder, Players, Watchlist, Transfers</td>
+          </tr>
+          <tr>
+            <td><strong>P(plays)</strong><br><span style="color:var(--muted);font-size:13px">will they take the field</span></td>
+            <td class="num">AUC 0.954</td>
+            <td><span style="color:var(--fdr-5)">Nowhere</span></td>
+          </tr>
+          <tr>
+            <td><strong>P(haul ≥ 10)</strong><br><span style="color:var(--muted);font-size:13px">captaincy upside</span></td>
+            <td class="num">AUC 0.869</td>
+            <td><span style="color:var(--fdr-5)">Nowhere</span></td>
+          </tr>
+          <tr>
+            <td><strong>Fixture difficulty</strong><br><span style="color:var(--muted);font-size:13px">attack vs defence, by venue</span></td>
+            <td class="num">+0.007 R²</td>
+            <td>Chips</td>
+          </tr>
+          <tr>
+            <td><strong>Optimal squad</strong><br><span style="color:var(--muted);font-size:13px">integer program, real constraints</span></td>
+            <td class="num">exact</td>
+            <td>Squad builder, Transfers</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <span class="label">The gap worth closing first</span>
+      <p>
+        Two trained classifiers are not surfaced anywhere. <strong>P(plays)</strong> at
+        0.954 AUC is the most accurate thing this project produces, and
+        <strong>P(haul)</strong> at 0.869 answers the captaincy question directly. Both
+        already exist in <code>fpl_pipeline.ipynb</code>. Building pages for them is
+        wiring, not modelling — and it is the cheapest way to make the site show more
+        of what the model does.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Data sources</h2>
+    <p class="lede">Verified against the live API in September 2026.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Endpoint</th><th>Gives</th><th>Used for</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">/api/bootstrap-static/</td><td>Players, prices, teams, gameweeks, injury news</td><td>Everything</td></tr>
+          <tr><td class="mono">/api/fixtures/?event={gw}</td><td>Fixtures and difficulty</td><td>Chips, ticker</td></tr>
+          <tr><td class="mono">/api/entry/{id}/</td><td>Manager name, rank, bank, total points</td><td>My Team</td></tr>
+          <tr><td class="mono">/api/entry/{id}/event/{gw}/picks/</td><td>Their actual 15, captain, chip played</td><td>My Team</td></tr>
+          <tr><td class="mono">/api/regions/</td><td>Country names and ISO codes</td><td>Player flags</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top:18px">
+      Locally: <code>predictions_next_gw.csv</code> (497 players with predictions),
+      <code>saved_models/direct/</code>, and ten seasons under <code>data/</code>.
+      Player photos come from <code>resources.premierleague.com</code> and all 509
+      resolve.
+    </p>
+
+    <ul class="plain" style="margin-top:14px">
+      <li><strong>No authentication.</strong> The API is read-only and public. We can read any manager's public squad by ID; we cannot make transfers for them.</li>
+      <li><strong>Live data needs caching.</strong> Bootstrap is ~1.5 MB. Fetch once per session, not per page.</li>
+      <li><strong>180 of 655 players carry injury news</strong> with a return note and a playing-chance percentage. That is enough to build a real News page from.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Built</h2>
+    <p class="lede">Working today. Requirements listed are changes, not the whole feature.</p>
+
+    <div class="spec built">
+      <div class="spec-head"><h3>Squad builder</h3><span class="chip built">Built</span></div>
+      <p>
+        Best legal fifteen for a budget, solved as one integer program with the XI, bench
+        order and captain decided together. Lock players in, exclude others, result drawn
+        on a pitch.
+      </p>
+      <ul class="reqs">
+        <li><span class="rid">SB-1</span><span class="rtext">Show a confidence band on each predicted score, not a bare number — ±1.0 is the measured error.</span></li>
+        <li><span class="rid">SB-2</span><span class="rtext">Warn when the optimal squad contains a player with no prior history.</span></li>
+        <li><span class="rid">SB-3</span><span class="rtext">Let the user save a solved squad to My Team in one click.</span></li>
+      </ul>
+    </div>
+
+    <div class="spec built">
+      <div class="spec-head"><h3>Transfers</h3><span class="chip built">Built</span></div>
+      <p>
+        Best move at every transfer count, with the −4 hit charged before comparison, so
+        a marginal second transfer shows as the loss it usually is.
+      </p>
+      <ul class="reqs">
+        <li><span class="rid">TR-1</span><span class="rtext">Read the squad from My Team instead of the tab's own local copy.</span></li>
+        <li><span class="rid">TR-2</span><span class="rtext">Say explicitly when a gain is inside the model's error and the transfer is worth rolling.</span></li>
+        <li><span class="rid">TR-3</span><span class="rtext">Show the outgoing and incoming player side by side, with photos and the stats behind the swap.</span></li>
+      </ul>
+    </div>
+
+    <div class="spec built">
+      <div class="spec-head"><h3>Chips</h3><span class="chip built">Built</span></div>
+      <p>
+        Bench Boost, Triple Captain, Free Hit and Wildcard ranked over a horizon, from
+        fixture count, difficulty and how much of the user's squad plays.
+      </p>
+      <ul class="reqs">
+        <li><span class="rid">CH-1</span><span class="rtext">Keep stating that per-player predictions do not vary by gameweek — the ranking is fixtures, not a projection.</span></li>
+        <li><span class="rid">CH-2</span><span class="rtext">Mark which chips the user has already played, read from their entry history.</span></li>
+      </ul>
+    </div>
+
+    <div class="spec built">
+      <div class="spec-head"><h3>Players &amp; Watchlist</h3><span class="chip built">Built</span></div>
+      <p>
+        Filterable grid of all 509 with photo, country flag, price, prediction and
+        ownership. Watchlist surfaces value per million, differentials and overpriced
+        players.
+      </p>
+      <ul class="reqs">
+        <li><span class="rid">PL-1</span><span class="rtext">Add P(plays) to the card, once it is exposed by the API.</span></li>
+        <li><span class="rid">PL-2</span><span class="rtext">Add a compare mode — select two to four players, show their stats side by side.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>To build</h2>
+    <p class="lede">Requested. Both are backed by data already verified as available.</p>
+
+    <div class="spec tobuild">
+      <div class="spec-head">
+        <h3>News</h3><span class="chip tobuild">To build</span><span class="chip high">High value</span>
+      </div>
+      <p>
+        The model has no team-news feature, which is its single largest blind spot — it
+        will happily rate a player who is out for three months. This page is the
+        counterweight: every injury, suspension and doubt FPL has published, next to
+        what the model thinks.
+      </p>
+      <ul class="reqs">
+        <li><span class="rid">NW-1</span><span class="rtext">List every player with a non-empty <code>news</code> field — 180 of 655 today — newest first by <code>news_added</code>.</span></li>
+        <li><span class="rid">NW-2</span><span class="rtext">Show the playing chance as a percentage with the raw note: <em>"Groin injury — 25% chance of playing"</em>.</span></li>
+        <li><span class="rid">NW-3</span><span class="rtext">Flag conflicts loudly: a player the model rates highly who has a 0% chance is the case this page exists to catch.</span></li>
+        <li><span class="rid">NW-4</span><span class="rtext">Highlight anyone in the user's squad, at the top, separated from the rest.</span></li>
+        <li><span class="rid">NW-5</span><span class="rtext">Filter by status: injured, suspended, doubtful, transferred out of the league.</span></li>
+        <li><span class="rid">NW-6</span><span class="rtext">Show when the data was fetched. Stale team news is worse than none.</span></li>
+      </ul>
+    </div>
+
+    <div class="spec tobuild">
+      <div class="spec-head">
+        <h3>My Team</h3><span class="chip tobuild">To build</span><span class="chip high">High value</span>
+      </div>
+      <p>
+        One place the user's squad lives, instead of a list retyped on the Transfers tab.
+        Entering fifteen names by hand is the worst interaction in the current site;
+        importing by FPL ID removes it entirely.
+      </p>
+      <ul class="reqs">
+        <li><span class="rid">MT-1</span><span class="rtext">Import by FPL manager ID via <code>/api/entry/{id}/event/{gw}/picks/</code> — pulls the real fifteen, captain, vice and bench order.</span></li>
+        <li><span class="rid">MT-2</span><span class="rtext">Show manager name, overall rank, total points and bank from <code>/api/entry/{id}/</code>.</span></li>
+        <li><span class="rid">MT-3</span><span class="rtext">Keep manual entry as a fallback, through the existing player picker.</span></li>
+        <li><span class="rid">MT-4</span><span class="rtext">Persist the ID so the import is automatic on the next visit.</span></li>
+        <li><span class="rid">MT-5</span><span class="rtext">Draw the squad on a pitch with each player's prediction, and total the XI.</span></li>
+        <li><span class="rid">MT-6</span><span class="rtext">Score the squad against the optimal one at the same value, and name the weakest slots.</span></li>
+        <li><span class="rid">MT-7</span><span class="rtext">Become the single source for Transfers, Chips and News — enter the squad once.</span></li>
+      </ul>
+      <div class="note">
+        <span class="label">Explain the ID</span>
+        <p>
+          Most people do not know their manager ID. Say where to find it: it is the
+          number in the URL when viewing your own points page on the FPL site.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Proposed</h2>
+    <p class="lede">
+      Ordered by value for effort. The first two are the strongest: both surface a model
+      that already exists and currently appears nowhere.
+    </p>
+
+    <div class="spec proposed">
+      <div class="spec-head">
+        <h3>Captain picker</h3><span class="chip proposed">Proposed</span><span class="chip high">High value</span><span class="chip low">Low effort</span>
+      </div>
+      <p>
+        Expected points and upside are different questions. A steady five-point midfielder
+        and a forward who returns 2 or 15 can carry the same prediction, and only one is
+        a captain. The P(haul) classifier answers this directly at 0.869 AUC and is not
+        used anywhere.
+      </p>
+      <ul class="reqs">
+        <li><span class="rid">CP-1</span><span class="rtext">Rank the user's XI by P(≥10 points), shown as a percentage against the 1.7% base rate.</span></li>
+        <li><span class="rid">CP-2</span><span class="rtext">Show expected points beside it — when the two disagree, that is the interesting case.</span></li>
+        <li><span class="rid">CP-3</span><span class="rtext">Be honest that in backtesting this did not beat ranking by expected points; it is a second opinion, not a better one.</span></li>
+      </ul>
+    </div>
+
+    <div class="spec proposed">
+      <div class="spec-head">
+        <h3>Will they play?</h3><span class="chip proposed">Proposed</span><span class="chip high">High value</span><span class="chip low">Low effort</span>
+      </div>
+      <p>
+        The play classifier reaches 0.954 AUC — the most accurate output this project has.
+        Combined with the News page it answers the question that decides most FPL
+        outcomes: is this player starting.
+      </p>
+      <ul class="reqs">
+        <li><span class="rid">WP-1</span><span class="rtext">Show P(plays) on every player card and in My Team.</span></li>
+        <li><span class="rid">WP-2</span><span class="rtext">Flag squad members below 50% before the deadline.</span></li>
+        <li><span class="rid">WP-3</span><span class="rtext">Show the model's own estimate next to FPL's published chance — they are independent, and disagreement is a signal.</span></li>
+      </ul>
+    </div>
+
+    <div class="spec proposed">
+      <div class="spec-head">
+        <h3>Fixture ticker</h3><span class="chip proposed">Proposed</span><span class="chip med">Medium value</span><span class="chip low">Low effort</span>
+      </div>
+      <p>
+        A grid of the next six to eight gameweeks, one row per club, each cell coloured by
+        difficulty. The most-used tool in the FPL community, and the fixture data is
+        already loaded for the Chips page.
+      </p>
+      <div class="fdr">
+        <div>1 · easy</div><div>2</div><div>3 · even</div><div>4</div><div>5 · hard</div>
+      </div>
+      <p class="caption">FPL's own difficulty scale, used as-is so the colours mean what regular players expect.</p>
+      <ul class="reqs" style="margin-top:14px">
+        <li><span class="rid">FT-1</span><span class="rtext">Sort clubs by total difficulty over the window, easiest first.</span></li>
+        <li><span class="rid">FT-2</span><span class="rtext">Mark blank and double gameweeks distinctly — they drive chip decisions.</span></li>
+        <li><span class="rid">FT-3</span><span class="rtext">Highlight the clubs the user owns.</span></li>
+      </ul>
+    </div>
+
+    <div class="spec proposed">
+      <div class="spec-head">
+        <h3>How it works</h3><span class="chip proposed">Proposed</span><span class="chip med">Medium value</span><span class="chip low">Low effort</span>
+      </div>
+      <p>
+        A model card. For a reviewer this may be the most important page on the site: it
+        shows the numbers are honest and the limits are understood.
+      </p>
+      <ul class="reqs">
+        <li><span class="rid">HW-1</span><span class="rtext">Per-position R² and MAE, against the rolling-average baseline, on the held-out seasons.</span></li>
+        <li><span class="rid">HW-2</span><span class="rtext">Explain the season-level holdout and why a random split would be wrong here.</span></li>
+        <li><span class="rid">HW-3</span><span class="rtext">Show the backtest: the picked XI beat the baseline in 29 of 33 gameweeks, +481 points.</span></li>
+        <li><span class="rid">HW-4</span><span class="rtext">State the limits plainly — no team news, ±1.0 error, chip timing is fixtures rather than a projection.</span></li>
+        <li><span class="rid">HW-5</span><span class="rtext">Name what was measured and dropped. Expected goals adding nothing is a finding worth showing.</span></li>
+      </ul>
+    </div>
+
+    <div class="spec proposed">
+      <div class="spec-head">
+        <h3>Price watch</h3><span class="chip proposed">Proposed</span><span class="chip med">Medium value</span><span class="chip med">Medium effort</span>
+      </div>
+      <p>
+        Prices move on net transfers, and a rise or fall changes what a squad can afford.
+        The pipeline already computes price momentum; the transfer counts are in the
+        bootstrap payload.
+      </p>
+      <ul class="reqs">
+        <li><span class="rid">PW-1</span><span class="rtext">Rank likely risers and fallers by net transfers this gameweek.</span></li>
+        <li><span class="rid">PW-2</span><span class="rtext">Flag squad members about to fall, and targets about to rise.</span></li>
+        <li><span class="rid">PW-3</span><span class="rtext">Call this a heuristic, not a model — FPL's real algorithm is undisclosed.</span></li>
+      </ul>
+    </div>
+
+    <div class="spec proposed">
+      <div class="spec-head">
+        <h3>Gameweek review</h3><span class="chip proposed">Proposed</span><span class="chip low">Lower value</span><span class="chip med">Medium effort</span>
+      </div>
+      <p>
+        After the gameweek: what the model predicted against what happened. The most
+        credible thing a prediction site can do is show its own misses.
+      </p>
+      <ul class="reqs">
+        <li><span class="rid">GR-1</span><span class="rtext">Predicted against actual for the user's squad, with the week's error.</span></li>
+        <li><span class="rid">GR-2</span><span class="rtext">The model's biggest hits and misses league-wide.</span></li>
+        <li><span class="rid">GR-3</span><span class="rtext">A running accuracy line across the season, so drift is visible.</span></li>
+      </ul>
+    </div>
+
+    <div class="spec proposed">
+      <div class="spec-head">
+        <h3>Wildcard planner</h3><span class="chip proposed">Proposed</span><span class="chip low">Lower value</span><span class="chip low">Low effort</span>
+      </div>
+      <p>
+        A wildcard is the squad builder with no transfer limit, which the site can already
+        solve. What it needs is framing: build from scratch, compare against what is owned,
+        and count how many moves the switch would take.
+      </p>
+      <ul class="reqs">
+        <li><span class="rid">WC-1</span><span class="rtext">Solve a fresh fifteen at the user's squad value plus bank.</span></li>
+        <li><span class="rid">WC-2</span><span class="rtext">Show the diff against the current squad, and the predicted gain.</span></li>
+        <li><span class="rid">WC-3</span><span class="rtext">Optimise over a multi-gameweek horizon, not just the next one.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Applies to every page</h2>
+    <p class="lede">Non-functional requirements. The first is the one most easily lost.</p>
+    <ul class="reqs">
+      <li><span class="rid">NF-1</span><span class="rtext"><strong>Never show a prediction as a fact.</strong> Measured error is ±1.0 points per player. Gaps smaller than that are noise and the interface should say so rather than implying a ranking is meaningful.</span></li>
+      <li><span class="rid">NF-2</span><span class="rtext">Players with no prior history are flagged everywhere they appear. Their predictions come from zero-filled features — an absence of evidence, not a forecast.</span></li>
+      <li><span class="rid">NF-3</span><span class="rtext">Every page states when its data was fetched, and from where.</span></li>
+      <li><span class="rid">NF-4</span><span class="rtext">A solve returns in under a second. It is 0.3 s today; keep it there.</span></li>
+      <li><span class="rid">NF-5</span><span class="rtext">Works at 400px. Tables scroll inside their own container; the page never scrolls sideways.</span></li>
+      <li><span class="rid">NF-6</span><span class="rtext">Light and dark both designed, not inverted.</span></li>
+      <li><span class="rid">NF-7</span><span class="rtext">API failure degrades to local data with a visible notice, never a blank page or a silent stale number.</span></li>
+      <li><span class="rid">NF-8</span><span class="rtext">Every figure traces to the same functions the CLI calls. Two code paths computing one number is how this project's worst bugs happened.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Out of scope</h2>
+    <ul class="plain">
+      <li><strong>Making transfers.</strong> The API is read-only without authentication, and handling FPL credentials is not worth it.</li>
+      <li><strong>Mini-league tables.</strong> Available, but it is a social feature and shows nothing about the model.</li>
+      <li><strong>Live in-play scores.</strong> A different product, with a polling cost this does not need.</li>
+      <li><strong>Accounts.</strong> A manager ID in local storage is enough; nothing here needs a password.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Open questions</h2>
+    <ul class="plain">
+      <li>Does <strong>My Team</strong> replace the Transfers squad entry outright, or shadow it until the import is trusted?</li>
+      <li>Does <strong>News</strong> stand alone, or fold into Players as a filter? Standalone is more visible; a filter is less to build.</li>
+      <li>How stale may cached bootstrap data get before the site refuses to show it — an hour, a day, until the next deadline?</li>
+      <li>Is the site deployed anywhere, or run locally? Deployment changes the caching and rate-limit answers substantially.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <p>
+      Figures are from the current trained models: 254,179 player-matches across ten
+      seasons, held out on 2024-25 and 2025-26, 48,304 test rows. Reproduce with
+      <code>scripts/train.py</code>, <code>scripts/baselines.py</code> and
+      <code>scripts/validate_selection.py</code>.
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>
