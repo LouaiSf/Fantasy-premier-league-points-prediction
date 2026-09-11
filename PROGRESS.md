@@ -216,9 +216,22 @@ because both models already exist and only need wiring.
       counting around GW6. Needs a `fetch_data.py` run, no code change
 - [ ] The FBref merge covers 2024-25 only through GW21; later rows carry
       `has_fbref_defensive=0` and honest zeros. Extend it or retire it
+- [ ] **`all_seasons_data_final.csv` is load-bearing and has no backup.** It is
+      the only surviving copy of the FBref defensive merge — `defensive_stats_raw.csv`
+      is gitignored and the scraping notebook was deleted, so `build_dataset.py`
+      lifts the defensive columns straight back out of this file. Re-scraping
+      costs ~380 requests per season. Never delete it; consider committing the
+      defensive columns on their own as a smaller, clearer artifact
 
 ### 5. Housekeeping
 
+- [x] Removed the 2,944 `data/*/understat/` files (38.8 MB) — grepped the whole
+      codebase, nothing reads them — and the regenerable `all_seasons_data.csv`
+      (41.9 MB). Tip went from 4,135 files / 220 MB to 1,190 / 139 MB
+- [ ] Add a `LICENSE`, and an MIT notice for the redistributed data. Upstream
+      (`vaastav/Fantasy-Premier-League`) is MIT, © 2017-19 Vaastav Anand, which
+      requires the notice to travel with the data. There is currently no
+      licence file of any kind
 - [ ] `README.md` has a **duplicated block**: the scripts table lists
       `predict_gameweek.py`, `optimise.py` and `validate_selection.py` twice,
       and the Layout section says the old notebooks "have been removed" and
