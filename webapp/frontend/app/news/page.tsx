@@ -1,11 +1,247 @@
-import { ComingSoon } from "@/components/coming-soon";
+"use client";
+
+import * as React from "react";
+import { useApp } from "@/components/providers/app-provider";
+import { num } from "@/lib/format";
+import type { PlayerRecord } from "@/lib/types";
+
+type Filter = "all" | "squad" | "injury" | "suspension" | "doubt";
+type View = "desk" | "cards";
+
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: "all", label: "All clubs" },
+  { key: "squad", label: "My squad" },
+  { key: "injury", label: "Injuries" },
+  { key: "suspension", label: "Suspensions" },
+  { key: "doubt", label: "Doubtful" },
+];
+
+function hasNote(player: PlayerRecord): boolean {
+  return Boolean(player.news) || player.status !== "a" || (player.chance_of_playing_next_round ?? 100) < 100;
+}
+
+function noteFor(player: PlayerRecord): string {
+  if (player.news) return player.news;
+  if ((player.chance_of_playing_next_round ?? 100) < 100) {
+    return `FPL lists a ${player.chance_of_playing_next_round}% chance of playing next round.`;
+  }
+  return `Current availability status: ${player.status}.`;
+}
+
+function severity(player: PlayerRecord): number {
+  return player.chance_of_playing_next_round ?? (player.status === "a" ? 100 : 50);
+}
 
 export default function NewsPage() {
+  const { snapshot, loading, squadNames, openProfile } = useApp();
+  const [filter, setFilter] = React.useState<Filter>("all");
+  const [view, setView] = React.useState<View>("desk");
+
+  if (loading || !snapshot) {
+    return (
+      <section className="page">
+        <div className="shell" style={{ paddingBlock: "var(--space-16)" }}>
+          <p>Loading the local season data…</p>
+        </div>
+      </section>
+    );
+  }
+
+  const squadNameSet = new Set(squadNames);
+  const allNotes = snapshot.players.filter(hasNote).sort((a, b) => severity(a) - severity(b));
+  const filtered = allNotes.filter((player) => {
+    switch (filter) {
+      case "squad":
+        return squadNameSet.has(player.name);
+      case "injury":
+        return player.status === "i";
+      case "suspension":
+        return player.status === "s";
+      case "doubt":
+        return player.status !== "a" || (player.chance_of_playing_next_round ?? 100) < 100;
+      default:
+        return true;
+    }
+  });
+
+  const lead = filtered[0] ?? null;
+  const rest = filtered.slice(1, 25);
+
   return (
-    <ComingSoon
-      eyebrow="Verified local player notes"
-      title="News wire"
-      description="Every status flag and note carried in the local FPL player snapshot, in one briefing."
-    />
+    <section className="page news-page paper-scope">
+      <div className="shell">
+        <div className="section-head on-paper">
+          <div>
+            <p className="eyebrow" style={{ color: "var(--pink)" }}>
+              Team news // local desk
+            </p>
+            <h1>Matchday wire</h1>
+          </div>
+          <p>
+            Every availability note carried in the local FPL player snapshot, ordered by what
+            changes your team first.
+          </p>
+        </div>
+
+        {allNotes.length > 0 && (
+          <div className="ticker-strip" aria-label="Availability headlines">
+            <span className="tag">Notes</span>
+            <div className="ticker-track" aria-hidden="true">
+              {[...allNotes, ...allNotes].map((player, index) => (
+                <span key={`${player.element}-${index}`}>
+                  <b>{player.web_name}</b> — {noteFor(player)}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="news-toolbar">
+          <div className="news-control-stack">
+            <div className="filter-row" role="group" aria-label="News filters">
+              {FILTERS.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={`chip on-paper${filter === item.key ? " is-active" : ""}`}
+                  onClick={() => setFilter(item.key)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <div className="news-view-switch" role="tablist" aria-label="News reading mode">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "desk"}
+                className="news-view-tab"
+                onClick={() => setView("desk")}
+              >
+                Desk
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "cards"}
+                className="news-view-tab"
+                onClick={() => setView("cards")}
+              >
+                Cards
+              </button>
+            </div>
+          </div>
+          <p className="kicker" style={{ color: "var(--muted-ink)" }}>
+            {filtered.length} note{filtered.length === 1 ? "" : "s"} in this filter
+          </p>
+        </div>
+
+        {!lead && <p className="wire-empty">No notes match this filter in the local snapshot.</p>}
+
+        {lead && (
+          <article
+            className="lead-story"
+            style={{ background: "linear-gradient(114deg,#37003c 0%,#1a0022 60%,#1a0022 100%)" }}
+          >
+            <span className="lead-hazard" aria-hidden="true" />
+            <div className="lead-copy">
+              <div className="lead-badges">
+                <span className="sev">{lead.status !== "a" ? "Flagged" : "Availability note"}</span>
+                {(lead.chance_of_playing_next_round ?? 100) < 100 && (
+                  <span className="live">{lead.chance_of_playing_next_round}% chance</span>
+                )}
+                <span className="club">{lead.team}</span>
+              </div>
+              <h2>{lead.web_name}</h2>
+              <p style={{ maxWidth: "40ch", color: "#f0e4f2", fontSize: 15 }}>{noteFor(lead)}</p>
+              <div className="lead-actions">
+                <button className="btn sm secondary" type="button" onClick={() => openProfile(lead)}>
+                  View player
+                </button>
+              </div>
+            </div>
+            <div className="lead-panel">
+              <h3>Squad relevance</h3>
+              <ul className="lead-impact">
+                <li>
+                  <i>{num(lead.selected_by)}%</i>
+                  <span>Owned by managers in the local snapshot</span>
+                </li>
+                <li>
+                  <i className={squadNameSet.has(lead.name) ? "" : "neg"}>
+                    {squadNameSet.has(lead.name) ? "In squad" : "Not owned"}
+                  </i>
+                  <span>Relevance to your current squad</span>
+                </li>
+                <li>
+                  <i>{lead.position}</i>
+                  <span>{lead.team}</span>
+                </li>
+              </ul>
+            </div>
+          </article>
+        )}
+
+        {view === "desk" && rest.length > 0 && (
+          <div className="wire-layout" style={{ gridTemplateColumns: "1fr" }}>
+            <div className="wire-col">
+              <h3 className="col-title">
+                League wire<small>{rest.length} stories</small>
+              </h3>
+              {rest.map((player) => (
+                <button
+                  key={player.element}
+                  type="button"
+                  className="wire-item"
+                  data-pri={player.status !== "a" ? "high" : "med"}
+                  onClick={() => openProfile(player)}
+                  style={{ width: "100%", background: "transparent", font: "inherit", textAlign: "left", cursor: "pointer" }}
+                >
+                  <span />
+                  <span>
+                    <h4>{player.web_name}</h4>
+                    <p>{noteFor(player)}</p>
+                    <div className="tagline">
+                      <span>{player.team}</span>
+                      <span>{player.position}</span>
+                      {squadNameSet.has(player.name) && <span className="owned">Owned</span>}
+                    </div>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {view === "cards" && rest.length > 0 && (
+          <div className="news-cards">
+            {rest.map((player) => (
+              <button
+                key={player.element}
+                type="button"
+                className="news-card"
+                onClick={() => openProfile(player)}
+              >
+                <div
+                  className="news-card-art"
+                  style={{ background: "linear-gradient(135deg,#555,#111)" }}
+                >
+                  <span />
+                </div>
+                <div className="news-card-copy">
+                  <div className="news-card-meta">
+                    <span>{player.team}</span>
+                    <span>{player.position}</span>
+                  </div>
+                  <h3>{player.web_name}</h3>
+                  <p>{noteFor(player)}</p>
+                  {squadNameSet.has(player.name) && <span className="news-card-tag owned">Owned</span>}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

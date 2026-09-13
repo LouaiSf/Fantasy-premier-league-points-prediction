@@ -110,8 +110,20 @@ predictions when available) or the widget is honestly omitted/simplified rather 
   Opponent Vulnerability (needs defensive analysis not in the data), Upside/Safety grid
   (redundant with the runway's meters), and the analyst "Insight" essay (pure invented prose)
   are all omitted rather than faked — see the fidelity note at the top of this document.
-- News Wire, Fixture Matrix are still **stub pages** (`components/coming-soon.tsx`) with
-  working nav — not yet rebuilt in the new system.
+- **News Wire fully rebuilt and verified**: a real scrolling ticker of every flagged player's
+  status text, filters that map onto real FPL `status` codes (Injuries → `status === "i"`,
+  Suspensions → `status === "s"`, Doubtful → `chance_of_playing_next_round < 100`, not
+  free-text categorisation the data doesn't carry), a lead story built from the single most
+  severe real note, and two reading modes (Desk list / Cards grid) over the same filtered real
+  data. The prototype's fabricated press-conference quotes/citations, "what changed since your
+  last visit" feed, price-watch panel, return-date timeline, and source-reliability dial are all
+  omitted — none of those are derivable from a single-snapshot dataset with no timestamps or
+  price history, so showing them would mean inventing data, not reporting it. The prototype's
+  third reading mode ("Picture line" horizontal reel) is also skipped: it's the same content in
+  a different layout, and two modes already demonstrate the pattern without meaningfully adding
+  more real information.
+- Fixture Matrix is still a **stub page** (`components/coming-soon.tsx`) with working nav — not
+  yet rebuilt in the new system.
 - Fixed two real bugs found in visual QA while building Transfer Studio (both explained in
   detail under Test evidence below): a negative-money formatting bug (`money()` rendered `-2.6`
   as `£-2.6m` instead of `-£2.6m`), and a mobile-width layout bug in the ported CSS itself
@@ -125,14 +137,12 @@ predictions when available) or the widget is honestly omitted/simplified rather 
 
 ## Current work in progress
 
-Rebuilding the remaining two surfaces (News Wire, Fixture Matrix) on the same pattern as the
-four shipped so far: prototype markup/classes + real data from the already-fetched
-`/api/platform` snapshot, with the same honest-omission rule for prototype-only fabricated
-content.
+Rebuilding the last surface (Fixture Matrix) on the same pattern as the five shipped so far:
+prototype markup/classes + real data from the already-fetched `/api/platform` snapshot.
 
 ## Remaining work
 
-- Rebuild the two stub surfaces.
+- Rebuild Fixture Matrix, the last stub surface.
 - Once all seven have parity with v1's real-data coverage, delete `webapp/templates/`,
   `webapp/static/`, and the Jinja page routes in `webapp/app.py` (keep only `/api/*`), and
   make Next.js the only frontend.
@@ -224,9 +234,21 @@ content.
     different from the squad-only leader). Clicked a runway candidate and confirmed the real
     player drawer opens. Verified at 375×844, no overlap.
   - Zero console errors on the finished Captain & Form page at both viewport sizes.
+  - News Wire: found and fixed a real rendering bug via full-page screenshot comparison, not
+    just code review — an inline `style={{border: 0}}` meant to reset the `<button>` default
+    for `.wire-item` rows was overriding the CSS class's own `border-left`/`border-top` accent
+    styling (inline styles always beat external stylesheet rules regardless of specificity), so
+    every wire item was silently missing its priority-colour left bar and its divider line.
+    Fixed by resetting only `background`/`font` inline and leaving all border management to the
+    CSS class. Verified the five filters (all real `status`-code-backed) change the note count
+    correctly, the Desk/Cards view switch renders the same filtered data in both layouts, and
+    checked the codebase for the same border-reset mistake elsewhere (none found). Verified at
+    375×844, no overlap.
+  - Zero console errors on the finished News Wire page at both viewport sizes.
 
 ## Next recommended milestone
 
-Rebuild News Wire next, then Fixture Matrix, each as its own verified,
-committed increment.
-After all seven exist, remove the superseded v1 Jinja/vanilla-JS files in one cleanup commit.
+Rebuild Fixture Matrix — the last surface. Once it's verified and committed, all seven surfaces
+will have parity with v1's real-data coverage; the next milestone after that is removing the
+superseded v1 Jinja/vanilla-JS files (`webapp/templates/`, `webapp/static/`, and the Jinja page
+routes in `webapp/app.py`) in one cleanup commit, making Next.js the only frontend.
