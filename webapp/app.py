@@ -162,6 +162,13 @@ def platform_page(page: str):
 # ---------------------------------------------------------------------------
 # API
 # ---------------------------------------------------------------------------
+@app.route('/favicon.ico')
+def favicon():
+    # The page already serves an inline data-URI icon; this just quiets the
+    # browser's unconditional /favicon.ico probe in the console/network log.
+    return '', 204
+
+
 @app.route('/api/meta')
 def api_meta():
     s = state()

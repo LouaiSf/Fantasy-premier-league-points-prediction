@@ -26,6 +26,7 @@ build/
 
 # Local browser and visual QA artifacts
 .playwright-cli/
+.playwright-mcp/
 output/
 
 # Environment
