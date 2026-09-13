@@ -1125,6 +1125,13 @@
     .rail{grid-template-columns:1fr}
     .studio-grid{grid-template-columns:1fr;grid-template-areas:"channel" "out" "in"}
     .channel{grid-template-columns:minmax(0,1fr) 52px minmax(0,1fr);grid-template-areas:"title title title" "out lane in" "read read read"}
+    /* FIX (not in the original prototype): the max-width:1280px breakpoint above
+       resets grid-column to auto on these four elements and this breakpoint never
+       restores it, so the title/read/foot rows collapse to a single narrow column
+       instead of spanning the row -- confirmed present in the unmodified prototype
+       file too, at this width. Re-asserting the span here is a correction, not a
+       verbatim-port deviation from taste. */
+    .channel-title,.channel-read,.channel-foot{grid-column:1/-1}
     .plinth-row{grid-template-columns:1fr;gap:var(--space-2)}
     .duel-vs{min-height:74px;grid-auto-flow:column}
     .cmp-cards{grid-template-columns:1fr}

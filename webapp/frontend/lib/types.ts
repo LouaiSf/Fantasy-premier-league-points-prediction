@@ -100,15 +100,29 @@ export interface TransferRow {
   transfers: number;
   gross: number;
   hit: number;
+  net: number;
   gain: number;
   out: string[];
   in: string[];
+  squad: PlayerRecord[];
+  xi: PlayerRecord[];
+}
+
+export interface TransferFailure {
+  transfers: number;
+  status: string;
 }
 
 export interface TransferResult {
   ok: true;
-  best: TransferRow | null;
+  squad_value: number;
+  bank: number;
+  budget: number;
+  free: number;
+  hit_cost: number;
   rows: TransferRow[];
+  failures: TransferFailure[];
+  best: TransferRow | null;
 }
 
 export interface ApiError {

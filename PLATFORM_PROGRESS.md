@@ -80,19 +80,38 @@ predictions when available) or the widget is honestly omitted/simplified rather 
   `addEventListener("error", ...)`; the first version of the React port dropped it, which
   showed as visible broken-image icons in bench cards — caught in visual QA and fixed with a
   small shared component used everywhere a player photo renders.
-- Transfer Studio, Comparison, Captain & Form, News Wire, Fixture Matrix are **stub pages**
+- **Transfer Studio fully rebuilt and verified**: dual desks (pink "Player out" / lime
+  "Player in", both with position and price/flag filters and search), a transfer channel with
+  staged out/in slots and a lane connector, live decision-bugs (bank after, points delta, hit
+  cost — points delta honestly shows "--" when predictions are unavailable rather than a fake
+  number), and free-transfers/bank inputs (real parameters the actual `/api/transfers`
+  optimiser accepts, not fabricated). "Run full analysis" calls the real optimiser and renders
+  its actual per-transfer-count rows (gross/hit/net gain, real out→in lists) instead of the
+  prototype's fictional 6-metric impact grid (fixture swing, captaincy relevance and risk
+  assessment have no real data source, so they're not included — see the fidelity note above).
+- Comparison, Captain & Form, News Wire, Fixture Matrix are still **stub pages**
   (`components/coming-soon.tsx`) with working nav — not yet rebuilt in the new system.
+- Fixed two real bugs found in visual QA while building Transfer Studio (both explained in
+  detail under Test evidence below): a negative-money formatting bug (`money()` rendered `-2.6`
+  as `£-2.6m` instead of `-£2.6m`), and a mobile-width layout bug in the ported CSS itself
+  (confirmed present in the unmodified `fpl-assistant-prototype.html` too, by serving it
+  locally and comparing bounding boxes) where the Transfer Channel's title/decision-read/footer
+  rows collapsed to a single narrow column instead of spanning full width, because a
+  `max-width:1280px` breakpoint's `grid-column:auto` reset is never undone by the
+  `max-width:860px` breakpoint's new `grid-template-areas`. Fixed with a small targeted
+  addition inside the 860px block, documented in `broadcast.css` as a correction rather than
+  part of the verbatim port.
 
 ## Current work in progress
 
-Rebuilding the remaining five surfaces (Transfer Studio, Comparison, Captain & Form, News Wire,
-Fixture Matrix) on the same pattern as My Team: prototype markup/classes + real data from the
-already-fetched `/api/platform` snapshot, with the same honest-omission rule for
+Rebuilding the remaining four surfaces (Comparison, Captain & Form, News Wire, Fixture Matrix)
+on the same pattern as My Team and Transfer Studio: prototype markup/classes + real data from
+the already-fetched `/api/platform` snapshot, with the same honest-omission rule for
 prototype-only fabricated content.
 
 ## Remaining work
 
-- Rebuild the five stub surfaces.
+- Rebuild the four stub surfaces.
 - Once all seven have parity with v1's real-data coverage, delete `webapp/templates/`,
   `webapp/static/`, and the Jinja page routes in `webapp/app.py` (keep only `/api/*`), and
   make Next.js the only frontend.
@@ -119,11 +138,17 @@ prototype-only fabricated content.
   `npm run build` passes at least 5/5 times first.
 - Premier League player photos and crests are external prototype assets; production publication
   still needs rights confirmation, as recorded in `DESIGN.md`.
+- **`fonts.gstatic.com` is flaky from this environment generally**, not just at build time —
+  Playwright screenshots occasionally timed out on "waiting for fonts to load" with
+  `ERR_CONNECTION_TIMED_OUT` / `ERR_QUIC_PROTOCOL_ERROR` in the console. The `display=swap` on
+  the font `<link>` means the app itself is unaffected (text renders in the fallback stack
+  immediately), but a future session doing visual QA should retry a hung screenshot once or
+  raise its timeout rather than assume the page is broken.
 
 ## Test and verification evidence
 
 - `npm run build` (webapp/frontend): passes, all 8 routes prerender as static content. Verified
-  3 consecutive clean runs after the font revert.
+  3 consecutive clean runs after the font revert, and again after the Transfer Studio commit.
 - `npm run lint`: 0 errors, 2 accepted warnings (plain `<img>` instead of `next/image` for
   external CDN photos needing custom error handling — a deliberate, documented trade-off, not
   an oversight).
@@ -154,11 +179,20 @@ prototype-only fabricated content.
     correctly, matches the prototype's mobile breakpoint behaviour (including its own quirk of
     an odd fifth hero-strip cell wrapping alone in a 2-column mobile grid).
   - Zero console errors on the finished My Team page at both viewport sizes.
+  - Transfer Studio: staged a real out→in swap (exact-ID automation again) and confirmed the
+    decision-bugs updated correctly, including a negative bank-after value once the money-
+    formatting bug above was fixed. Confirmed "Run full analysis" is correctly `disabled` since
+    predictions are unavailable (same honest pattern as My Team's auto-pick) — could not
+    exercise the live optimiser call itself for that reason, but it reuses the exact same
+    `lib/api.ts` client and error handling already verified working for `/api/squad`. Confirmed
+    Reset correctly clears both staged players. Checked and fixed the mobile-width Transfer
+    Channel layout bug (see above) by comparing bounding boxes against the actual unmodified
+    prototype file served locally, not just against intuition.
+  - Zero console errors on the finished Transfer Studio page at both viewport sizes.
 
 ## Next recommended milestone
 
-Rebuild Transfer Studio next (highest product value after My Team, and the prototype's own
-`.desk`/`.channel`/`.impact` classes are already fully understood from the CSS port), then
-Comparison, Captain & Form, News Wire, Fixture Matrix in that order, each as its own verified,
-committed increment. After all seven exist, remove the superseded v1 Jinja/vanilla-JS files in
-one cleanup commit.
+Rebuild Comparison next (the prototype's own `.picker`/`.teamsheet` classes are already reused
+by the My Team squad editor, so the player-picker half is a known quantity), then Captain &
+Form, News Wire, Fixture Matrix in that order, each as its own verified, committed increment.
+After all seven exist, remove the superseded v1 Jinja/vanilla-JS files in one cleanup commit.

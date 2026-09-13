@@ -8,7 +8,9 @@ function hasNumericValue(value: unknown): value is number | string {
 }
 
 export function money(value: unknown): string {
-  return hasNumericValue(value) ? `£${Number(value).toFixed(1)}m` : "--";
+  if (!hasNumericValue(value)) return "--";
+  const n = Number(value);
+  return `${n < 0 ? "-" : ""}£${Math.abs(n).toFixed(1)}m`;
 }
 
 export function num(value: unknown, digits = 1): string {
