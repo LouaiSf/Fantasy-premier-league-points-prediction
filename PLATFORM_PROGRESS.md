@@ -100,8 +100,18 @@ predictions when available) or the widget is honestly omitted/simplified rather 
 - Extracted `lib/club-colors.ts` after finding the same club-name-needs-quoting bug (see below)
   duplicated between `player-marker.tsx` and the new Comparison page — one shared, typo-checked
   map now, instead of copy-pasting it into every surface that needs a club gradient.
-- Captain & Form, News Wire, Fixture Matrix are still **stub pages**
-  (`components/coming-soon.tsx`) with working nav — not yet rebuilt in the new system.
+- **Captain & Form fully rebuilt and verified**: spotlight-gradient hero naming the real lead
+  candidate, a squad/all-players toggle (reusing `.mini-chip`, not the prototype's own
+  nonexistent-in-CSS "segmented" pattern that the old v1 build had invented), a 10-candidate
+  runway with real next-fixture/FDR, form and ICT meters, and a risk badge derived from real
+  `status`/`chance_of_playing_next_round` (nailed on / some doubt / high risk — not fabricated),
+  plus a top-2 "Captaincy battle" head-to-head reusing the same dual-bar pattern as Comparison.
+  The prototype's Form Timeline (needs per-gameweek history this snapshot doesn't carry),
+  Opponent Vulnerability (needs defensive analysis not in the data), Upside/Safety grid
+  (redundant with the runway's meters), and the analyst "Insight" essay (pure invented prose)
+  are all omitted rather than faked — see the fidelity note at the top of this document.
+- News Wire, Fixture Matrix are still **stub pages** (`components/coming-soon.tsx`) with
+  working nav — not yet rebuilt in the new system.
 - Fixed two real bugs found in visual QA while building Transfer Studio (both explained in
   detail under Test evidence below): a negative-money formatting bug (`money()` rendered `-2.6`
   as `£-2.6m` instead of `-£2.6m`), and a mobile-width layout bug in the ported CSS itself
@@ -115,14 +125,14 @@ predictions when available) or the widget is honestly omitted/simplified rather 
 
 ## Current work in progress
 
-Rebuilding the remaining three surfaces (Captain & Form, News Wire, Fixture Matrix) on the same
-pattern as the three shipped so far: prototype markup/classes + real data from the
-already-fetched `/api/platform` snapshot, with the same honest-omission rule for
-prototype-only fabricated content.
+Rebuilding the remaining two surfaces (News Wire, Fixture Matrix) on the same pattern as the
+four shipped so far: prototype markup/classes + real data from the already-fetched
+`/api/platform` snapshot, with the same honest-omission rule for prototype-only fabricated
+content.
 
 ## Remaining work
 
-- Rebuild the three stub surfaces.
+- Rebuild the two stub surfaces.
 - Once all seven have parity with v1's real-data coverage, delete `webapp/templates/`,
   `webapp/static/`, and the Jinja page routes in `webapp/app.py` (keep only `/api/*`), and
   make Next.js the only frontend.
@@ -206,9 +216,17 @@ prototype-only fabricated content.
     underlying numbers by hand-check. Verified at 375×844 — plinths stack to one column per the
     prototype's own mobile rule, no overlap.
   - Zero console errors on the finished Comparison page at both viewport sizes.
+  - Captain & Form: caught mid-build that `.segmented` (used for the squad/all toggle) does not
+    exist anywhere in the ported prototype CSS — it was invented for the old v1 vanilla-JS
+    build and doesn't belong in a "verbatim port" — swapped for the real `.mini-chip` pattern
+    before it ever reached a screenshot. Toggled squad → all players live and confirmed the
+    runway re-ranks correctly (all-players pool surfaced a real 746-player top scorer by form,
+    different from the squad-only leader). Clicked a runway candidate and confirmed the real
+    player drawer opens. Verified at 375×844, no overlap.
+  - Zero console errors on the finished Captain & Form page at both viewport sizes.
 
 ## Next recommended milestone
 
-Rebuild Captain & Form next, then News Wire and Fixture Matrix, each as its own verified,
+Rebuild News Wire next, then Fixture Matrix, each as its own verified,
 committed increment.
 After all seven exist, remove the superseded v1 Jinja/vanilla-JS files in one cleanup commit.
