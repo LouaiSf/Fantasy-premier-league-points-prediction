@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pandas as pd
 from flask import Flask, jsonify, render_template, request
+from flask_cors import CORS
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -34,6 +35,10 @@ from webapp.platform_data import build_local_snapshot, latest_local_season  # no
 DEFAULT_BUDGET = 100.0
 
 app = Flask(__name__)
+# The Next.js frontend (webapp/frontend) runs on its own dev port and calls
+# this API cross-origin; the Jinja/vanilla-JS pages it is replacing served
+# same-origin and needed none of this.
+CORS(app, resources={r'/api/*': {'origins': '*'}})
 
 # Loaded once. The CSV is small (a few hundred rows) and rereading it per
 # request would just add latency.
