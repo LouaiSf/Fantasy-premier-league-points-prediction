@@ -89,7 +89,18 @@ predictions when available) or the widget is honestly omitted/simplified rather 
   its actual per-transfer-count rows (gross/hit/net gain, real out→in lists) instead of the
   prototype's fictional 6-metric impact grid (fixture swing, captaincy relevance and risk
   assessment have no real data source, so they're not included — see the fidelity note above).
-- Comparison, Captain & Form, News Wire, Fixture Matrix are still **stub pages**
+- **Comparison fully rebuilt and verified**: plinth A/B seats, a picker reusing the same
+  teamsheet pattern as the My Team squad editor (pool/position/club filters, search), club-
+  gradient duel cards, and a 12-category accordion of real dual-bar comparisons (season totals,
+  form, ICT/xG/xA, ownership) with a genuine leader tick per row. The prototype's per-category
+  analyst prose and multi-week "comparison horizon" tabs (Next GW/3/5/Season) have no real data
+  source (no multi-gameweek forecast, no written analysis), so they're replaced with an honestly
+  *computed* verdict — "X leads N of 12 categories" tallied from the real numbers, not invented
+  commentary — shown in the same `.verdict`/`.stamp` visual treatment.
+- Extracted `lib/club-colors.ts` after finding the same club-name-needs-quoting bug (see below)
+  duplicated between `player-marker.tsx` and the new Comparison page — one shared, typo-checked
+  map now, instead of copy-pasting it into every surface that needs a club gradient.
+- Captain & Form, News Wire, Fixture Matrix are still **stub pages**
   (`components/coming-soon.tsx`) with working nav — not yet rebuilt in the new system.
 - Fixed two real bugs found in visual QA while building Transfer Studio (both explained in
   detail under Test evidence below): a negative-money formatting bug (`money()` rendered `-2.6`
@@ -104,14 +115,14 @@ predictions when available) or the widget is honestly omitted/simplified rather 
 
 ## Current work in progress
 
-Rebuilding the remaining four surfaces (Comparison, Captain & Form, News Wire, Fixture Matrix)
-on the same pattern as My Team and Transfer Studio: prototype markup/classes + real data from
-the already-fetched `/api/platform` snapshot, with the same honest-omission rule for
+Rebuilding the remaining three surfaces (Captain & Form, News Wire, Fixture Matrix) on the same
+pattern as the three shipped so far: prototype markup/classes + real data from the
+already-fetched `/api/platform` snapshot, with the same honest-omission rule for
 prototype-only fabricated content.
 
 ## Remaining work
 
-- Rebuild the four stub surfaces.
+- Rebuild the three stub surfaces.
 - Once all seven have parity with v1's real-data coverage, delete `webapp/templates/`,
   `webapp/static/`, and the Jinja page routes in `webapp/app.py` (keep only `/api/*`), and
   make Next.js the only frontend.
@@ -189,10 +200,15 @@ prototype-only fabricated content.
     Channel layout bug (see above) by comparing bounding boxes against the actual unmodified
     prototype file served locally, not just against intuition.
   - Zero console errors on the finished Transfer Studio page at both viewport sizes.
+  - Comparison: filled both seats through the real teamsheet picker, confirmed the arena
+    (duel cards, ribbon, 12-category accordion) renders with correctly computed dual-bar widths
+    and leader ticks, and the auto-generated verdict text and category tally matched the
+    underlying numbers by hand-check. Verified at 375×844 — plinths stack to one column per the
+    prototype's own mobile rule, no overlap.
+  - Zero console errors on the finished Comparison page at both viewport sizes.
 
 ## Next recommended milestone
 
-Rebuild Comparison next (the prototype's own `.picker`/`.teamsheet` classes are already reused
-by the My Team squad editor, so the player-picker half is a known quantity), then Captain &
-Form, News Wire, Fixture Matrix in that order, each as its own verified, committed increment.
+Rebuild Captain & Form next, then News Wire and Fixture Matrix, each as its own verified,
+committed increment.
 After all seven exist, remove the superseded v1 Jinja/vanilla-JS files in one cleanup commit.
