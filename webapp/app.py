@@ -17,15 +17,18 @@ from __future__ import annotations
 import os
 import sys
 import traceback
+from pathlib import Path
 
 import pandas as pd
 from flask import Flask, jsonify, render_template, request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, 'scripts'))
 os.chdir(ROOT)   # every path in optimise.py is relative to the project root
 
 import optimise as opt  # noqa: E402
+from webapp.platform_data import build_local_snapshot, latest_local_season  # noqa: E402
 
 # optimise.py takes this as a CLI default rather than a module constant.
 DEFAULT_BUDGET = 100.0
@@ -134,6 +137,21 @@ def on_error(exc):
 def index():
     s = state()
     return render_template('index.html',
+                           initial_page='team',
+                           error=s.get('error'),
+                           season=s.get('season'),
+                           gameweek=s.get('gameweek'),
+                           model=s.get('model', {}),
+                           player_count=len(s.get('players', [])))
+
+
+@app.route('/<page>')
+def platform_page(page: str):
+    if page not in {'team', 'transfers', 'comparison', 'captain', 'news', 'fixtures'}:
+        return fail('page not found', 404)
+    s = state()
+    return render_template('index.html',
+                           initial_page=page,
                            error=s.get('error'),
                            season=s.get('season'),
                            gameweek=s.get('gameweek'),
@@ -160,6 +178,35 @@ def api_meta():
         'xi_size': opt.XI_SIZE,
         'hit_cost': opt.HIT_COST,
     })
+
+
+@app.route('/api/platform')
+def api_platform():
+    s = state()
+    season = s.get('season') or latest_local_season(Path(ROOT))
+    if season is None:
+        return fail('no local FPL season data is available')
+
+    snapshot = build_local_snapshot(Path(ROOT), season)
+    prediction_available = not bool(s.get('error'))
+    if prediction_available:
+        predictions = {player['name']: player for player in enriched_players()}
+        for player in snapshot['players']:
+            prediction = predictions.get(player['name'])
+            if prediction is None:
+                continue
+            for key in ('predicted_points', 'points_per_million', 'opponent_team',
+                        'was_home', 'has_prior_history'):
+                if key in prediction:
+                    player[key] = prediction[key]
+
+    snapshot.update({
+        'ok': True,
+        'prediction_available': prediction_available,
+        'prediction_error': s.get('error'),
+        'model': s.get('model') or model_summary(),
+    })
+    return jsonify(snapshot)
 
 
 # Fields worth showing next to a prediction. Everything here comes from

@@ -24,6 +24,10 @@ build/
 # VS Code
 .vscode/
 
+# Local browser and visual QA artifacts
+.playwright-cli/
+output/
+
 # Environment
 .env
 venv/
