@@ -1341,14 +1341,14 @@
       radial-gradient(ellipse 60% 90% at 88% 30%,rgba(255,212,90,.28),transparent 62%),
       var(--gradient-spotlight)}
   .cap-hero::before{background:repeating-linear-gradient(128deg,transparent 0 46px,rgba(26,0,34,.16) 46px 64px,transparent 64px 104px)}
-  .armband-ring{position:absolute;left:22%;top:51%;z-index:3;width:42%;height:11%;
-    transform:rotate(-14deg);border:2px solid rgba(255,255,255,.7);border-radius:.25rem;pointer-events:none;
+  .armband-ring{position:absolute;left:49%;top:59%;z-index:3;width:20%;height:8%;
+    transform:rotate(-10deg);border:2px solid rgba(255,255,255,.7);border-radius:.25rem;pointer-events:none;
     background:repeating-linear-gradient(90deg,rgba(33,0,37,.26) 0 8%,transparent 8% 16%),linear-gradient(90deg,#a8781e,var(--gold) 46%,#fff0a5 52%,#b88a24);
     box-shadow:0 5px 10px rgba(26,0,34,.45),inset 0 0 0 1px rgba(255,255,255,.34);animation:armbandSettle var(--motion-stage) var(--ease-out) both}
   .armband-ring::before{content:"";position:absolute;inset:15% 38%;border-inline:2px solid rgba(33,0,37,.28);opacity:.8}
   .armband-ring::after{content:"C";position:absolute;right:6%;top:50%;display:grid;place-items:center;width:28%;aspect-ratio:1;
     transform:translateY(-50%);border:2px solid var(--ink);border-radius:50%;background:var(--gold);color:var(--ink);font:900 clamp(.7rem,1.2vw,1rem) var(--display)}
-  @keyframes armbandSettle{from{opacity:0;transform:translateY(5px) rotate(-14deg)}to{opacity:1;transform:rotate(-14deg)}}
+  @keyframes armbandSettle{from{opacity:0;transform:translateY(5px) rotate(-10deg)}to{opacity:1;transform:rotate(-10deg)}}
   .cap-armband{position:absolute;left:12px;bottom:14px;z-index:3;display:flex;align-items:center;gap:6px;
     padding:5px 10px 5px 8px;background:var(--gold);color:var(--ink);font:800 10px var(--data);
     letter-spacing:.1em;text-transform:uppercase;clip-path:polygon(0 0,100% 0,calc(100% - 8px) 100%,0 100%)}
@@ -1387,5 +1387,5 @@
     .verdict-side,.verdict-side.right{text-align:left}
     .verdict-side.right .verdict-side-copy{margin-left:0}
     .verdict-side .shot{opacity:.5}
-    .armband-ring{left:20%;top:49%;width:44%;height:12%}
+    .armband-ring{left:47%;top:59%;width:24%;height:9%}
   }
