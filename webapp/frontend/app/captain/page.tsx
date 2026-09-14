@@ -55,12 +55,12 @@ export default function CaptainPage() {
   return (
     <section className="page cap-page paper-scope">
       <div className="cap-hero" style={lead ? clubStyle(lead.team) : undefined}>
-        <div className="armband-ring" aria-hidden="true" />
         {lead && (
           <>
             {leadTeam && <img className="cap-crest" src={crestUrl(leadTeam.code)} alt="" aria-hidden="true" />}
             <div className="cap-shot" aria-hidden="true">
               {lead.photo && <PlayerPhoto src={lead.photo} alt="" width={250} height={250} />}
+              <span className="armband-ring" aria-hidden="true" />
             </div>
             <span className="cap-armband">
               <span aria-hidden="true">C</span> Armband pick
