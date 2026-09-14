@@ -24,6 +24,6 @@ export function signed(value: unknown, digits = 1): string {
   return `${sign}${Math.abs(n).toFixed(digits)}`;
 }
 
-export function crestUrl(code: number): string {
-  return `https://resources.premierleague.com/premierleague/badges/50/t${code}.png`;
+export function crestUrl(code: number, size = 100): string {
+  return `https://resources.premierleague.com/premierleague/badges/${size}/t${code}.png`;
 }

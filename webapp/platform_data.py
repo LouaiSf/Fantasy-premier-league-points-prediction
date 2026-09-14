@@ -201,7 +201,7 @@ def build_local_snapshot(
                 transfers_out_event=_integer(row.get("transfers_out_event")),
                 chance_of_playing_next_round=chance,
                 photo=(
-                    f"https://resources.premierleague.com/premierleague/photos/players/110x140/p{code}.png"
+                    f"https://resources.premierleague.com/premierleague/photos/players/250x250/p{code}.png"
                     if code
                     else None
                 ),

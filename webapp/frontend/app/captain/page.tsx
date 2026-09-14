@@ -60,7 +60,7 @@ export default function CaptainPage() {
           <>
             {leadTeam && <img className="cap-crest" src={crestUrl(leadTeam.code)} alt="" aria-hidden="true" />}
             <div className="cap-shot" aria-hidden="true">
-              {lead.photo && <PlayerPhoto src={lead.photo} alt="" width={280} height={340} />}
+              {lead.photo && <PlayerPhoto src={lead.photo} alt="" width={250} height={250} />}
             </div>
             <span className="cap-armband">
               <span aria-hidden="true">C</span> Armband pick
