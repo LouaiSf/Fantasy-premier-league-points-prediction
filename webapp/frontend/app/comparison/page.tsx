@@ -334,7 +334,9 @@ export default function ComparisonPage() {
             </div>
             <div className="cmp-cards">
               <div className="cmp-card left" style={clubStyle(playerA.team)}>
-                <div className="mane" aria-hidden="true" />
+                {teamCodeByName.get(playerA.team) && (
+                  <img className="cmp-crest" src={crestUrl(teamCodeByName.get(playerA.team)!)} alt="" aria-hidden="true" />
+                )}
                 <span className="ghost-num" aria-hidden="true">
                   A
                 </span>
@@ -353,7 +355,9 @@ export default function ComparisonPage() {
                 </div>
               </div>
               <div className="cmp-card right" style={clubStyle(playerB.team)}>
-                <div className="mane" aria-hidden="true" />
+                {teamCodeByName.get(playerB.team) && (
+                  <img className="cmp-crest" src={crestUrl(teamCodeByName.get(playerB.team)!)} alt="" aria-hidden="true" />
+                )}
                 <span className="ghost-num" aria-hidden="true">
                   B
                 </span>
