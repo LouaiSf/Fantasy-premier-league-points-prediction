@@ -1,6 +1,6 @@
 # FPL Assistant Platform Progress
 
-Last updated: 2026-09-13
+Last updated: 2026-09-14
 Branch: `web-platform`
 
 ## Architecture change (2026-09-13)
@@ -246,9 +246,29 @@ prototype markup/classes + real data from the already-fetched `/api/platform` sn
     375×844, no overlap.
   - Zero console errors on the finished News Wire page at both viewport sizes.
 
-## Next recommended milestone
+## Comprehensive Fix & 2026-27 Elevation (Completed 2026-09-14)
 
-Rebuild Fixture Matrix — the last surface. Once it's verified and committed, all seven surfaces
-will have parity with v1's real-data coverage; the next milestone after that is removing the
-superseded v1 Jinja/vanilla-JS files (`webapp/templates/`, `webapp/static/`, and the Jinja page
-routes in `webapp/app.py`) in one cleanup commit, making Next.js the only frontend.
+Following `COMPREHENSIVE_FIX_PLAN.md`:
+
+### 1. Season Data & Model Pipeline
+- **2026-27 Season Loaded**: Acquired official 2026-27 season data (`teams.csv`, `fixtures.csv`, `players_raw.csv`, `cleaned_players.csv`, `player_idlist.csv`, `gws/merged_gw.csv`, `gws/gw1.csv`).
+- **Models & Predictions Deployed**: Transferred precomputed Colab model weights (`saved_models/direct/{GK,DEF,MID,FWD}/` with 159–220 features per position) and `predictions_next_gw.csv` (489 players, 20 clubs) into active paths. Added `fpl_results/` to `.gitignore`.
+- **Roster & Alignment**: Resolved league roster alignment (Coventry, Hull, and Ipswich confirmed as active promoted clubs).
+
+### 2. Backend & Optimization Fixes
+- **NameError Fix**: Resolved `best = max(data['rows'], key=lambda r: r['net'])` in `scripts/optimise.py` line 360.
+- **Exception Cleanliness**: Replaced `SystemExit` with `ValueError` in `squad_from_names()`.
+- **IDE & Static Resolution**: Added `scripts/__init__.py` and fallback import `from scripts import optimise as opt` in `webapp/app.py` to eliminate IDE language-server warnings.
+- **Player History**: Added `player_history(root, season, element_id)` in `webapp/platform_data.py` reading `merged_gw.csv` and exposed `GET /api/player/<id>/history`.
+- **Live Refresh & Mtime Watcher**: Added `POST /api/refresh` to pull new season data and predictions, and added automatic file `mtime` check in `app.py`'s `state()`.
+- **V1 Elimination**: Deleted superseded `webapp/templates/` and `webapp/static/` directories and removed legacy Jinja routes from `webapp/app.py`. All 6 pytest backend tests pass green.
+
+### 3. Frontend Resiliency & Design System Elevation
+- **Error Boundary**: Created `components/error-boundary.tsx` with broadcast styling and wrapped app layout.
+- **Crest Handling**: Created `components/club-crest.tsx` with club color gradient & short-name badge fallback on CDN 404; replaced raw `<img>` crests across all surfaces.
+- **Photo Initials Fallback**: Enhanced `components/player-photo.tsx` to render `.photo-fb` initials on image 404s.
+- **Mobile Responsive Alignment**: Fixed `.pm-badge`, `.pm-flag`, `.pm-pred`, and `.armband-ring` geometry in `broadcast.css` for mobile screens (<560px and <860px).
+- **Squad Persistence**: Updated `components/providers/app-provider.tsx` to persist squad by element ID with season scoping, budget warning, and queued toasts with dismiss buttons.
+- **Watchlist & Differentials Surface**: Built `app/watchlist/page.tsx` featuring Best Value (points-per-million), Differentials (customizable ownership cutoff), Overpriced traps, and Promoted/New signings with drawer inspection.
+- **Chip Advisor Surface**: Built `app/chips/page.tsx` featuring recommendations for Triple Captain, Bench Boost, Free Hit, and Wildcard alongside a schedule congestion and FDR fixture heatmap.
+- **Zero Build Errors**: Full `npm run build` static compilation succeeded across all 9 App Router pages.

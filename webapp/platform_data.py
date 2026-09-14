@@ -218,3 +218,99 @@ def build_local_snapshot(
         "players": players,
         "teams": sorted(teams_by_id.values(), key=lambda team: team["name"]),
     }
+
+
+class PlayerHistoryRecord(TypedDict):
+    season: str
+    gameweek: int
+    opponent: str
+    opponent_name: str
+    was_home: bool
+    total_points: int
+    minutes: int
+    goals_scored: int
+    assists: int
+    clean_sheets: int
+    bonus: int
+    bps: int
+    ict_index: float
+
+
+def player_history(
+    root: Path,
+    season: str,
+    element_id: int,
+    limit: int = 8,
+) -> list[PlayerHistoryRecord]:
+    history: list[PlayerHistoryRecord] = []
+    season_dir = root / "data" / season
+    merged_path = season_dir / "gws" / "merged_gw.csv"
+    teams_path = season_dir / "teams.csv"
+
+    team_names: dict[int, tuple[str, str]] = {}
+    if teams_path.exists():
+        for row in _read_rows(teams_path):
+            tid = _integer(row.get("id"))
+            team_names[tid] = (row.get("short_name", ""), row.get("name", ""))
+
+    player_name: str | None = None
+    if merged_path.exists():
+        rows = _read_rows(merged_path)
+        player_rows = [r for r in rows if _integer(r.get("element")) == element_id]
+        if player_rows:
+            player_name = player_rows[0].get("name")
+            for r in player_rows:
+                opp_id = _integer(r.get("opponent_team"))
+                short_opp, full_opp = team_names.get(opp_id, ("", f"Team {opp_id}"))
+                history.append({
+                    "season": season,
+                    "gameweek": _integer(r.get("GW") or r.get("round")),
+                    "opponent": short_opp,
+                    "opponent_name": full_opp,
+                    "was_home": str(r.get("was_home", "")).lower() == "true",
+                    "total_points": _integer(r.get("total_points")),
+                    "minutes": _integer(r.get("minutes")),
+                    "goals_scored": _integer(r.get("goals_scored")),
+                    "assists": _integer(r.get("assists")),
+                    "clean_sheets": _integer(r.get("clean_sheets")),
+                    "bonus": _integer(r.get("bonus")),
+                    "bps": _integer(r.get("bps")),
+                    "ict_index": _decimal(r.get("ict_index")),
+                })
+
+    if len(history) < limit:
+        prev_season = "2025-26" if season == "2026-27" else None
+        if prev_season:
+            prev_dir = root / "data" / prev_season
+            prev_merged = prev_dir / "gws" / "merged_gw.csv"
+            prev_teams_path = prev_dir / "teams.csv"
+            prev_teams: dict[int, tuple[str, str]] = {}
+            if prev_teams_path.exists():
+                for row in _read_rows(prev_teams_path):
+                    tid = _integer(row.get("id"))
+                    prev_teams[tid] = (row.get("short_name", ""), row.get("name", ""))
+            if prev_merged.exists():
+                prev_rows = _read_rows(prev_merged)
+                matched_prev = [r for r in prev_rows if (player_name and r.get("name") == player_name)]
+                for r in reversed(matched_prev):
+                    if len(history) >= limit:
+                        break
+                    opp_id = _integer(r.get("opponent_team"))
+                    short_opp, full_opp = prev_teams.get(opp_id, ("", f"Team {opp_id}"))
+                    history.insert(0, {
+                        "season": prev_season,
+                        "gameweek": _integer(r.get("GW") or r.get("round")),
+                        "opponent": short_opp,
+                        "opponent_name": full_opp,
+                        "was_home": str(r.get("was_home", "")).lower() == "true",
+                        "total_points": _integer(r.get("total_points")),
+                        "minutes": _integer(r.get("minutes")),
+                        "goals_scored": _integer(r.get("goals_scored")),
+                        "assists": _integer(r.get("assists")),
+                        "clean_sheets": _integer(r.get("clean_sheets")),
+                        "bonus": _integer(r.get("bonus")),
+                        "bps": _integer(r.get("bps")),
+                        "ict_index": _decimal(r.get("ict_index")),
+                    })
+
+    return history[-limit:]

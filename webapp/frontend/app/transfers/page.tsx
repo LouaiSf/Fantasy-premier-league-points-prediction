@@ -4,8 +4,9 @@ import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
 import { api } from "@/lib/api";
 import { PlayerPhoto } from "@/components/player-photo";
+import { ClubCrest } from "@/components/club-crest";
 import { clubStyle } from "@/lib/club-colors";
-import { crestUrl, money, num, signed } from "@/lib/format";
+import { money, num, signed } from "@/lib/format";
 import type { PlayerRecord, TransferResult } from "@/lib/types";
 
 const OUT_FILTERS = ["ALL", "GK", "DEF", "MID", "FWD", "FLAG"] as const;
@@ -41,8 +42,21 @@ function DeskRow({
       style={clubStyle(player.team)}
     >
       <span className="shot" style={{ position: "relative" }}>
-        {player.photo && <PlayerPhoto src={player.photo} alt="" loading="lazy" />}
-        {teamCode && <img className="badge-mini" src={crestUrl(teamCode)} alt="" aria-hidden="true" />}
+        <PlayerPhoto
+          src={player.photo ?? undefined}
+          alt={player.name}
+          name={player.name}
+          loading="lazy"
+        />
+        {teamCode && (
+          <ClubCrest
+            className="badge-mini"
+            code={teamCode}
+            team={player.team}
+            shortName={player.team_short}
+            aria-hidden="true"
+          />
+        )}
       </span>
       <span className="prow-id">
         <b>{player.web_name || player.name}</b>
@@ -285,10 +299,18 @@ export default function TransfersPage() {
                     <span>{money(outgoing.value_m)}</span>
                   </div>
                   <div className="slot-photo">
-                    {outgoing.photo && <PlayerPhoto className="shot-img" src={outgoing.photo} alt="" />}
-                    {teamCodeByName.get(outgoing.team) && (
-                      <img className="badge-mini" src={crestUrl(teamCodeByName.get(outgoing.team)!)} alt="" aria-hidden="true" />
-                    )}
+                    <PlayerPhoto
+                      className="shot-img"
+                      src={outgoing.photo ?? undefined}
+                      alt={outgoing.name}
+                      name={outgoing.name}
+                    />
+                    <ClubCrest
+                      className="badge-mini"
+                      code={teamCodeByName.get(outgoing.team)}
+                      team={outgoing.team}
+                      aria-hidden="true"
+                    />
                   </div>
                 </>
               ) : (
@@ -311,10 +333,18 @@ export default function TransfersPage() {
                     <span>{money(incoming.value_m)}</span>
                   </div>
                   <div className="slot-photo">
-                    {incoming.photo && <PlayerPhoto className="shot-img" src={incoming.photo} alt="" />}
-                    {teamCodeByName.get(incoming.team) && (
-                      <img className="badge-mini" src={crestUrl(teamCodeByName.get(incoming.team)!)} alt="" aria-hidden="true" />
-                    )}
+                    <PlayerPhoto
+                      className="shot-img"
+                      src={incoming.photo ?? undefined}
+                      alt={incoming.name}
+                      name={incoming.name}
+                    />
+                    <ClubCrest
+                      className="badge-mini"
+                      code={teamCodeByName.get(incoming.team)}
+                      team={incoming.team}
+                      aria-hidden="true"
+                    />
                   </div>
                 </>
               ) : (

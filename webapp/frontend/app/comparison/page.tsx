@@ -3,8 +3,9 @@
 import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
 import { PlayerPhoto } from "@/components/player-photo";
+import { ClubCrest } from "@/components/club-crest";
 import { clubStyle } from "@/lib/club-colors";
-import { crestUrl, money, num } from "@/lib/format";
+import { money, num } from "@/lib/format";
 import type { PlayerRecord } from "@/lib/types";
 
 const POSITIONS = ["ALL", "GK", "DEF", "MID", "FWD"] as const;
@@ -158,11 +159,9 @@ export default function ComparisonPage() {
               </span>
               {playerA ? (
                 <>
-                  {playerA.photo && (
-                    <div className="shot">
-                      <PlayerPhoto src={playerA.photo} alt="" />
-                    </div>
-                  )}
+                  <div className="shot">
+                    <PlayerPhoto src={playerA.photo ?? undefined} alt={playerA.name} name={playerA.name} />
+                  </div>
                   <span className="plinth-copy">
                     <span className="slotlabel">Player A</span>
                     <h3>{playerA.web_name}</h3>
@@ -198,11 +197,9 @@ export default function ComparisonPage() {
               </span>
               {playerB ? (
                 <>
-                  {playerB.photo && (
-                    <div className="shot">
-                      <PlayerPhoto src={playerB.photo} alt="" />
-                    </div>
-                  )}
+                  <div className="shot">
+                    <PlayerPhoto src={playerB.photo ?? undefined} alt={playerB.name} name={playerB.name} />
+                  </div>
                   <span className="plinth-copy">
                     <span className="slotlabel">Player B</span>
                     <h3>{playerB.web_name}</h3>
@@ -334,17 +331,18 @@ export default function ComparisonPage() {
             </div>
             <div className="cmp-cards">
               <div className="cmp-card left" style={clubStyle(playerA.team)}>
-                {teamCodeByName.get(playerA.team) && (
-                  <img className="cmp-crest" src={crestUrl(teamCodeByName.get(playerA.team)!)} alt="" aria-hidden="true" />
-                )}
+                <ClubCrest
+                  className="cmp-crest"
+                  code={teamCodeByName.get(playerA.team)}
+                  team={playerA.team}
+                  aria-hidden="true"
+                />
                 <span className="ghost-num" aria-hidden="true">
                   A
                 </span>
-                {playerA.photo && (
-                  <div className="shot">
-                    <PlayerPhoto src={playerA.photo} alt="" />
-                  </div>
-                )}
+                <div className="shot">
+                  <PlayerPhoto src={playerA.photo ?? undefined} alt={playerA.name} name={playerA.name} />
+                </div>
                 <div className="cmp-copy">
                   <span className="kicker">
                     {playerA.team} / {playerA.position}
@@ -355,17 +353,18 @@ export default function ComparisonPage() {
                 </div>
               </div>
               <div className="cmp-card right" style={clubStyle(playerB.team)}>
-                {teamCodeByName.get(playerB.team) && (
-                  <img className="cmp-crest" src={crestUrl(teamCodeByName.get(playerB.team)!)} alt="" aria-hidden="true" />
-                )}
+                <ClubCrest
+                  className="cmp-crest"
+                  code={teamCodeByName.get(playerB.team)}
+                  team={playerB.team}
+                  aria-hidden="true"
+                />
                 <span className="ghost-num" aria-hidden="true">
                   B
                 </span>
-                {playerB.photo && (
-                  <div className="shot">
-                    <PlayerPhoto src={playerB.photo} alt="" />
-                  </div>
-                )}
+                <div className="shot">
+                  <PlayerPhoto src={playerB.photo ?? undefined} alt={playerB.name} name={playerB.name} />
+                </div>
                 <div className="cmp-copy">
                   <span className="kicker">
                     {playerB.team} / {playerB.position}
@@ -432,19 +431,19 @@ export default function ComparisonPage() {
                         className={`verdict-side${tie ? "" : winner === playerB ? " right" : ""}`}
                         style={clubStyle((tie ? playerA : winner!).team)}
                       >
-                        {teamCodeByName.get((tie ? playerA : winner!).team) && (
-                          <img
-                            className="verdict-crest"
-                            src={crestUrl(teamCodeByName.get((tie ? playerA : winner!).team)!)}
-                            alt=""
-                            aria-hidden="true"
+                        <ClubCrest
+                          className="verdict-crest"
+                          code={teamCodeByName.get((tie ? playerA : winner!).team)}
+                          team={(tie ? playerA : winner!).team}
+                          aria-hidden="true"
+                        />
+                        <div className="shot">
+                          <PlayerPhoto
+                            src={(tie ? playerA : winner!).photo ?? undefined}
+                            alt={(tie ? playerA : winner!).name}
+                            name={(tie ? playerA : winner!).name}
                           />
-                        )}
-                        {(tie ? playerA : winner!).photo && (
-                          <div className="shot">
-                            <PlayerPhoto src={(tie ? playerA : winner!).photo!} alt="" />
-                          </div>
-                        )}
+                        </div>
                         <div className="verdict-side-copy">
                           <span className="win-tag">{tie ? "Even" : "Leads on the numbers"}</span>
                           <h3>{(tie ? playerA : winner!).web_name}</h3>
@@ -457,19 +456,19 @@ export default function ComparisonPage() {
                         className={`verdict-side${tie ? "" : winner === playerB ? "" : " right"}${tie ? "" : " is-loser"}`}
                         style={clubStyle((tie ? playerB : loser!).team)}
                       >
-                        {teamCodeByName.get((tie ? playerB : loser!).team) && (
-                          <img
-                            className="verdict-crest"
-                            src={crestUrl(teamCodeByName.get((tie ? playerB : loser!).team)!)}
-                            alt=""
-                            aria-hidden="true"
+                        <ClubCrest
+                          className="verdict-crest"
+                          code={teamCodeByName.get((tie ? playerB : loser!).team)}
+                          team={(tie ? playerB : loser!).team}
+                          aria-hidden="true"
+                        />
+                        <div className="shot">
+                          <PlayerPhoto
+                            src={(tie ? playerB : loser!).photo ?? undefined}
+                            alt={(tie ? playerB : loser!).name}
+                            name={(tie ? playerB : loser!).name}
                           />
-                        )}
-                        {(tie ? playerB : loser!).photo && (
-                          <div className="shot">
-                            <PlayerPhoto src={(tie ? playerB : loser!).photo!} alt="" />
-                          </div>
-                        )}
+                        </div>
                         <div className="verdict-side-copy">
                           <span className="win-tag" style={{ background: "rgba(255,255,255,.24)", color: "var(--white)" }}>
                             {tie ? "Even" : "Runner-up"}

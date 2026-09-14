@@ -19,13 +19,14 @@ function earliestKickoff(snapshot: ReturnType<typeof useApp>["snapshot"]): Date 
   return earliest === null ? null : new Date(earliest);
 }
 
-function formatCountdown(ms: number): string {
-  if (ms <= 0) return "Locked";
+function formatCountdown(ms: number, gw: number | null): string {
+  if (ms <= 0) return `GW${gw ?? ""} in progress`;
   const totalMinutes = Math.floor(ms / 60000);
   const days = Math.floor(totalMinutes / (60 * 24));
   const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
   const minutes = totalMinutes % 60;
-  return `${days}d ${hours}h ${minutes}m`;
+  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+  return `${hours}h ${minutes}m`;
 }
 
 export function DeadlineClock() {
@@ -38,16 +39,27 @@ export function DeadlineClock() {
   }, []);
 
   const deadline = earliestKickoff(snapshot);
-  if (!deadline) return null;
+  if (!deadline) {
+    if (snapshot?.season) {
+      return (
+        <div className="deadline" aria-live="polite">
+          <strong>Season {snapshot.season}</strong>
+          <span>Fixtures pending</span>
+        </div>
+      );
+    }
+    return null;
+  }
 
   const remaining = deadline.getTime() - now;
+  const inProgress = remaining <= 0;
   const urgent = remaining > 0 && remaining < 24 * 60 * 60 * 1000;
-  const tension = Math.min(100, Math.max(0, 100 - (remaining / WEEK_MS) * 100));
+  const tension = inProgress ? 100 : Math.min(100, Math.max(0, 100 - (remaining / WEEK_MS) * 100));
 
   return (
     <div className={`deadline${urgent ? " urgent" : ""}`} aria-live="polite">
-      <strong>GW{snapshot?.gameweek} first kickoff</strong>
-      <span>{formatCountdown(remaining)}</span>
+      <strong>GW{snapshot?.gameweek} {inProgress ? "matchday" : "deadline"}</strong>
+      <span>{formatCountdown(remaining, snapshot?.gameweek ?? null)}</span>
       <div className="deadline-tension" aria-hidden="true">
         <i style={{ width: `${tension}%` }} />
       </div>

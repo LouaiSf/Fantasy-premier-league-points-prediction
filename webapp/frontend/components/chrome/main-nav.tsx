@@ -4,22 +4,40 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useApp } from "@/components/providers/app-provider";
-import { DeadlineClock } from "@/components/chrome/deadline-clock";
+import { DeadlineClock } from "./deadline-clock";
+import { api } from "@/lib/api";
 
 const TABS = [
   { href: "/team", label: "My Team" },
   { href: "/transfers", label: "Transfer Studio" },
   { href: "/comparison", label: "Comparison" },
   { href: "/captain", label: "Captain & Form" },
-  { href: "/news", label: "News Wire" },
+  { href: "/watchlist", label: "Watchlist" },
+  { href: "/chips", label: "Chip Advisor" },
   { href: "/fixtures", label: "Fixture Matrix" },
+  { href: "/news", label: "News Wire" },
 ] as const;
 
 export function MainNav() {
   const pathname = usePathname();
-  const { snapshot } = useApp();
+  const { snapshot, reload, toast } = useApp();
+  const [refreshing, setRefreshing] = React.useState(false);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
   const tabsRef = React.useRef<HTMLDivElement>(null);
   const inkRef = React.useRef<HTMLSpanElement>(null);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const res = await api.refresh();
+      toast(res.message || "Season data refreshed!");
+      reload();
+    } catch (err) {
+      toast(`Refresh failed: ${(err as Error).message}`);
+    } finally {
+      setRefreshing(false);
+    }
+  };
   const newsCount = snapshot?.players.filter(
     (player) =>
       Boolean(player.news) ||
@@ -39,6 +57,14 @@ export function MainNav() {
 
   React.useLayoutEffect(() => {
     positionInk();
+    const scroller = scrollRef.current;
+    const active = tabsRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!scroller || !active || scroller.scrollWidth <= scroller.clientWidth) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    scroller.scrollTo({
+      left: active.offsetLeft - (scroller.clientWidth - active.offsetWidth) / 2,
+      behavior: reducedMotion ? "auto" : "smooth",
+    });
   }, [positionInk, pathname]);
 
   // Google Fonts swap in after first paint and reflow the tab widths, so a
@@ -63,7 +89,7 @@ export function MainNav() {
             <small>Prediction desk</small>
           </span>
         </Link>
-        <div className="nav-scroll">
+        <div className="nav-scroll" ref={scrollRef}>
           <nav className="nav-tabs" role="tablist" aria-label="FPL Assistant sections" ref={tabsRef}>
             {TABS.map((tab) => {
               const active = pathname === tab.href;
@@ -85,7 +111,20 @@ export function MainNav() {
             <span className="nav-ink" ref={inkRef} aria-hidden="true" />
           </nav>
         </div>
-        <div className="nav-actions">
+        <div className="nav-actions" style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+          <button
+            type="button"
+            className="btn ghost sm"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            title="Fetch latest season fixtures, odds, and predictions from backend"
+            aria-label="Refresh season data"
+          >
+            <span style={{ display: "inline-block", transform: refreshing ? "rotate(360deg)" : "none", transition: "transform 0.8s linear" }}>
+              ↻
+            </span>
+            <span style={{ marginLeft: "4px" }}>{refreshing ? "Updating…" : "Refresh"}</span>
+          </button>
           <DeadlineClock />
         </div>
       </div>

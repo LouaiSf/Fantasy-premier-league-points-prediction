@@ -3,8 +3,9 @@
 import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
 import { PlayerPhoto } from "@/components/player-photo";
+import { ClubCrest } from "@/components/club-crest";
 import { clubStyle } from "@/lib/club-colors";
-import { crestUrl, money, num } from "@/lib/format";
+import { money, num } from "@/lib/format";
 import type { PlayerRecord, TeamRecord } from "@/lib/types";
 
 function captainScore(player: PlayerRecord, predictionAvailable: boolean): number {
@@ -57,9 +58,23 @@ export default function CaptainPage() {
       <div className="cap-hero" style={lead ? clubStyle(lead.team) : undefined}>
         {lead && (
           <>
-            {leadTeam && <img className="cap-crest" src={crestUrl(leadTeam.code)} alt="" aria-hidden="true" />}
+            {leadTeam && (
+              <ClubCrest
+                className="cap-crest"
+                code={leadTeam.code}
+                team={leadTeam.name}
+                shortName={leadTeam.short_name}
+                aria-hidden="true"
+              />
+            )}
             <div className="cap-shot" aria-hidden="true">
-              {lead.photo && <PlayerPhoto src={lead.photo} alt="" width={250} height={250} />}
+              <PlayerPhoto
+                src={lead.photo ?? undefined}
+                alt={lead.name}
+                name={lead.name}
+                width={250}
+                height={250}
+              />
               <span className="armband-ring" aria-hidden="true" />
             </div>
             <span className="cap-armband">
@@ -174,7 +189,7 @@ export default function CaptainPage() {
               >
                 <span className="cand-rank">{String(index + 1).padStart(2, "0")}</span>
                 <span className="shot">
-                  {player.photo && <PlayerPhoto src={player.photo} alt="" loading="lazy" />}
+                  <PlayerPhoto src={player.photo ?? undefined} alt={player.name} name={player.name} loading="lazy" />
                 </span>
                 <span className="cand-id">
                   <b>{player.web_name || player.name}</b>

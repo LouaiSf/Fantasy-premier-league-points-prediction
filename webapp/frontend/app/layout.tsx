@@ -7,6 +7,8 @@ import { MainNav } from "@/components/chrome/main-nav";
 import { PlayerDrawer } from "@/components/player-drawer";
 import { Toast } from "@/components/chrome/toast";
 
+import { ErrorBoundary } from "@/components/error-boundary";
+
 export const metadata: Metadata = {
   title: "FPL Assistant",
   description: "FPL decision support powered by this repository's local prediction pipeline.",
@@ -38,7 +40,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <CrestTicker />
             <MainNav />
             <main id="main" tabIndex={-1}>
-              {children}
+              <ErrorBoundary>{children}</ErrorBoundary>
             </main>
             <PlayerDrawer />
             <Toast />

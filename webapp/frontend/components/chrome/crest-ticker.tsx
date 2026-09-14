@@ -1,7 +1,7 @@
 "use client";
 
 import { useApp } from "@/components/providers/app-provider";
-import { crestUrl } from "@/lib/format";
+import { ClubCrest } from "@/components/club-crest";
 
 export function CrestTicker() {
   const { snapshot } = useApp();
@@ -19,7 +19,15 @@ export function CrestTicker() {
             data-team={team.short_name}
             title={team.name}
           >
-            <img src={crestUrl(team.code)} alt={team.name} width={24} height={24} loading="lazy" />
+            <ClubCrest
+              code={team.code}
+              team={team.name}
+              shortName={team.short_name}
+              alt={team.name}
+              width={24}
+              height={24}
+              loading="lazy"
+            />
           </button>
         ))}
       </div>

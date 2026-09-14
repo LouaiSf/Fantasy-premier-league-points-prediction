@@ -309,8 +309,13 @@ def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
 
 
 def squad_records(frame: pd.DataFrame) -> list:
-    """Rows as plain dicts, for JSON and for templates."""
-    cols = [c for c in ('name', 'team', 'position', 'opponent_team', 'was_home',
+    """Rows as plain dicts, for JSON and for templates.
+
+    Includes `element` when present so API rows have stable identity within a
+    prediction export. FPL element ids are season-scoped, so callers must
+    verify the season roster before joining them to another dataset.
+    """
+    cols = [c for c in ('element', 'name', 'team', 'position', 'opponent_team', 'was_home',
                         'value_m', 'predicted_points', 'points_per_million',
                         'selected_by', 'status', 'has_prior_history')
             if c in frame.columns]
@@ -352,7 +357,7 @@ def suggest_transfers(current: pd.DataFrame, players: pd.DataFrame,
         print(f"  {row['transfers']:<7}{row['gross']:>8.2f}{row['hit']:>6}"
               f"{row['net']:>8.2f}{row['gain']:>+8.2f}")
 
-    best = max(rows, key=lambda r: r['net'])
+    best = max(data['rows'], key=lambda r: r['net'])
     print(f"\n  best: {best['transfers']} transfer(s), "
           f"net {best['net']:.2f} ({best['gain']:+.2f} vs standing pat)")
     if best['transfers']:

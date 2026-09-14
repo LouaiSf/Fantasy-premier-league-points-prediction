@@ -1,11 +1,14 @@
 "use client";
 
+import * as React from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { useApp } from "@/components/providers/app-provider";
 import { PlayerPhoto } from "@/components/player-photo";
+import { ClubCrest } from "@/components/club-crest";
+import { api } from "@/lib/api";
 import { clubStyle } from "@/lib/club-colors";
-import { crestUrl, money, num } from "@/lib/format";
-import type { TeamRecord } from "@/lib/types";
+import { money, num } from "@/lib/format";
+import type { PlayerHistoryRecord, TeamRecord } from "@/lib/types";
 
 function fixtureRibbon(team: TeamRecord | undefined, gameweek: number | null) {
   if (!team || gameweek == null) return [];
@@ -21,6 +24,22 @@ export function PlayerDrawer() {
   const ribbon = fixtureRibbon(team, snapshot?.gameweek ?? null);
   const predictionAvailable = snapshot?.prediction_available ?? false;
 
+  const [history, setHistory] = React.useState<PlayerHistoryRecord[]>([]);
+  const [historyLoading, setHistoryLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!player?.element) {
+      setHistory([]);
+      return;
+    }
+    setHistoryLoading(true);
+    api
+      .playerHistory(player.element)
+      .then((data) => setHistory(data.history || []))
+      .catch(() => setHistory([]))
+      .finally(() => setHistoryLoading(false));
+  }, [player?.element]);
+
   return (
     <DialogPrimitive.Root open={Boolean(player)} onOpenChange={(open) => !open && closeProfile()}>
       <DialogPrimitive.Portal>
@@ -35,23 +54,29 @@ export function PlayerDrawer() {
                 <div className="drawer-hero" style={clubStyle(player.team)}>
                   <div className="drawer-texture" aria-hidden="true" />
                   {team && (
-                    <img
+                    <ClubCrest
                       className="drawer-crest"
-                      src={crestUrl(team.code)}
-                      alt=""
-                      aria-hidden="true"
+                      code={team.code}
+                      team={team.name}
+                      shortName={team.short_name}
+                      size={104}
                       width={104}
                       height={104}
+                      aria-hidden="true"
                     />
                   )}
                   <span className="ghost-num drawer-ghostnum" aria-hidden="true">
                     {player.position}
                   </span>
-                  {player.photo && (
-                    <div className="drawer-portrait">
-                      <PlayerPhoto src={player.photo} alt="" width={160} height={200} />
-                    </div>
-                  )}
+                  <div className="drawer-portrait">
+                    <PlayerPhoto
+                      src={player.photo ?? undefined}
+                      alt={player.name}
+                      name={player.name}
+                      width={160}
+                      height={200}
+                    />
+                  </div>
                   <div className="drawer-id">
                     <span className="kicker">
                       {player.team} {player.flag ?? ""}
@@ -120,6 +145,59 @@ export function PlayerDrawer() {
                     </div>
                   </div>
                 )}
+
+                <div className="dsec">
+                  <div className="slate">
+                    <i>Ladder</i>
+                    <b>Recent match history</b>
+                    <span className="rule" />
+                  </div>
+                  {historyLoading ? (
+                    <p style={{ color: "var(--muted-ink)", fontSize: 12 }}>Loading history…</p>
+                  ) : history.length > 0 ? (
+                    <table className="stable">
+                      <thead>
+                        <tr>
+                          <th>GW</th>
+                          <th>Opponent</th>
+                          <th style={{ textAlign: "right" }}>Min</th>
+                          <th style={{ textAlign: "right" }}>G/A</th>
+                          <th style={{ textAlign: "right" }}>Pts</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {history.map((row, idx) => (
+                          <tr key={`${row.season}-${row.gameweek}-${idx}`}>
+                            <td>
+                              GW{row.gameweek}{" "}
+                              <small style={{ opacity: 0.6 }}>({row.season})</small>
+                            </td>
+                            <td>
+                              {row.opponent || row.opponent_name} ({row.was_home ? "H" : "A"})
+                            </td>
+                            <td style={{ textAlign: "right" }}>{row.minutes}</td>
+                            <td style={{ textAlign: "right" }}>
+                              {row.goals_scored}/{row.assists}
+                            </td>
+                            <td
+                              style={{
+                                textAlign: "right",
+                                fontWeight: 750,
+                                color: row.total_points >= 6 ? "var(--lime)" : "inherit",
+                              }}
+                            >
+                              {row.total_points}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p style={{ color: "var(--muted-ink)", fontSize: 12 }}>
+                      No recent gameweek history recorded in local snapshot.
+                    </p>
+                  )}
+                </div>
 
                 <div className="dsec">
                   <div className="slate">

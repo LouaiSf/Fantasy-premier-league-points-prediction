@@ -3,8 +3,9 @@
 import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
 import { PlayerPhoto } from "@/components/player-photo";
+import { ClubCrest } from "@/components/club-crest";
 import { clubStyle } from "@/lib/club-colors";
-import { crestUrl, num } from "@/lib/format";
+import { num } from "@/lib/format";
 import type { PlayerRecord } from "@/lib/types";
 
 type Filter = "all" | "squad" | "injury" | "suspension" | "doubt";
@@ -197,9 +198,12 @@ export default function NewsPage() {
           <article className="lead-story" style={clubStyle(lead.team)}>
             <span className="lead-hazard" aria-hidden="true" />
             <div className="lead-mane" aria-hidden="true" />
-            {teamCodeByName.get(lead.team) && (
-              <img className="lead-crest" src={crestUrl(teamCodeByName.get(lead.team)!)} alt="" aria-hidden="true" />
-            )}
+            <ClubCrest
+              className="lead-crest"
+              code={teamCodeByName.get(lead.team)}
+              team={lead.team}
+              aria-hidden="true"
+            />
             <div className="lead-copy">
               <div className="lead-badges">
                 <span className="sev">{statusLabel(lead)}</span>
@@ -219,11 +223,9 @@ export default function NewsPage() {
                 </button>
               </div>
             </div>
-            {lead.photo && (
-              <div className="lead-shot">
-                <PlayerPhoto src={lead.photo} alt="" />
-              </div>
-            )}
+            <div className="lead-shot">
+              <PlayerPhoto src={lead.photo ?? undefined} alt={lead.name} name={lead.name} />
+            </div>
             <div className="lead-panel">
               <h3>Squad relevance</h3>
               <ul className="lead-impact">
@@ -262,10 +264,13 @@ export default function NewsPage() {
                   style={{ width: "100%", background: "transparent", font: "inherit", textAlign: "left", cursor: "pointer" }}
                 >
                   <span className="wire-shot" style={clubStyle(player.team)}>
-                    {player.photo && <PlayerPhoto src={player.photo} alt="" loading="lazy" />}
-                    {teamCodeByName.get(player.team) && (
-                      <img className="wire-badge" src={crestUrl(teamCodeByName.get(player.team)!)} alt="" aria-hidden="true" />
-                    )}
+                    <PlayerPhoto src={player.photo ?? undefined} alt={player.name} name={player.name} loading="lazy" />
+                    <ClubCrest
+                      className="wire-badge"
+                      code={teamCodeByName.get(player.team)}
+                      team={player.team}
+                      aria-hidden="true"
+                    />
                   </span>
                   <span>
                     <h4>{player.web_name}</h4>
@@ -294,14 +299,15 @@ export default function NewsPage() {
                 onClick={() => openProfile(player)}
               >
                 <div className="news-card-art" style={clubStyle(player.team)}>
-                  {teamCodeByName.get(player.team) && (
-                    <img className="crest" src={crestUrl(teamCodeByName.get(player.team)!)} alt="" aria-hidden="true" />
-                  )}
-                  {player.photo && (
-                    <div className="shot">
-                      <PlayerPhoto src={player.photo} alt="" loading="lazy" />
-                    </div>
-                  )}
+                  <ClubCrest
+                    className="crest"
+                    code={teamCodeByName.get(player.team)}
+                    team={player.team}
+                    aria-hidden="true"
+                  />
+                  <div className="shot">
+                    <PlayerPhoto src={player.photo ?? undefined} alt={player.name} name={player.name} loading="lazy" />
+                  </div>
                 </div>
                 <div className="news-card-copy">
                   <div className="news-card-meta">

@@ -190,9 +190,12 @@ panels use hard gradient light and clipped graphic shapes rather than grey eleva
 - At the same narrow breakpoint, five-player formation lines use compact 60px markers with zero explicit
   gap so every profile target remains fully inside the turf. Squad alerts recompose into a label/action
   rail above a full-width message instead of squeezing all three into one row.
+- The mobile navigation scrolls the active destination into view, the fifth My Team summary stat spans
+  the full row, and the Transfer Channel becomes a vertical out → in sequence so labels never clip.
 - Fixture-run summaries resolve deliberately as four columns on desktop, a complete 2 × 2 field on
   tablet, and one continuous briefing rail on phone; an orphaned fourth card is never allowed to create
-  false empty-panel space.
+  false empty-panel space. Its overflow fade and scroll cue appear only when later gameweeks are actually
+  off-screen; the sticky club column narrows on phone to keep two fixtures visible at once.
 - Visible `:focus-visible` ring — cyan on dark, purple on paper.
 - Meaning is never colour-only: FDR carries its number, leadership carries a screen-reader "leads",
   availability carries text.

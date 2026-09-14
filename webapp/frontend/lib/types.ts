@@ -129,3 +129,84 @@ export interface ApiError {
   ok: false;
   error: string;
 }
+
+export interface PlayerHistoryRecord {
+  season: string;
+  gameweek: number;
+  opponent: string;
+  opponent_name: string;
+  was_home: boolean;
+  total_points: number;
+  minutes: number;
+  goals_scored: number;
+  assists: number;
+  clean_sheets: number;
+  bonus: number;
+  bps: number;
+  ict_index: number;
+}
+
+export interface StoredSquad {
+  season?: string;
+  ids: number[];
+  formation?: string;
+  captainId?: number;
+}
+
+export interface WatchlistPlayer {
+  name: string;
+  team: string;
+  position: "GK" | "DEF" | "MID" | "FWD";
+  value_m: number;
+  predicted_points: number;
+  points_per_million: number;
+  selected_by?: number;
+  opponent_team?: string;
+  was_home?: boolean;
+  has_prior_history?: boolean;
+  status?: string;
+  element?: number;
+}
+
+export interface WatchlistResult {
+  ok: boolean;
+  has_ownership: boolean;
+  max_ownership: number;
+  value: WatchlistPlayer[];
+  differentials: WatchlistPlayer[];
+  overpriced: WatchlistPlayer[];
+  no_history: WatchlistPlayer[];
+  no_history_total?: number;
+}
+
+export interface ChipRow {
+  gw: number;
+  matches: number;
+  dgw_teams: number;
+  blank_teams: number;
+  avg_fdr: number;
+  squad_playing?: number;
+  squad_blanks?: number;
+}
+
+export interface ChipRecommendation {
+  chip: string;
+  gw: number | null;
+  reason: string;
+  confidence: "high" | "low" | "medium";
+  note?: string;
+  squad_gap?: number;
+}
+
+export interface ChipsResult {
+  ok: boolean;
+  first_gw: number;
+  last_gw: number;
+  any_dgw: boolean;
+  any_bgw: boolean;
+  has_squad: boolean;
+  rows: ChipRow[];
+  recommendations: ChipRecommendation[];
+  unmapped_teams?: string[];
+}
+
