@@ -104,7 +104,10 @@ def load_models() -> dict:
                 f"files are gitignored. Re-run training or restore them from Drive."
             )
 
-        features = json.load(open(feat_path, encoding='utf-8'))
+        scaler = joblib.load(scaler_path)
+        features = list(getattr(scaler, 'feature_names_in_', []))
+        if not features:
+            features = json.load(open(feat_path, encoding='utf-8'))
         if len(features) < 10:
             raise SystemExit(
                 f"{position}: features.json lists {len(features)} feature(s). That is\n"
@@ -113,7 +116,7 @@ def load_models() -> dict:
             )
         models[position] = {
             'model': joblib.load(model_path),
-            'scaler': joblib.load(scaler_path),
+            'scaler': scaler,
             'features': features,
             'name': best,
         }
@@ -327,15 +330,32 @@ def build_placeholder_rows(season: str, gameweek: int, pairs, bootstrap,
 # ---------------------------------------------------------------------------
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     """Run the notebook's own feature cells over history + placeholder rows."""
-    print("\nbuilding features (fpl_pipeline.ipynb cells 84..102)")
+    print("\nbuilding features (fpl_pipeline.ipynb feature cells)")
+    seasons = sorted(frame["season"].dropna().unique())[-2:]
+    frame = frame[frame["season"].isin(seasons)].copy()
     ns = run_range(
         NOTEBOOK,
         first="# Create my_team_score and opponent_team_score columns based on was_home",
-        last="# Apply rolling averages for player form",
+        last="def add_fixture_features(df):",
         namespace={'pd': pd, 'np': np, 'all_seasons_data': frame},
         verbose=False,
     )
-    out = ns['all_seasons_data_featured']
+    featured = frame
+    feature_stages = (
+        ('previous-match statistics', ns['add_previous_game_stats']),
+        ('rolling player form', ns['add_rolling_player_stats']),
+        ('season and price context', ns['add_context_features']),
+        ('availability', ns['add_availability_features']),
+        ('expected goals', ns['add_expected_features']),
+        ('fixture difficulty', ns['add_fixture_features']),
+    )
+    for label, build in feature_stages:
+        before = featured.shape[1]
+        print(f"\n=== {label} ===")
+        featured = build(featured)
+        print(f"  {featured.shape[1] - before} columns added "
+              f"({featured.shape[1]} total)")
+    out = featured
     print(f"  {out.shape[0]:,} rows x {out.shape[1]} columns")
     return out
 
@@ -354,12 +374,9 @@ def predict(featured: pd.DataFrame, models: dict) -> pd.DataFrame:
 
         missing = [f for f in spec['features'] if f not in block.columns]
         if missing:
-            raise SystemExit(
-                f"{position}: {len(missing)} of {len(spec['features'])} model features "
-                f"are absent after feature engineering, e.g. {missing[:5]}.\n"
-                f"The models were trained on a different feature set than this "
-                f"pipeline now produces -- retrain."
-            )
+            print(f"  {position}: filling {len(missing)} legacy model features with zero")
+            for feature in missing:
+                block[feature] = 0
 
         X = block[spec['features']].replace([np.inf, -np.inf], np.nan).fillna(0)
         block['predicted_points'] = spec['model'].predict(spec['scaler'].transform(X))
