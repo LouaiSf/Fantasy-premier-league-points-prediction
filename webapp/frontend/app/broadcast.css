@@ -497,7 +497,7 @@
     font:500 11px/1.35 var(--editorial);color:var(--muted-light)}
 
   .channel{position:relative;display:grid;gap:var(--space-3);padding:var(--space-4);border:1px solid rgba(255,255,255,.2);
-    background:linear-gradient(180deg,#2a0030,#1a0022);box-shadow:inset 0 0 60px rgba(0,0,0,.5)}
+    background:linear-gradient(180deg,#2a0030,#1a0022);box-shadow:inset 0 0 60px rgba(0,0,0,.5);container-type:inline-size}
   .channel-title{display:flex;align-items:center;justify-content:space-between;gap:10px;
     font:900 13px var(--display);text-transform:uppercase;letter-spacing:.04em}
   .slot{position:relative;min-height:112px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;
@@ -572,6 +572,8 @@
   .studio-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"channel channel" "out in";align-items:start}
   .studio-grid .desk.out{grid-area:out}.studio-grid .desk.in{grid-area:in}.studio-grid .channel{grid-area:channel}
   .studio-bar{gap:var(--space-3)}
+  .studio-summary{display:grid;gap:6px;align-content:center;min-width:clamp(8rem,12vw,10rem)}
+  .studio-summary .data{font:800 clamp(1rem,1.8vw,1.25rem)/1 var(--data)}
   .desk-list{max-height:436px;padding-top:10px}
   .prow{padding:9px 10px}
   .prow-num{gap:0;min-width:46px}
@@ -590,7 +592,9 @@
   .channel-read p{margin:0;font:500 13px/1.36 var(--editorial);color:var(--muted-light)}
   .decision-bugs{display:flex;gap:1px;background:rgba(255,255,255,.12)}
   .decision-bugs .bug{flex:1;min-width:0;padding:8px;background:var(--night-900)}
-  .channel-foot{justify-content:flex-end}.channel-foot .btn{flex:0 1 auto}
+  .channel-foot{grid-column:1/-1;justify-content:flex-start;align-items:center;flex-wrap:wrap;min-width:0}
+  .channel-foot .btn{flex:0 0 auto;width:auto;min-height:36px}
+  .run-reason{grid-column:1/-1;max-width:none;padding:8px 10px;border-left:3px solid var(--yellow);line-height:1.4;text-align:left}
 
   /* --- 8. COMPARISON ------------------------------------------------------ */
   .cmp-page{padding:var(--space-10) 0 0;background:linear-gradient(180deg,var(--night-900),#31002f 70%)}
@@ -1164,6 +1168,14 @@
     .drawer-id{max-width:64%}
   }
   @media (max-width:560px){
+    .studio-bar{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);align-items:stretch}
+    .studio-bar .spacer{display:none}
+    .studio-field{display:grid;align-content:start;gap:6px;min-width:0}
+    .studio-field .kicker{white-space:normal}
+    .stepper{display:grid;grid-template-columns:2.25rem minmax(0,1fr) 2.25rem;width:100%;min-height:2.5rem}
+    .stepper button{width:auto;min-width:0;min-height:2.5rem}
+    .stepper output{min-width:0;min-height:2.5rem}
+    .studio-summary{grid-column:1/-1;grid-template-columns:1fr auto;align-items:center;min-width:0;padding-top:var(--space-3);border-top:1px solid rgba(255,255,255,.18)}
     .hero-strip{grid-template-columns:1fr 1fr}
     .hero-strip .cell:last-child{grid-column:1/-1;border-top:1px solid #ded5df}
     .hero-title{font-size:clamp(2.2rem,12vw,3rem)}
@@ -1235,14 +1247,15 @@
   .hero-team .hero-grid,.hero-team .hero-strip{position:relative;z-index:3}
 
   /* --- PLAYER DRAWER: club identity, not the shared broadcast mane --- */
-  .drawer-hero{background:linear-gradient(140deg,var(--c1,#444) 0%,var(--c2,#111) 88%)}
+  .drawer-hero{background:linear-gradient(140deg,var(--c1,#444) 0%,var(--c2,#111) 88%);container-type:inline-size}
   .drawer-texture{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.5;
     background-image:radial-gradient(rgba(255,255,255,.16) 1px,transparent 1px);
     background-size:14px 14px;
     -webkit-mask-image:linear-gradient(120deg,#000 0%,transparent 62%);
     mask-image:linear-gradient(120deg,#000 0%,transparent 62%)}
-  .drawer-crest{position:absolute;right:6%;top:8%;z-index:1;width:104px;height:104px;object-fit:contain;
-    opacity:.22;filter:drop-shadow(0 6px 10px rgba(0,0,0,.35))}
+  .drawer-crest{position:absolute;left:var(--space-6);right:auto;top:var(--space-5);z-index:1;width:clamp(2.75rem,12cqi,4.25rem);height:auto;object-fit:contain;
+    opacity:.3;filter:drop-shadow(0 4px 7px rgba(0,0,0,.35))}
+  .drawer-id{padding-top:clamp(2.75rem,12cqi,4.25rem)}
 
   /* --- TRANSFER STUDIO: labelled steppers + portrait/badge presentation --- */
   .studio-field{display:flex;align-items:center;gap:8px}
@@ -1256,7 +1269,7 @@
     border-inline:1px solid rgba(255,255,255,.2)}
   .prow .badge-mini{position:absolute;left:26px;bottom:-2px;width:15px;height:15px;object-fit:contain;
     filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
-  .slot-photo{position:relative;z-index:2;width:78px;height:88px;flex:none}
+  .slot-photo{position:relative;z-index:2;width:clamp(3.5rem,18cqi,4.75rem);height:auto;aspect-ratio:7/8;flex:none}
   .slot-photo img.shot-img{width:100%;height:100%;object-fit:contain;object-position:bottom;
     filter:drop-shadow(-6px 6px 8px rgba(0,0,0,.4))}
   .slot-photo .badge-mini{position:absolute;left:-4px;bottom:2px;width:22px;height:22px;object-fit:contain;

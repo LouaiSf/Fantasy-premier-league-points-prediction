@@ -218,8 +218,10 @@ export default function TransfersPage() {
             </div>
           </div>
           <span className="spacer" />
-          <span className="kicker">Squad size</span>
-          <strong className="data">{squadPlayers.length} / 15</strong>
+          <div className="studio-summary">
+            <span className="kicker">Squad size</span>
+            <strong className="data">{squadPlayers.length} / 15</strong>
+          </div>
         </div>
 
         <div className="studio-grid">
@@ -369,7 +371,7 @@ export default function TransfersPage() {
               </button>
             </div>
             {runDisabledReason && !analysing && (
-              <p className="run-reason" style={{ textAlign: "right", marginTop: -4 }}>
+              <p className="run-reason">
                 {runDisabledReason}
               </p>
             )}
