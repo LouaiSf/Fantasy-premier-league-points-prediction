@@ -11,7 +11,7 @@ type Filter = "all" | "squad" | "injury" | "suspension" | "doubt";
 type View = "desk" | "cards";
 
 const FILTERS: { key: Filter; label: string }[] = [
-  { key: "all", label: "All clubs" },
+  { key: "all", label: "All notes" },
   { key: "squad", label: "My squad" },
   { key: "injury", label: "Injuries" },
   { key: "suspension", label: "Suspensions" },
@@ -46,6 +46,9 @@ export default function NewsPage() {
   const { snapshot, loading, squadNames, openProfile } = useApp();
   const [filter, setFilter] = React.useState<Filter>("all");
   const [view, setView] = React.useState<View>("desk");
+  const [query, setQuery] = React.useState("");
+  const [club, setClub] = React.useState("ALL");
+  const [position, setPosition] = React.useState("ALL");
 
   if (loading || !snapshot) {
     return (
@@ -59,9 +62,16 @@ export default function NewsPage() {
 
   const squadNameSet = new Set(squadNames);
   const teamCodeByName = new Map(snapshot.teams.map((team) => [team.name, team.code]));
+  const clubOptions = snapshot.teams.map((team) => team.name);
   const freshness = snapshot.gameweek ? `Local snapshot · GW${snapshot.gameweek}` : "Local snapshot";
   const allNotes = snapshot.players.filter(hasNote).sort((a, b) => severity(a) - severity(b));
+  const normalizedQuery = query.trim().toLowerCase();
   const filtered = allNotes.filter((player) => {
+    if (normalizedQuery && !`${player.name} ${player.web_name} ${player.team}`.toLowerCase().includes(normalizedQuery)) {
+      return false;
+    }
+    if (club !== "ALL" && player.team !== club) return false;
+    if (position !== "ALL" && player.position !== position) return false;
     switch (filter) {
       case "squad":
         return squadNameSet.has(player.name);
@@ -95,11 +105,15 @@ export default function NewsPage() {
           </p>
         </div>
 
-        {allNotes.length > 0 && (
+        {filtered.length > 0 && (
           <div className="ticker-strip" aria-label="Availability headlines">
             <span className="tag">Notes</span>
-            <div className="ticker-track" aria-hidden="true">
-              {[...allNotes, ...allNotes].map((player, index) => (
+            <div
+              className="ticker-track"
+              aria-hidden="true"
+              style={{ "--ticker-duration": `${Math.max(72, filtered.length * 0.72)}s` } as React.CSSProperties}
+            >
+              {[...filtered, ...filtered].map((player, index) => (
                 <span key={`${player.element}-${index}`}>
                   <b>{player.web_name}</b> — {noteFor(player)}
                 </span>
@@ -121,6 +135,35 @@ export default function NewsPage() {
                   {item.label}
                 </button>
               ))}
+            </div>
+            <div className="news-filter-tools">
+              <label className="search">
+                <span className="sr-only">Search player or club</span>
+                <input
+                  type="search"
+                  placeholder="Search player or club"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </label>
+              <label className="news-select-wrap">
+                <span className="sr-only">Filter by club</span>
+                <select className="news-select" value={club} onChange={(event) => setClub(event.target.value)}>
+                  <option value="ALL">All clubs</option>
+                  {clubOptions.map((team) => (
+                    <option key={team} value={team}>{team}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="news-select-wrap">
+                <span className="sr-only">Filter by position</span>
+                <select className="news-select" value={position} onChange={(event) => setPosition(event.target.value)}>
+                  <option value="ALL">All positions</option>
+                  {(["GK", "DEF", "MID", "FWD"] as const).map((item) => (
+                    <option key={item} value={item}>{item}</option>
+                  ))}
+                </select>
+              </label>
             </div>
             <div className="news-view-switch" role="tablist" aria-label="News reading mode">
               <button

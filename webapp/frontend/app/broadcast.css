@@ -882,7 +882,7 @@
   .ticker-strip{display:flex;align-items:center;gap:0;margin-bottom:var(--space-6);background:var(--ink);color:var(--white);overflow:hidden}
   .ticker-strip .tag{position:relative;z-index:2;flex:none;padding:10px 14px;background:var(--pink);
     font:800 10px var(--data);letter-spacing:.16em;text-transform:uppercase}
-  .ticker-track{display:flex;gap:var(--space-8);padding:10px var(--space-5);white-space:nowrap;animation:tickerRun 42s linear infinite}
+  .ticker-track{display:flex;gap:var(--space-8);padding:10px var(--space-5);white-space:nowrap;animation:tickerRun var(--ticker-duration,96s) linear infinite}
   .ticker-track span{font:600 12px var(--data);color:#f0e4f2}
   .ticker-track span b{color:var(--lime)}
   @keyframes tickerRun{from{transform:translateX(0)}to{transform:translateX(-50%)}}
@@ -993,6 +993,14 @@
   /* News Wire — one wire, three deliberate reading modes */
   .news-toolbar{align-items:flex-start}
   .news-control-stack{display:grid;gap:var(--space-3);min-width:0}
+  .news-filter-tools{display:grid;grid-template-columns:minmax(200px,1.5fr) repeat(2,minmax(120px,1fr));gap:var(--space-2);min-width:min(100%,680px)}
+  .news-filter-tools .search{min-height:38px;background:var(--paper);border-color:#d5cbd6}
+  .news-filter-tools .search input{color:var(--ink);font-size:12px}
+  .news-filter-tools .search input::placeholder{color:var(--muted-ink)}
+  .news-select-wrap{position:relative;min-width:0}
+  .news-select{width:100%;min-height:38px;padding:0 34px 0 10px;appearance:none;background:var(--paper);border:1px solid #d5cbd6;color:var(--ink);font:650 11px var(--ui);cursor:pointer}
+  .news-select-wrap::after{content:"";position:absolute;right:12px;top:14px;width:7px;height:7px;border-right:1.5px solid var(--ink);border-bottom:1.5px solid var(--ink);transform:rotate(45deg);pointer-events:none}
+  .news-select:focus-visible{border-color:var(--pl-purple)}
   .news-view-switch{display:inline-flex;position:relative;width:max-content;max-width:100%;padding:3px;background:var(--ink);overflow:auto}
   .news-view-tab{position:relative;z-index:1;min-height:34px;padding:0 13px;border:0;background:transparent;color:#c9bccb;font:800 10px var(--data);letter-spacing:.1em;text-transform:uppercase;cursor:pointer;white-space:nowrap}
   .news-view-tab[aria-selected="true"]{color:var(--ink)}
@@ -1210,6 +1218,7 @@
     .insight-inner{grid-template-columns:1fr}
     .impact-foot .btn{width:100%}
     .news-cards{grid-template-columns:1fr}.news-card.is-priority{grid-column:span 1;grid-template-columns:1fr;grid-template-rows:170px 1fr}.news-reel{grid-auto-columns:84vw}
+    .news-filter-tools{grid-template-columns:1fr;min-width:0;width:100%}
     .drawer-grid{grid-template-columns:1fr}
     .drawer-actions{grid-template-columns:1fr}
     .verdict{padding:var(--space-5)}
@@ -1356,14 +1365,15 @@
   .cand.is-lead .cand-view:hover{background:rgba(255,255,255,.2);color:var(--white)}
 
   /* --- NEWS WIRE: portraits + crests as content, not decoration --- */
-  .lead-story{background:linear-gradient(114deg,var(--c1,#37003c) 0%,var(--c2,#1a0022) 62%,var(--night-900) 100%)}
-  .lead-crest{position:absolute;left:86px;top:22px;z-index:5;width:44px;height:44px;object-fit:contain;
+  .lead-story{--lead-copy-left:clamp(74px,6vw,86px);background:linear-gradient(114deg,var(--c1,#37003c) 0%,var(--c2,#1a0022) 62%,var(--night-900) 100%)}
+  .lead-copy{padding-left:var(--lead-copy-left)}
+  .lead-crest{position:absolute;left:var(--lead-copy-left);top:clamp(1rem,3vw,1.5rem);z-index:5;width:clamp(2rem,4vw,2.75rem);height:auto;object-fit:contain;
     filter:drop-shadow(0 2px 5px rgba(0,0,0,.4))}
   .lead-source-link{color:var(--lime);font-weight:700;text-decoration:underline;text-underline-offset:2px}
-  .wire-item .wire-shot{position:relative;width:46px;height:46px;border-radius:50%;overflow:hidden;flex:none;
+  .wire-item .wire-shot{position:relative;width:46px;height:46px;border-radius:50%;overflow:visible;flex:none;
     background:linear-gradient(150deg,var(--c1,#444),var(--c2,#111))}
-  .wire-item .wire-shot img{width:100%;height:100%;object-fit:cover;object-position:center top}
-  .wire-item .wire-badge{position:absolute;right:-3px;bottom:-3px;width:17px;height:17px;object-fit:contain;
+  .wire-item .wire-shot>img:not(.wire-badge){width:100%;height:100%;border-radius:50%;object-fit:cover;object-position:center top}
+  .wire-item .wire-badge{position:absolute;right:-.25rem;bottom:-.25rem;z-index:3;width:1.0625rem;height:1.0625rem;object-fit:contain;
     filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
   .news-card-art .badge-mini{position:absolute;z-index:2;right:14px;top:14px;width:26px;height:26px;object-fit:contain;
     filter:drop-shadow(0 2px 4px rgba(0,0,0,.3))}
