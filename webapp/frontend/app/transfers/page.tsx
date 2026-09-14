@@ -4,7 +4,8 @@ import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
 import { api } from "@/lib/api";
 import { PlayerPhoto } from "@/components/player-photo";
-import { money, num, signed } from "@/lib/format";
+import { clubStyle } from "@/lib/club-colors";
+import { crestUrl, money, num, signed } from "@/lib/format";
 import type { PlayerRecord, TransferResult } from "@/lib/types";
 
 const OUT_FILTERS = ["ALL", "GK", "DEF", "MID", "FWD", "FLAG"] as const;
@@ -23,10 +24,12 @@ function isFlagged(player: PlayerRecord) {
 function DeskRow({
   player,
   selected,
+  teamCode,
   onClick,
 }: {
   player: PlayerRecord;
   selected: boolean;
+  teamCode?: number;
   onClick: () => void;
 }) {
   return (
@@ -35,10 +38,11 @@ function DeskRow({
       className={`prow${selected ? " is-picked" : ""}`}
       data-player-id={player.element}
       onClick={onClick}
-      style={{ "--c1": "#555" } as React.CSSProperties}
+      style={clubStyle(player.team)}
     >
-      <span className="shot">
+      <span className="shot" style={{ position: "relative" }}>
         {player.photo && <PlayerPhoto src={player.photo} alt="" loading="lazy" />}
+        {teamCode && <img className="badge-mini" src={crestUrl(teamCode)} alt="" aria-hidden="true" />}
       </span>
       <span className="prow-id">
         <b>{player.web_name || player.name}</b>
@@ -82,6 +86,7 @@ export default function TransfersPage() {
   }
 
   const predictionAvailable = snapshot.prediction_available;
+  const teamCodeByName = new Map(snapshot.teams.map((team) => [team.name, team.code]));
   const byElement = new Map(snapshot.players.map((player) => [player.element, player]));
   const outgoing = outId != null ? byElement.get(outId) ?? null : null;
   const incoming = inId != null ? byElement.get(inId) ?? null : null;
@@ -125,6 +130,13 @@ export default function TransfersPage() {
       ? Number(incoming.predicted_points ?? 0) - Number(outgoing.predicted_points ?? 0)
       : null;
   const hit = free >= 1 ? 0 : (1 - free) * (analysis?.hit_cost ?? 4);
+  const runDisabledReason =
+    squadPlayers.length !== 15
+      ? "Build a full 15-player squad in My Team first."
+      : !predictionAvailable
+        ? (snapshot.prediction_error ?? "Predictions are unavailable for this snapshot.")
+        : null;
+  const runDisabled = Boolean(runDisabledReason) || analysing;
 
   async function runAnalysis() {
     setAnalysing(true);
@@ -162,26 +174,49 @@ export default function TransfersPage() {
         </div>
 
         <div className="studio-bar">
-          <span className="kicker">Free transfers</span>
-          <input
-            type="number"
-            min={0}
-            max={5}
-            value={free}
-            onChange={(event) => setFree(Number(event.target.value))}
-            className="data"
-            style={{ width: 48, background: "transparent", color: "inherit", border: "1px solid rgba(255,255,255,.3)" }}
-          />
-          <span className="kicker">Bank</span>
-          <input
-            type="number"
-            min={0}
-            step={0.1}
-            value={bank}
-            onChange={(event) => setBank(Number(event.target.value))}
-            className="data"
-            style={{ width: 64, background: "transparent", color: "inherit", border: "1px solid rgba(255,255,255,.3)" }}
-          />
+          <div className="studio-field">
+            <span className="kicker">Free transfers</span>
+            <div className="stepper">
+              <button
+                type="button"
+                aria-label="Decrease free transfers"
+                disabled={free <= 0}
+                onClick={() => setFree((value) => Math.max(0, value - 1))}
+              >
+                −
+              </button>
+              <output className="data">{free}</output>
+              <button
+                type="button"
+                aria-label="Increase free transfers"
+                disabled={free >= 5}
+                onClick={() => setFree((value) => Math.min(5, value + 1))}
+              >
+                +
+              </button>
+            </div>
+          </div>
+          <div className="studio-field">
+            <span className="kicker">Bank</span>
+            <div className="stepper">
+              <button
+                type="button"
+                aria-label="Decrease bank by £0.1m"
+                disabled={bank <= 0}
+                onClick={() => setBank((value) => Math.max(0, Math.round((value - 0.1) * 10) / 10))}
+              >
+                −
+              </button>
+              <output className="data">{money(bank)}</output>
+              <button
+                type="button"
+                aria-label="Increase bank by £0.1m"
+                onClick={() => setBank((value) => Math.round((value + 0.1) * 10) / 10)}
+              >
+                +
+              </button>
+            </div>
+          </div>
           <span className="spacer" />
           <span className="kicker">Squad size</span>
           <strong className="data">{squadPlayers.length} / 15</strong>
@@ -224,6 +259,7 @@ export default function TransfersPage() {
                     key={player.element}
                     player={player}
                     selected={player.element === outId}
+                    teamCode={teamCodeByName.get(player.team)}
                     onClick={() => pickOut(player)}
                   />
                 ))
@@ -238,13 +274,21 @@ export default function TransfersPage() {
                 {outgoing && incoming ? "Move staged" : outgoing ? "Choose a replacement" : "Awaiting selection"}
               </span>
             </div>
-            <div id="slotOut" className={`slot out${outgoing ? " is-filled" : ""}`}>
+            <div id="slotOut" className={`slot out${outgoing ? " is-filled" : ""}`} style={outgoing ? clubStyle(outgoing.team) : undefined}>
               {outgoing ? (
-                <div className="slot-id">
-                  <span className="kicker">{outgoing.position}</span>
-                  <b>{outgoing.web_name}</b>
-                  <span>{money(outgoing.value_m)}</span>
-                </div>
+                <>
+                  <div className="slot-id">
+                    <span className="kicker">{outgoing.position}</span>
+                    <b>{outgoing.web_name}</b>
+                    <span>{money(outgoing.value_m)}</span>
+                  </div>
+                  <div className="slot-photo">
+                    {outgoing.photo && <PlayerPhoto className="shot-img" src={outgoing.photo} alt="" />}
+                    {teamCodeByName.get(outgoing.team) && (
+                      <img className="badge-mini" src={crestUrl(teamCodeByName.get(outgoing.team)!)} alt="" aria-hidden="true" />
+                    )}
+                  </div>
+                </>
               ) : (
                 <div className="slot-empty">
                   <b>Select a player to sell</b>
@@ -256,13 +300,21 @@ export default function TransfersPage() {
             <div className="lane" aria-hidden="true">
               <span className="lane-chev">↓</span>
             </div>
-            <div id="slotIn" className={`slot in${incoming ? " is-filled" : ""}`}>
+            <div id="slotIn" className={`slot in${incoming ? " is-filled" : ""}`} style={incoming ? clubStyle(incoming.team) : undefined}>
               {incoming ? (
-                <div className="slot-id">
-                  <span className="kicker">{incoming.position}</span>
-                  <b>{incoming.web_name}</b>
-                  <span>{money(incoming.value_m)}</span>
-                </div>
+                <>
+                  <div className="slot-id">
+                    <span className="kicker">{incoming.position}</span>
+                    <b>{incoming.web_name}</b>
+                    <span>{money(incoming.value_m)}</span>
+                  </div>
+                  <div className="slot-photo">
+                    {incoming.photo && <PlayerPhoto className="shot-img" src={incoming.photo} alt="" />}
+                    {teamCodeByName.get(incoming.team) && (
+                      <img className="badge-mini" src={crestUrl(teamCodeByName.get(incoming.team)!)} alt="" aria-hidden="true" />
+                    )}
+                  </div>
+                </>
               ) : (
                 <div className="slot-empty">
                   <b>Select a replacement</b>
@@ -271,7 +323,7 @@ export default function TransfersPage() {
               )}
               <span className="slot-tag in">In</span>
             </div>
-            <div className="channel-read" aria-live="polite">
+            <div className={`channel-read${outgoing && incoming ? " has-move" : ""}`} aria-live="polite">
               <span className="kicker">Decision read</span>
               <h3>
                 {outgoing && incoming
@@ -281,9 +333,11 @@ export default function TransfersPage() {
                     : "Choose an outgoing player"}
               </h3>
               <p>
-                {outgoing && !incoming
-                  ? `${inRows.length} ${outgoing.position} options match the current filters.`
-                  : "The market narrows to the same position once you pick who leaves."}
+                {outgoing && incoming
+                  ? `${outgoing.web_name} (${money(outgoing.value_m)}) makes way for ${incoming.web_name} (${money(incoming.value_m)}). Run the full analysis to see how this ranks against every transfer count.`
+                  : outgoing
+                    ? `${inRows.length} ${outgoing.position} options match the current filters.`
+                    : "Pick a player to sell from the desk on the left to start staging a move."}
               </p>
               <div className="decision-bugs">
                 <div className="bug">
@@ -307,12 +361,36 @@ export default function TransfersPage() {
               <button
                 className="btn sm"
                 type="button"
-                disabled={squadPlayers.length !== 15 || !predictionAvailable || analysing}
+                disabled={runDisabled}
+                title={runDisabledReason ?? undefined}
                 onClick={runAnalysis}
               >
                 {analysing ? "Running…" : "Run full analysis"}
               </button>
             </div>
+            {runDisabledReason && !analysing && (
+              <p className="run-reason" style={{ textAlign: "right", marginTop: -4 }}>
+                {runDisabledReason}
+              </p>
+            )}
+            {analysing && (
+              <div className="analysis-status" role="status">
+                <span className="spinner" aria-hidden="true" />
+                Running the optimiser across every transfer count…
+              </div>
+            )}
+            {!analysing && analysisError && (
+              <div className="analysis-status is-error" role="alert">
+                {analysisError}
+              </div>
+            )}
+            {!analysing && !analysisError && analysis && (
+              <div className="analysis-status" role="status">
+                {analysis.best
+                  ? `Analysis complete: ${analysis.best.transfers} transfer${analysis.best.transfers === 1 ? "" : "s"} lead the model.`
+                  : "Analysis complete: no legal squad was found for any transfer count."}
+              </div>
+            )}
           </section>
 
           <section className="desk in" style={{ "--desk-c": "var(--lime)" } as React.CSSProperties}>
@@ -360,16 +438,13 @@ export default function TransfersPage() {
                   key={player.element}
                   player={player}
                   selected={player.element === inId}
+                  teamCode={teamCodeByName.get(player.team)}
                   onClick={() => pickIn(player)}
                 />
               ))}
             </div>
           </section>
         </div>
-
-        {analysisError && (
-          <p style={{ color: "var(--pink)", marginTop: 16 }}>{analysisError}</p>
-        )}
 
         {analysis && (
           <section className="impact" aria-live="polite">

@@ -1,10 +1,10 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { useApp } from "@/components/providers/app-provider";
 import { PlayerPhoto } from "@/components/player-photo";
-import { money, num } from "@/lib/format";
+import { clubStyle } from "@/lib/club-colors";
+import { crestUrl, money, num } from "@/lib/format";
 import type { TeamRecord } from "@/lib/types";
 
 function fixtureRibbon(team: TeamRecord | undefined, gameweek: number | null) {
@@ -32,11 +32,18 @@ export function PlayerDrawer() {
           {player && (
             <>
               <div className="drawer-scroll">
-                <div
-                  className="drawer-hero"
-                  style={{ "--c1": "#37003c", "--c2": "#1a0022" } as CSSProperties}
-                >
-                  <div className="mane" aria-hidden="true" />
+                <div className="drawer-hero" style={clubStyle(player.team)}>
+                  <div className="drawer-texture" aria-hidden="true" />
+                  {team && (
+                    <img
+                      className="drawer-crest"
+                      src={crestUrl(team.code)}
+                      alt=""
+                      aria-hidden="true"
+                      width={104}
+                      height={104}
+                    />
+                  )}
                   <span className="ghost-num drawer-ghostnum" aria-hidden="true">
                     {player.position}
                   </span>

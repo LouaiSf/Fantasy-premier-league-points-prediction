@@ -4,7 +4,7 @@ import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
 import { PlayerPhoto } from "@/components/player-photo";
 import { clubStyle } from "@/lib/club-colors";
-import { money, num } from "@/lib/format";
+import { crestUrl, money, num } from "@/lib/format";
 import type { PlayerRecord, TeamRecord } from "@/lib/types";
 
 function captainScore(player: PlayerRecord, predictionAvailable: boolean): number {
@@ -26,6 +26,7 @@ function nextFixture(team: TeamRecord | undefined, gameweek: number | null) {
 export default function CaptainPage() {
   const { snapshot, loading, squadPlayers, openProfile } = useApp();
   const [pool, setPool] = React.useState<"squad" | "all">("squad");
+  const [selectedElement, setSelectedElement] = React.useState<number | null>(null);
 
   if (loading || !snapshot) {
     return (
@@ -43,14 +44,29 @@ export default function CaptainPage() {
     .filter((player) => player.status === "a")
     .sort((a, b) => captainScore(b, predictionAvailable) - captainScore(a, predictionAvailable))
     .slice(0, 10);
-  const lead = ranked[0] ?? null;
-  const runnerUp = ranked[1] ?? null;
+  const topPick = ranked[0] ?? null;
+  const lead = (selectedElement != null && ranked.find((p) => p.element === selectedElement)) || topPick;
+  const runnerUp = ranked.find((p) => p.element !== lead?.element) ?? null;
   const teamByName = new Map(snapshot.teams.map((team) => [team.name, team]));
+  const leadTeam = lead ? teamByName.get(lead.team) : undefined;
+  const leadFixture = lead ? nextFixture(leadTeam, snapshot.gameweek) : null;
+  const leadRisk = lead ? riskFor(lead) : null;
 
   return (
     <section className="page cap-page paper-scope">
-      <div className="cap-hero">
-        <div className="mane" aria-hidden="true" />
+      <div className="cap-hero" style={lead ? clubStyle(lead.team) : undefined}>
+        <div className="armband-ring" aria-hidden="true" />
+        {lead && (
+          <>
+            {leadTeam && <img className="cap-crest" src={crestUrl(leadTeam.code)} alt="" aria-hidden="true" />}
+            <div className="cap-shot" aria-hidden="true">
+              {lead.photo && <PlayerPhoto src={lead.photo} alt="" width={280} height={340} />}
+            </div>
+            <span className="cap-armband">
+              <span aria-hidden="true">C</span> Armband pick
+            </span>
+          </>
+        )}
         <div className="shell cap-inner">
           <div className="cap-copy">
             <span className="eyebrow">Armband desk</span>
@@ -59,12 +75,28 @@ export default function CaptainPage() {
               <span>&amp; Form</span>
             </h1>
             <p className="cap-quote">
-              {lead
+              {lead && lead.element === topPick?.element
                 ? `${lead.web_name} leads the ${pool === "squad" ? "squad" : "league"} pool on ${
                     predictionAvailable ? "projected points" : "current form"
                   }, at ${num(captainScore(lead, predictionAvailable))}.`
-                : "No available candidates in this pool yet."}
+                : lead
+                  ? `Your armband pick, at ${num(captainScore(lead, predictionAvailable))} ${
+                      predictionAvailable ? "projected points" : "form"
+                    }.`
+                  : "No available candidates in this pool yet."}
             </p>
+            {lead && (
+              <div className="cap-tags">
+                <span className="solid">{lead.team}</span>
+                <span>{lead.position}</span>
+                {leadFixture && (
+                  <span>
+                    Next: {leadFixture.opponent} ({leadFixture.venue}) · FDR {leadFixture.difficulty}
+                  </span>
+                )}
+                {leadRisk && <span>{leadRisk.label}</span>}
+              </div>
+            )}
           </div>
           {lead && (
             <div className="cap-metrics">
@@ -123,13 +155,22 @@ export default function CaptainPage() {
           {ranked.map((player, index) => {
             const fixture = nextFixture(teamByName.get(player.team), snapshot.gameweek);
             const risk = riskFor(player);
+            const isSelected = lead?.element === player.element;
             return (
-              <button
+              <div
                 key={player.element}
-                type="button"
-                className={`cand${index === 0 ? " is-lead" : ""}`}
+                role="button"
+                tabIndex={0}
+                className={`cand${index === 0 ? " is-lead" : ""}${isSelected ? " is-selected" : ""}`}
                 style={clubStyle(player.team)}
-                onClick={() => openProfile(player)}
+                aria-pressed={isSelected}
+                onClick={() => setSelectedElement(player.element)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setSelectedElement(player.element);
+                  }
+                }}
               >
                 <span className="cand-rank">{String(index + 1).padStart(2, "0")}</span>
                 <span className="shot">
@@ -172,8 +213,18 @@ export default function CaptainPage() {
                   <span className="risk" data-risk={risk.level}>
                     {risk.label}
                   </span>
+                  <button
+                    type="button"
+                    className="cand-view"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openProfile(player);
+                    }}
+                  >
+                    Profile
+                  </button>
                 </span>
-              </button>
+              </div>
             );
           })}
           {!ranked.length && <p className="picker-empty">No available candidates in this pool.</p>}

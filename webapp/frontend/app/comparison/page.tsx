@@ -4,7 +4,7 @@ import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
 import { PlayerPhoto } from "@/components/player-photo";
 import { clubStyle } from "@/lib/club-colors";
-import { money, num } from "@/lib/format";
+import { crestUrl, money, num } from "@/lib/format";
 import type { PlayerRecord } from "@/lib/types";
 
 const POSITIONS = ["ALL", "GK", "DEF", "MID", "FWD"] as const;
@@ -51,9 +51,13 @@ export default function ComparisonPage() {
   }
 
   const byElement = new Map(snapshot.players.map((player) => [player.element, player]));
+  const teamCodeByName = new Map(snapshot.teams.map((team) => [team.name, team.code]));
   const playerA = seatA != null ? byElement.get(seatA) ?? null : null;
   const playerB = seatB != null ? byElement.get(seatB) ?? null : null;
   const squadNameSet = new Set(squadNames);
+  const allSorted = [...snapshot.players].sort((a, b) =>
+    (a.web_name || a.name).localeCompare(b.web_name || b.name),
+  );
 
   const candidates = snapshot.players.filter((player) => {
     if (pool === "squad" && !squadNameSet.has(player.name)) return false;
@@ -107,6 +111,41 @@ export default function ComparisonPage() {
         </div>
 
         <div className="duel-stage">
+          <div className="seat-select-row">
+            <div className="seat-select">
+              <label htmlFor="seatASelect">Player A</label>
+              <select
+                id="seatASelect"
+                value={seatA ?? ""}
+                onChange={(event) => setSeatA(event.target.value ? Number(event.target.value) : null)}
+              >
+                <option value="">Choose a player…</option>
+                {allSorted.map((player) => (
+                  <option key={player.element} value={player.element}>
+                    {player.web_name || player.name} · {player.team_short}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <span className="vs" aria-hidden="true">
+              VS
+            </span>
+            <div className="seat-select">
+              <label htmlFor="seatBSelect">Player B</label>
+              <select
+                id="seatBSelect"
+                value={seatB ?? ""}
+                onChange={(event) => setSeatB(event.target.value ? Number(event.target.value) : null)}
+              >
+                <option value="">Choose a player…</option>
+                {allSorted.map((player) => (
+                  <option key={player.element} value={player.element}>
+                    {player.web_name || player.name} · {player.team_short}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div className="plinth-row">
             <button
               type="button"
@@ -376,27 +415,81 @@ export default function ComparisonPage() {
                   );
                 })}
               </div>
-              <div className="verdict">
-                <div className="mane" aria-hidden="true" />
-                <div className="verdict-grid">
-                  <div>
-                    <h3>
-                      {aWins === bWins
-                        ? "Even across the board"
-                        : `${aWins > bWins ? playerA.web_name : playerB.web_name} leads on the numbers`}
-                    </h3>
-                    <p>
-                      {playerA.web_name} leads {aWins} of {METRICS.length} categories;{" "}
-                      {playerB.web_name} leads {bWins}.{" "}
-                      {aWins === bWins ? "Too close to call from season data alone." : ""}
-                    </p>
+              {(() => {
+                const tie = aWins === bWins;
+                const winner = tie ? null : aWins > bWins ? playerA : playerB;
+                const loser = tie ? null : aWins > bWins ? playerB : playerA;
+                const winnerWins = tie ? 0 : Math.max(aWins, bWins);
+                const loserWins = tie ? 0 : Math.min(aWins, bWins);
+                return (
+                  <div className={`verdict split${tie ? " is-tie" : ""}`}>
+                    <div className="verdict-split-grid">
+                      <div
+                        className={`verdict-side${tie ? "" : winner === playerB ? " right" : ""}`}
+                        style={clubStyle((tie ? playerA : winner!).team)}
+                      >
+                        {teamCodeByName.get((tie ? playerA : winner!).team) && (
+                          <img
+                            className="verdict-crest"
+                            src={crestUrl(teamCodeByName.get((tie ? playerA : winner!).team)!)}
+                            alt=""
+                            aria-hidden="true"
+                          />
+                        )}
+                        {(tie ? playerA : winner!).photo && (
+                          <div className="shot">
+                            <PlayerPhoto src={(tie ? playerA : winner!).photo!} alt="" />
+                          </div>
+                        )}
+                        <div className="verdict-side-copy">
+                          <span className="win-tag">{tie ? "Even" : "Leads on the numbers"}</span>
+                          <h3>{(tie ? playerA : winner!).web_name}</h3>
+                          <p>
+                            {tie ? aWins : winnerWins} of {METRICS.length} categories
+                          </p>
+                        </div>
+                      </div>
+                      <div
+                        className={`verdict-side${tie ? "" : winner === playerB ? "" : " right"}${tie ? "" : " is-loser"}`}
+                        style={clubStyle((tie ? playerB : loser!).team)}
+                      >
+                        {teamCodeByName.get((tie ? playerB : loser!).team) && (
+                          <img
+                            className="verdict-crest"
+                            src={crestUrl(teamCodeByName.get((tie ? playerB : loser!).team)!)}
+                            alt=""
+                            aria-hidden="true"
+                          />
+                        )}
+                        {(tie ? playerB : loser!).photo && (
+                          <div className="shot">
+                            <PlayerPhoto src={(tie ? playerB : loser!).photo!} alt="" />
+                          </div>
+                        )}
+                        <div className="verdict-side-copy">
+                          <span className="win-tag" style={{ background: "rgba(255,255,255,.24)", color: "var(--white)" }}>
+                            {tie ? "Even" : "Runner-up"}
+                          </span>
+                          <h3>{(tie ? playerB : loser!).web_name}</h3>
+                          <p>
+                            {tie ? bWins : loserWins} of {METRICS.length} categories
+                          </p>
+                        </div>
+                      </div>
+                      <div className="verdict-mid">
+                        <h3>{tie ? "Split decision" : `${winner!.web_name} leads on the numbers`}</h3>
+                        <p>
+                          {playerA.web_name} leads {aWins} of {METRICS.length} categories; {playerB.web_name} leads{" "}
+                          {bWins}.{" "}
+                          {tie
+                            ? "Too close to call from season data alone — check form and fixtures below before deciding."
+                            : "Full category breakdown is above; the accordion below has the detail."}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="stamp">
-                    <b>{aWins === bWins ? "Even" : aWins > bWins ? playerA.web_name : playerB.web_name}</b>
-                    <span>{aWins === bWins ? "split decision" : "category leader"}</span>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
             </div>
           </div>
         </div>

@@ -2,7 +2,9 @@
 
 import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
-import { num } from "@/lib/format";
+import { PlayerPhoto } from "@/components/player-photo";
+import { clubStyle } from "@/lib/club-colors";
+import { crestUrl, num } from "@/lib/format";
 import type { PlayerRecord } from "@/lib/types";
 
 type Filter = "all" | "squad" | "injury" | "suspension" | "doubt";
@@ -32,6 +34,14 @@ function severity(player: PlayerRecord): number {
   return player.chance_of_playing_next_round ?? (player.status === "a" ? 100 : 50);
 }
 
+function statusLabel(player: PlayerRecord): string {
+  if (player.status === "i") return "Injured";
+  if (player.status === "s") return "Suspended";
+  if (player.status === "u") return "Unavailable";
+  if ((player.chance_of_playing_next_round ?? 100) < 100) return "Doubtful";
+  return "Availability note";
+}
+
 export default function NewsPage() {
   const { snapshot, loading, squadNames, openProfile } = useApp();
   const [filter, setFilter] = React.useState<Filter>("all");
@@ -48,6 +58,8 @@ export default function NewsPage() {
   }
 
   const squadNameSet = new Set(squadNames);
+  const teamCodeByName = new Map(snapshot.teams.map((team) => [team.name, team.code]));
+  const freshness = snapshot.gameweek ? `Local snapshot · GW${snapshot.gameweek}` : "Local snapshot";
   const allNotes = snapshot.players.filter(hasNote).sort((a, b) => severity(a) - severity(b));
   const filtered = allNotes.filter((player) => {
     switch (filter) {
@@ -139,27 +151,36 @@ export default function NewsPage() {
         {!lead && <p className="wire-empty">No notes match this filter in the local snapshot.</p>}
 
         {lead && (
-          <article
-            className="lead-story"
-            style={{ background: "linear-gradient(114deg,#37003c 0%,#1a0022 60%,#1a0022 100%)" }}
-          >
+          <article className="lead-story" style={clubStyle(lead.team)}>
             <span className="lead-hazard" aria-hidden="true" />
+            <div className="lead-mane" aria-hidden="true" />
+            {teamCodeByName.get(lead.team) && (
+              <img className="lead-crest" src={crestUrl(teamCodeByName.get(lead.team)!)} alt="" aria-hidden="true" />
+            )}
             <div className="lead-copy">
               <div className="lead-badges">
-                <span className="sev">{lead.status !== "a" ? "Flagged" : "Availability note"}</span>
+                <span className="sev">{statusLabel(lead)}</span>
                 {(lead.chance_of_playing_next_round ?? 100) < 100 && (
-                  <span className="live">{lead.chance_of_playing_next_round}% chance</span>
+                  <span className="live">{lead.chance_of_playing_next_round}% chance of playing</span>
                 )}
                 <span className="club">{lead.team}</span>
               </div>
               <h2>{lead.web_name}</h2>
               <p style={{ maxWidth: "40ch", color: "#f0e4f2", fontSize: 15 }}>{noteFor(lead)}</p>
+              <p className="wire-fresh" style={{ color: "rgba(255,255,255,.7)" }}>
+                {freshness} · Official FPL player status, not third-party reporting
+              </p>
               <div className="lead-actions">
                 <button className="btn sm secondary" type="button" onClick={() => openProfile(lead)}>
                   View player
                 </button>
               </div>
             </div>
+            {lead.photo && (
+              <div className="lead-shot">
+                <PlayerPhoto src={lead.photo} alt="" />
+              </div>
+            )}
             <div className="lead-panel">
               <h3>Squad relevance</h3>
               <ul className="lead-impact">
@@ -197,16 +218,23 @@ export default function NewsPage() {
                   onClick={() => openProfile(player)}
                   style={{ width: "100%", background: "transparent", font: "inherit", textAlign: "left", cursor: "pointer" }}
                 >
-                  <span />
+                  <span className="wire-shot" style={clubStyle(player.team)}>
+                    {player.photo && <PlayerPhoto src={player.photo} alt="" loading="lazy" />}
+                    {teamCodeByName.get(player.team) && (
+                      <img className="wire-badge" src={crestUrl(teamCodeByName.get(player.team)!)} alt="" aria-hidden="true" />
+                    )}
+                  </span>
                   <span>
                     <h4>{player.web_name}</h4>
                     <p>{noteFor(player)}</p>
                     <div className="tagline">
+                      <span>{statusLabel(player)}</span>
                       <span>{player.team}</span>
                       <span>{player.position}</span>
                       {squadNameSet.has(player.name) && <span className="owned">Owned</span>}
                     </div>
                   </span>
+                  <time>{freshness}</time>
                 </button>
               ))}
             </div>
@@ -222,19 +250,25 @@ export default function NewsPage() {
                 className="news-card"
                 onClick={() => openProfile(player)}
               >
-                <div
-                  className="news-card-art"
-                  style={{ background: "linear-gradient(135deg,#555,#111)" }}
-                >
-                  <span />
+                <div className="news-card-art" style={clubStyle(player.team)}>
+                  {teamCodeByName.get(player.team) && (
+                    <img className="crest" src={crestUrl(teamCodeByName.get(player.team)!)} alt="" aria-hidden="true" />
+                  )}
+                  {player.photo && (
+                    <div className="shot">
+                      <PlayerPhoto src={player.photo} alt="" loading="lazy" />
+                    </div>
+                  )}
                 </div>
                 <div className="news-card-copy">
                   <div className="news-card-meta">
+                    <span>{statusLabel(player)}</span>
                     <span>{player.team}</span>
                     <span>{player.position}</span>
                   </div>
                   <h3>{player.web_name}</h3>
                   <p>{noteFor(player)}</p>
+                  <span className="wire-fresh">{freshness}</span>
                   {squadNameSet.has(player.name) && <span className="news-card-tag owned">Owned</span>}
                 </div>
               </button>

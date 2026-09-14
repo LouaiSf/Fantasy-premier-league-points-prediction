@@ -10,8 +10,17 @@ import { SquadEditor } from "@/components/team/squad-editor";
 import { PlayerPhoto } from "@/components/player-photo";
 
 export default function TeamPage() {
-  const { snapshot, loading, error, squadPlayers, teamResult, setTeamResult, toast, openProfile } =
-    useApp();
+  const {
+    snapshot,
+    loading,
+    error,
+    squadPlayers,
+    teamResult,
+    setTeamResult,
+    setSquadNames,
+    toast,
+    openProfile,
+  } = useApp();
   const [picking, setPicking] = React.useState(false);
 
   if (loading) {
@@ -52,6 +61,7 @@ export default function TeamPage() {
     setPicking(true);
     try {
       const result = await api.squad({ budget: 100, lock: [], ban: [] });
+      setSquadNames([...result.xi, ...result.bench].map((player) => player.name));
       setTeamResult(result);
       toast("Optimal squad loaded from the prediction pipeline.");
     } catch (err) {
@@ -64,7 +74,8 @@ export default function TeamPage() {
   return (
     <section className="page">
       <div className="hero-team">
-        <div className="mane" aria-hidden="true" />
+        <div className="hero-glow" aria-hidden="true" />
+        <div className="hero-rays" aria-hidden="true" />
         <div className="hero-blade" aria-hidden="true" />
         <div className="shell hero-grid">
           <div className="hero-copy">
@@ -162,7 +173,7 @@ export default function TeamPage() {
               </button>
               {!predictionAvailable && (
                 <p style={{ fontSize: 11, color: "var(--muted-mid)", marginTop: 8 }}>
-                  Restore predictions_next_gw.csv to enable the optimiser.
+                  {snapshot.prediction_error ?? "A matching prediction export is required."}
                 </p>
               )}
             </section>
