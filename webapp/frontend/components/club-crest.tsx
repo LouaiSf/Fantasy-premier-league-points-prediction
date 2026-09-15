@@ -26,11 +26,8 @@ export function ClubCrest({
   onError,
   ...props
 }: ClubCrestProps) {
-  const [hasError, setHasError] = React.useState(!code);
-
-  React.useEffect(() => {
-    setHasError(!code);
-  }, [code]);
+  const [failedCode, setFailedCode] = React.useState<number | null>(null);
+  const hasError = !code || failedCode === code;
 
   if (hasError || !code) {
     const [c1, c2] = getClubColors(team || "");
@@ -72,7 +69,7 @@ export function ClubCrest({
       height={height}
       style={style}
       onError={(event) => {
-        setHasError(true);
+        setFailedCode(code);
         onError?.(event);
       }}
       {...props}

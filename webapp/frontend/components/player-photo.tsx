@@ -19,11 +19,8 @@ export function getInitials(name?: string, fallback = ""): string {
 }
 
 export function PlayerPhoto({ alt, name, src, className, onError, ...props }: PlayerPhotoProps) {
-  const [hasError, setHasError] = React.useState(!src);
-
-  React.useEffect(() => {
-    setHasError(!src);
-  }, [src]);
+  const [failedSrc, setFailedSrc] = React.useState<string | Blob | null>(null);
+  const hasError = !src || failedSrc === src;
 
   if (hasError || !src) {
     const initials = getInitials(name, alt);
@@ -40,11 +37,10 @@ export function PlayerPhoto({ alt, name, src, className, onError, ...props }: Pl
       src={src}
       className={className}
       onError={(event) => {
-        setHasError(true);
+        setFailedSrc(src);
         onError?.(event);
       }}
       {...props}
     />
   );
 }
-

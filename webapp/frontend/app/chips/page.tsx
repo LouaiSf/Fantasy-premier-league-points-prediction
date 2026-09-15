@@ -48,10 +48,12 @@ export default function ChipsPage() {
   );
 
   React.useEffect(() => {
-    if (snapshot?.prediction_available) {
-      const names = useSquad ? squadNames : [];
-      loadChips(names, effectiveHorizon);
-    }
+    if (!snapshot?.prediction_available) return;
+    const names = useSquad ? squadNames : [];
+    const timer = window.setTimeout(() => {
+      void loadChips(names, effectiveHorizon);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [snapshot?.prediction_available, useSquad, squadNames, effectiveHorizon, loadChips]);
 
   if (loading || !snapshot) {

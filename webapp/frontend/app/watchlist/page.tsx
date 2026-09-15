@@ -38,9 +38,11 @@ export default function WatchlistPage() {
   }, []);
 
   React.useEffect(() => {
-    if (snapshot?.prediction_available) {
-      loadWatchlist(maxOwnership, topCount);
-    }
+    if (!snapshot?.prediction_available) return;
+    const timer = window.setTimeout(() => {
+      void loadWatchlist(maxOwnership, topCount);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [snapshot?.prediction_available, maxOwnership, topCount, loadWatchlist]);
 
   if (loading || !snapshot) {

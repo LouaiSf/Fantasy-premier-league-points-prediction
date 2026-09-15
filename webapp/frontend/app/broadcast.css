@@ -87,7 +87,7 @@
     clip-path:polygon(50% 0,61% 13%,76% 7%,79% 23%,96% 27%,85% 41%,100% 54%,83% 62%,84% 82%,63% 78%,50% 100%,39% 79%,16% 83%,18% 62%,0 54%,15% 40%,5% 25%,24% 22%,27% 6%,42% 13%)}
   .brand-copy{font:900 15px/1 var(--display);letter-spacing:.02em}
   .brand-copy small{display:block;margin-top:5px;font:600 9px var(--data);letter-spacing:.14em;color:var(--lime)}
-  .nav-scroll{position:relative;display:flex;align-items:stretch;justify-content:center;overflow-x:auto;scrollbar-width:none}
+  .nav-scroll{position:relative;display:flex;align-items:stretch;justify-content:flex-start;overflow-x:auto;scrollbar-width:none}
   .nav-tabs{display:flex;align-items:stretch;min-width:max-content;position:relative}
   .nav-tab{position:relative;display:flex;align-items:center;justify-content:center;min-height:68px;padding:0 var(--space-4);border:0;background:transparent;color:var(--muted-light);
     font-size:13px;font-weight:650;cursor:pointer;white-space:nowrap;transition:color var(--motion-fast)}

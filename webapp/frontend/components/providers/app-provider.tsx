@@ -96,15 +96,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Process toast queue
   React.useEffect(() => {
-    if (!toastMessage && toastQueue.length > 0) {
-      const next = toastQueue[0];
+    if (toastMessage || toastQueue.length === 0) return;
+    const next = toastQueue[0];
+    const timer = window.setTimeout(() => {
       setToastQueue((prev) => prev.slice(1));
       setToastMessage(next);
       window.clearTimeout(toastTimer.current);
       toastTimer.current = setTimeout(() => {
         setToastMessage(null);
       }, 3500);
-    }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [toastMessage, toastQueue]);
 
   const saveSquadData = React.useCallback(

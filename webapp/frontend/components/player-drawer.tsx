@@ -26,18 +26,42 @@ export function PlayerDrawer() {
 
   const [history, setHistory] = React.useState<PlayerHistoryRecord[]>([]);
   const [historyLoading, setHistoryLoading] = React.useState(false);
+  const [historyPlayerId, setHistoryPlayerId] = React.useState<number | null>(null);
+  const visibleHistory = historyPlayerId === player?.element ? history : [];
+  const visibleHistoryLoading = Boolean(player && historyPlayerId !== player.element) || historyLoading;
 
   React.useEffect(() => {
-    if (!player?.element) {
-      setHistory([]);
-      return;
-    }
-    setHistoryLoading(true);
-    api
-      .playerHistory(player.element)
-      .then((data) => setHistory(data.history || []))
-      .catch(() => setHistory([]))
-      .finally(() => setHistoryLoading(false));
+    let cancelled = false;
+    const playerId = player?.element ?? null;
+    const timer = window.setTimeout(() => {
+      if (!playerId) {
+        setHistory([]);
+        setHistoryPlayerId(null);
+        setHistoryLoading(false);
+        return;
+      }
+
+      setHistoryLoading(true);
+      void api.playerHistory(playerId).then(
+        (data) => {
+          if (cancelled) return;
+          setHistory(data.history || []);
+          setHistoryPlayerId(playerId);
+        },
+        () => {
+          if (cancelled) return;
+          setHistory([]);
+          setHistoryPlayerId(playerId);
+        },
+      ).finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [player?.element]);
 
   return (
@@ -152,9 +176,9 @@ export function PlayerDrawer() {
                     <b>Recent match history</b>
                     <span className="rule" />
                   </div>
-                  {historyLoading ? (
+                  {visibleHistoryLoading ? (
                     <p style={{ color: "var(--muted-ink)", fontSize: 12 }}>Loading history…</p>
-                  ) : history.length > 0 ? (
+                  ) : visibleHistory.length > 0 ? (
                     <table className="stable">
                       <thead>
                         <tr>
@@ -166,7 +190,7 @@ export function PlayerDrawer() {
                         </tr>
                       </thead>
                       <tbody>
-                        {history.map((row, idx) => (
+                        {visibleHistory.map((row, idx) => (
                           <tr key={`${row.season}-${row.gameweek}-${idx}`}>
                             <td>
                               GW{row.gameweek}{" "}
