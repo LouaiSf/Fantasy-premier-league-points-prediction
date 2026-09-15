@@ -1,6 +1,6 @@
 # FPL Assistant Platform Progress
 
-Last updated: 2026-09-14
+Last updated: 2026-09-15
 Branch: `web-platform`
 
 ## Architecture change (2026-09-13)
@@ -14,8 +14,8 @@ chat for the full clarifying-question exchange):
   `/api/*` endpoints (the optimiser seam is untouched); a `flask-cors` addition is the only
   backend change, needed because the two dev servers run on different ports. The old Jinja
   page routes (`/`, `/team`, etc. returning `index.html`) and `webapp/templates/`,
-  `webapp/static/` (the v1 vanilla-JS build) are **still in place and untouched** — they will
-  be deleted once the new frontend reaches feature parity across all seven surfaces, not before.
+  `webapp/static/` (the v1 vanilla-JS build) were deleted after the new frontend reached feature
+  parity across all seven surfaces; `webapp/app.py` now serves the API surface only.
 - **UI kit: shadcn/ui (Base UI primitives, not Radix — this shadcn version ships on
   `@base-ui/react`) + Tailwind v4.** In practice, most of the visual system does not come from
   shadcn's default theme at all: `fpl-assistant-prototype.html`'s entire hand-written CSS
@@ -122,8 +122,11 @@ predictions when available) or the widget is honestly omitted/simplified rather 
   third reading mode ("Picture line" horizontal reel) is also skipped: it's the same content in
   a different layout, and two modes already demonstrate the pattern without meaningfully adding
   more real information.
-- Fixture Matrix is still a **stub page** (`components/coming-soon.tsx`) with working nav — not
-  yet rebuilt in the new system.
+- **Fixture Matrix fully rebuilt and verified**: renders the next eight gameweeks from the live
+  `/api/platform` snapshot, FDR/venue cells for all 20 clubs, four easiest-run summaries,
+  squad-only filtering, and a keyboard-reachable horizontal matrix reel with sticky club labels
+  and a scroll cue. Responsive desktop, tablet, and phone layouts were checked against the
+  prototype's broadcast styling.
 - Fixed two real bugs found in visual QA while building Transfer Studio (both explained in
   detail under Test evidence below): a negative-money formatting bug (`money()` rendered `-2.6`
   as `£-2.6m` instead of `-£2.6m`), and a mobile-width layout bug in the ported CSS itself
@@ -135,17 +138,16 @@ predictions when available) or the widget is honestly omitted/simplified rather 
   addition inside the 860px block, documented in `broadcast.css` as a correction rather than
   part of the verbatim port.
 
-## Current work in progress
+## Current status
 
-Rebuilding the last surface (Fixture Matrix) on the same pattern as the five shipped so far:
-prototype markup/classes + real data from the already-fetched `/api/platform` snapshot.
+The eight React/Next.js surfaces are complete: My Team, Transfer Studio, Comparison, Captain &
+Form, News Wire, Watchlist & Differentials, Chip Advisor, and Fixture Matrix. Fixture Matrix uses
+the same prototype markup/classes and real `/api/platform` snapshot data as the other surfaces.
 
 ## Remaining work
 
-- Rebuild Fixture Matrix, the last stub surface.
-- Once all seven have parity with v1's real-data coverage, delete `webapp/templates/`,
-  `webapp/static/`, and the Jinja page routes in `webapp/app.py` (keep only `/api/*`), and
-  make Next.js the only frontend.
+- Legacy Jinja/static frontend removal is complete in commit `58cf9e09`; Next.js is now the only
+  frontend and `webapp/app.py` retains only `/api/*` routes.
 - Decide on a production setup: either Next.js `output: "standalone"` behind the same process
   manager as Flask, or keep them as two separately deployed services. Not needed for local dev.
 - Same standing decision as before on `predictions_next_gw.csv` / `saved_models/*/*.joblib` —
@@ -175,6 +177,29 @@ prototype markup/classes + real data from the already-fetched `/api/platform` sn
   the font `<link>` means the app itself is unaffected (text renders in the fallback stack
   immediately), but a future session doing visual QA should retry a hung screenshot once or
   raise its timeout rather than assume the page is broken.
+
+## Verification refresh (2026-09-15)
+
+- React 19 hook lint blockers were fixed with derived fallback state and cancel-safe deferred
+  loading effects in the shared photo, crest, drawer, toast, Watchlist, and Chip Advisor paths.
+  Dev-only `react-grab`, `react-scan`, and `react-doctor` tooling is installed for continued
+  frontend inspection.
+- Fixed desktop navigation overflow alignment by making the tab rail start-aligned while keeping
+  the active-tab scroll behavior.
+- `npm run lint` (webapp/frontend): passes with 0 errors and 2 accepted external-asset `<img>`
+  warnings in the shared photo and crest fallbacks.
+- `npm run build` (webapp/frontend): passes with TypeScript and static generation complete across
+  the application routes.
+- `python -m pytest -q`: 6 tests passed; one pre-existing pandas/bottleneck version warning
+  remains.
+- `npm run doctor -- --json`: `ok: true`, 0 errors, and 34 advisory warnings, primarily the
+  pre-existing complexity/accessibility suggestions documented by the tool.
+- Manual browser QA against a fresh production build at 1280×900, 768×900, and 375×844 found
+  no document overflow, 20 club rows, 160 fixture cells, working horizontal matrix scrolling,
+  sticky club labels, and zero console errors. Live squad-only filtering was also exercised with
+  the saved 15-player squad and correctly reduced the matrix to 10 club rows.
+- An independent visual-QA reviewer subagent was unavailable in this host; the recorded browser
+  checks were performed directly with Playwright and CUA instead.
 
 ## Test and verification evidence
 
