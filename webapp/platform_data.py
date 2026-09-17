@@ -48,6 +48,7 @@ class PlayerRecord(TypedDict):
     transfers_in_event: int
     transfers_out_event: int
     chance_of_playing_next_round: int | None
+    cost_change_event: int
     photo: str | None
     predicted_points: float | None
     points_per_million: float | None
@@ -200,6 +201,7 @@ def build_local_snapshot(
                 transfers_in_event=_integer(row.get("transfers_in_event")),
                 transfers_out_event=_integer(row.get("transfers_out_event")),
                 chance_of_playing_next_round=chance,
+                cost_change_event=_integer(row.get("cost_change_event")),
                 photo=(
                     f"https://resources.premierleague.com/premierleague/photos/players/250x250/p{code}.png"
                     if code

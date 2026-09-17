@@ -51,6 +51,7 @@ export interface PlayerRecord {
   transfers_in_event: number;
   transfers_out_event: number;
   chance_of_playing_next_round: number | null;
+  cost_change_event: number;
   photo: string | null;
   country?: string | null;
   flag?: string | null;
