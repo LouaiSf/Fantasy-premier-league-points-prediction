@@ -407,7 +407,7 @@ def build_final(raw: pd.DataFrame, old_final: str) -> pd.DataFrame:
     return df
 
 
-def report(df: pd.DataFrame) -> None:
+def report(df: pd.DataFrame, allow_empty_columns: bool = False) -> None:
     print("\n" + "=" * 78)
     print("RESULT")
     print("=" * 78)
@@ -431,6 +431,71 @@ def report(df: pd.DataFrame) -> None:
     if missing:
         raise SystemExit(f"output is missing required column(s): {missing}")
     print("column check: everything the feature stage needs is present")
+    check_season_columns(df, allow_empty_columns)
+
+
+# Columns that are genuinely all-zero for long stretches -- nobody is sent off
+# most weeks -- so an empty column here says nothing about the source.
+ALWAYS_SPARSE = {
+    'own_goals', 'penalties_missed', 'penalties_saved', 'red_cards',
+    'has_fbref_defensive', 'has_xg',
+}
+
+
+def check_season_columns(df: pd.DataFrame, allow_empty_columns: bool = False) -> None:
+    """Fail when a season is entirely empty in a column other seasons fill.
+
+    A source whose column names do not match gets zero-filled a few lines up,
+    by design, so that one missing field cannot stop a build. The cost is that
+    a source which names half its columns differently produces a season of
+    zeroes and no error at all -- which is exactly what the olbauday switch
+    did. Position, the ICT components and every defensive action came through
+    as zero for the whole of 2026-27, and the first sign of it was a model
+    recommending goalkeepers as captain.
+
+    Comparing each season against the rest turns that into a failure at the
+    point the data is built, where it is cheap to diagnose.
+    """
+    seasons = sorted(df['season'].dropna().unique())
+    if len(seasons) < 2:
+        return
+
+    numeric = [c for c in df.columns
+               if c not in ALWAYS_SPARSE
+               and pd.api.types.is_numeric_dtype(df[c])]
+    filled = df.groupby('season')[numeric].apply(
+        lambda block: (block.fillna(0) != 0).mean()
+    )
+    # A column worth checking is one that other seasons do populate.
+    elsewhere = filled.drop(index=seasons[-1]).max()
+    suspect = [c for c in numeric
+               if filled.loc[seasons[-1], c] == 0 and elsewhere[c] > 0.05]
+
+    # position and team are strings, so they miss the numeric sweep above, and
+    # they are the two that matter most: every model is trained per position.
+    for col in ('position', 'team'):
+        if col in df.columns:
+            latest = df.loc[df['season'] == seasons[-1], col].astype(str)
+            if latest.isin({'0', '0.0', '', 'nan', 'None'}).all():
+                suspect.append(col)
+
+    if not suspect:
+        print(f"content check: {seasons[-1]} has data in every column other "
+              f"seasons populate")
+        return
+
+    raise SystemExit(
+        f"{seasons[-1]} is entirely empty in {len(suspect)} column(s) that "
+        f"earlier seasons populate:\n"
+        f"  {', '.join(sorted(suspect))}\n\n"
+        f"These were filled with zero rather than fetched, which almost always "
+        f"means the\nsource's column names do not match the ones the mapping "
+        f"in scripts/fetch_data.py\nlooks for. Every lag and rolling mean built "
+        f"on top of them will also be zero,\nso the models will score this "
+        f"season on features that are blank rather than bad.\n\n"
+        f"Fix the mapping and re-fetch with --force. To build anyway, pass "
+        f"--allow-empty-columns."
+    )
 
 
 def main() -> int:
@@ -441,6 +506,9 @@ def main() -> int:
                     help=f'reuse an existing {RAW_OUT} instead of re-merging the seasons')
     ap.add_argument('--old-final', default=FINAL_OUT,
                     help='file to lift the defensive columns out of')
+    ap.add_argument('--allow-empty-columns', action='store_true',
+                    help='build even when the latest season is blank in columns '
+                         'other seasons populate')
     ap.add_argument('--allow-missing-defensive', action='store_true',
                     help='build even with no defensive stats to carry over')
     args = ap.parse_args()
@@ -488,7 +556,7 @@ def main() -> int:
 
     final = build_final(raw, old_final_snapshot)
     final = add_expected_stats(final)
-    report(final)
+    report(final, allow_empty_columns=args.allow_empty_columns)
 
     if args.write:
         final.to_csv(FINAL_OUT, index=False, encoding='utf-8')
