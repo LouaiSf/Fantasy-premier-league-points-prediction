@@ -89,6 +89,8 @@ export default function CaptainPage() {
                 name={lead.name}
                 width={250}
                 height={250}
+                loading="eager"
+                fetchPriority="high"
               />
               <span className="armband-ring" aria-hidden="true" />
             </div>

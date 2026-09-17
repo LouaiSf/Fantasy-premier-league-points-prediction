@@ -24,6 +24,8 @@ export function ClubCrest({
   height,
   style,
   onError,
+  loading = "lazy",
+  decoding = "async",
   ...props
 }: ClubCrestProps) {
   const [failedCode, setFailedCode] = React.useState<number | null>(null);
@@ -68,6 +70,8 @@ export function ClubCrest({
       width={width}
       height={height}
       style={style}
+      loading={loading}
+      decoding={decoding}
       onError={(event) => {
         setFailedCode(code);
         onError?.(event);
