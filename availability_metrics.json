@@ -1,42 +1,42 @@
 {
   "GK": {
     "n_features": 66,
-    "train_rows": 21370,
+    "train_rows": 21744,
     "test_rows": 6296,
-    "availability_auc": 0.9735915225789358,
+    "availability_auc": 0.9731668230437742,
     "played_rate": 0.24412325285895806,
-    "combined_test_r2": 0.4131762983100823,
-    "combined_test_mae": 0.6491071192983342,
-    "conditional_test_r2_on_players_who_played": -0.002575713706806093
+    "combined_test_r2": 0.38503327503648244,
+    "combined_test_mae": 0.6715294075965513,
+    "conditional_test_r2_on_players_who_played": -0.08089637805917227
   },
   "DEF": {
     "n_features": 74,
-    "train_rows": 66405,
+    "train_rows": 67697,
     "test_rows": 18879,
-    "availability_auc": 0.9309436768497806,
+    "availability_auc": 0.930906643315994,
     "played_rate": 0.4098204354044176,
-    "combined_test_r2": 0.3022817141249643,
-    "combined_test_mae": 1.101558509941232,
-    "conditional_test_r2_on_players_who_played": 0.08433419956974275
+    "combined_test_r2": 0.27371526125082746,
+    "combined_test_mae": 1.1169649619479964,
+    "conditional_test_r2_on_players_who_played": 0.03169880454045648
   },
   "MID": {
     "n_features": 74,
-    "train_rows": 82187,
+    "train_rows": 83741,
     "test_rows": 25559,
-    "availability_auc": 0.9400466168038764,
+    "availability_auc": 0.9398951717134963,
     "played_rate": 0.43370241402245785,
-    "combined_test_r2": 0.34596643679582695,
-    "combined_test_mae": 0.947252855612871,
-    "conditional_test_r2_on_players_who_played": 0.12605243658808485
+    "combined_test_r2": 0.33433188956858695,
+    "combined_test_mae": 0.9656365132818693,
+    "conditional_test_r2_on_players_who_played": 0.10694595162505138
   },
   "FWD": {
     "n_features": 74,
-    "train_rows": 26475,
+    "train_rows": 27024,
     "test_rows": 6297,
-    "availability_auc": 0.9466256417205969,
+    "availability_auc": 0.9466335708714713,
     "played_rate": 0.4286168016515801,
-    "combined_test_r2": 0.3431696338353486,
-    "combined_test_mae": 1.0690583204492206,
-    "conditional_test_r2_on_players_who_played": 0.11507230033102023
+    "combined_test_r2": 0.3307085558016013,
+    "combined_test_mae": 1.0842475535415275,
+    "conditional_test_r2_on_players_who_played": 0.09122908226741888
   }
 }
