@@ -40,17 +40,37 @@ function statusLabel(player: PlayerRecord): string {
   if (player.status === "i") return "Injured";
   if (player.status === "s") return "Suspended";
   if (player.status === "u") return "Unavailable";
-  if ((player.chance_of_playing_next_round ?? 100) < 100) return "Doubtful";
+  if (player.status === "n") return "Not in squad";
+  if (player.status === "d" || (player.chance_of_playing_next_round ?? 100) < 100) return "Doubtful";
   return "Availability note";
 }
 
+// FPL publishes a chance of playing as 25, 50 or 75. Red through orange to
+// yellow, so the badge reads as a risk level at a glance rather than as a
+// number the reader has to interpret.
+function chanceTone(chance: number): "bad" | "mid" | "ok" {
+  if (chance <= 25) return "bad";
+  if (chance <= 50) return "mid";
+  return "ok";
+}
+
+function ChanceBadge({ player }: { player: PlayerRecord }) {
+  const chance = player.chance_of_playing_next_round;
+  // Only the partial cases. 100 is not news, and 0 already reads as Injured or
+  // Unavailable beside it -- a "0% fit" badge on a player who has left the club
+  // is noise, not a risk level.
+  if (chance == null || chance <= 0 || chance >= 100) return null;
+  return <span className={`chance-badge is-${chanceTone(chance)}`}>{chance}% fit</span>;
+}
+
 export default function NewsPage() {
-  const { snapshot, loading, squadNames, openProfile } = useApp();
+  const { snapshot, loading, squadElements, openProfile } = useApp();
   const [filter, setFilter] = React.useState<Filter>("all");
   const [view, setView] = React.useState<View>("desk");
   const [query, setQuery] = React.useState("");
   const [club, setClub] = React.useState("ALL");
   const [position, setPosition] = React.useState("ALL");
+  const [showAll, setShowAll] = React.useState(false);
 
   if (loading || !snapshot) {
     return (
@@ -62,7 +82,9 @@ export default function NewsPage() {
     );
   }
 
-  const squadNameSet = new Set(squadNames);
+  // Ownership is an identity question, so it is asked by element id. The two
+  // name spellings in this app do not line up and never matched here.
+  const squadIdSet = new Set(squadElements);
   const teamCodeByName = new Map(snapshot.teams.map((team) => [team.name, team.code]));
   const clubOptions = snapshot.teams.map((team) => team.name);
   const freshness = snapshot.gameweek ? `Local snapshot · GW${snapshot.gameweek}` : "Local snapshot";
@@ -76,7 +98,7 @@ export default function NewsPage() {
     if (position !== "ALL" && player.position !== position) return false;
     switch (filter) {
       case "squad":
-        return squadNameSet.has(player.name);
+        return squadIdSet.has(player.element);
       case "injury":
         return player.status === "i";
       case "suspension":
@@ -89,7 +111,10 @@ export default function NewsPage() {
   });
 
   const lead = filtered[0] ?? null;
-  const rest = filtered.slice(1, 25);
+  // A busy week produces far more than two dozen notes, and the cap silently
+  // hid the rest; the count and the toggle make the limit visible instead.
+  const allRest = filtered.slice(1);
+  const rest = showAll ? allRest : allRest.slice(0, 24);
 
   return (
     <section className="page news-page paper-scope">
@@ -208,9 +233,7 @@ export default function NewsPage() {
             <div className="lead-copy">
               <div className="lead-badges">
                 <span className="sev">{statusLabel(lead)}</span>
-                {(lead.chance_of_playing_next_round ?? 100) < 100 && (
-                  <span className="live">{lead.chance_of_playing_next_round}% chance of playing</span>
-                )}
+                <ChanceBadge player={lead} />
                 <span className="club">{lead.team}</span>
               </div>
               <h2>{lead.web_name}</h2>
@@ -235,8 +258,8 @@ export default function NewsPage() {
                   <span>Owned by managers in the local snapshot</span>
                 </li>
                 <li>
-                  <i className={squadNameSet.has(lead.name) ? "" : "neg"}>
-                    {squadNameSet.has(lead.name) ? "In squad" : "Not owned"}
+                  <i className={squadIdSet.has(lead.element) ? "" : "neg"}>
+                    {squadIdSet.has(lead.element) ? "In squad" : "Not owned"}
                   </i>
                   <span>Relevance to your current squad</span>
                 </li>
@@ -253,7 +276,9 @@ export default function NewsPage() {
           <div className="wire-layout" style={{ gridTemplateColumns: "1fr" }}>
             <div className="wire-col">
               <h3 className="col-title">
-                League wire<small>{rest.length} stories</small>
+                League wire<small>
+                  {rest.length} of {allRest.length} stories
+                </small>
               </h3>
               {rest.map((player) => (
                 <button
@@ -278,14 +303,33 @@ export default function NewsPage() {
                     <p>{noteFor(player)}</p>
                     <div className="tagline">
                       <span>{statusLabel(player)}</span>
+                      <ChanceBadge player={player} />
                       <span>{player.team}</span>
                       <span>{player.position}</span>
-                      {squadNameSet.has(player.name) && <span className="owned">Owned</span>}
+                      {squadIdSet.has(player.element) && <span className="owned">Owned</span>}
                     </div>
                   </span>
                   <time>{freshness}</time>
                 </button>
               ))}
+              {allRest.length > rest.length && (
+                <button
+                  type="button"
+                  className="btn sm secondary wire-more"
+                  onClick={() => setShowAll(true)}
+                >
+                  Show all {allRest.length} stories
+                </button>
+              )}
+              {showAll && allRest.length > 24 && (
+                <button
+                  type="button"
+                  className="btn sm secondary wire-more"
+                  onClick={() => setShowAll(false)}
+                >
+                  Show fewer
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -319,7 +363,7 @@ export default function NewsPage() {
                   <h3>{player.web_name}</h3>
                   <p>{noteFor(player)}</p>
                   <span className="wire-fresh">{freshness}</span>
-                  {squadNameSet.has(player.name) && <span className="news-card-tag owned">Owned</span>}
+                  {squadIdSet.has(player.element) && <span className="news-card-tag owned">Owned</span>}
                 </div>
               </button>
             ))}

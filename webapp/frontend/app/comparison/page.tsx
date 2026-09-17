@@ -42,7 +42,7 @@ export default function ComparisonPage() {
 }
 
 function ComparisonPageInner() {
-  const { snapshot, loading, squadNames } = useApp();
+  const { snapshot, loading, squadElements } = useApp();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [seatA, setSeatA] = React.useState<number | null>(null);
@@ -91,14 +91,14 @@ function ComparisonPageInner() {
   const teamCodeByName = new Map(snapshot.teams.map((team) => [team.name, team.code]));
   const playerA = seatA != null ? byElement.get(seatA) ?? null : null;
   const playerB = seatB != null ? byElement.get(seatB) ?? null : null;
-  const squadNameSet = new Set(squadNames);
+  const squadIdSet = new Set(squadElements);
   const allSorted = [...snapshot.players].sort((a, b) =>
     (a.web_name || a.name).localeCompare(b.web_name || b.name),
   );
 
   const candidates = snapshot.players.filter((player) => {
-    if (pool === "squad" && !squadNameSet.has(player.name)) return false;
-    if (pool === "market" && squadNameSet.has(player.name)) return false;
+    if (pool === "squad" && !squadIdSet.has(player.element)) return false;
+    if (pool === "market" && squadIdSet.has(player.element)) return false;
     if (position !== "ALL" && player.position !== position) return false;
     if (club !== "ALL" && player.team !== club) return false;
     return `${player.name} ${player.team}`.toLowerCase().includes(query.trim().toLowerCase());

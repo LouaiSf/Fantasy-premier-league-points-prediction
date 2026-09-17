@@ -86,7 +86,7 @@ function DeskRow({
 }
 
 export default function TransfersPage() {
-  const { snapshot, loading, squadPlayers, squadNames, toast } = useApp();
+  const { snapshot, loading, squadPlayers, squadNames, squadElements, toast } = useApp();
   const [outQuery, setOutQuery] = React.useState("");
   const [inQuery, setInQuery] = React.useState("");
   const [outFilter, setOutFilter] = React.useState<(typeof OUT_FILTERS)[number]>("ALL");
@@ -122,9 +122,9 @@ export default function TransfersPage() {
     return `${player.name} ${player.team}`.toLowerCase().includes(outQuery.trim().toLowerCase());
   });
 
-  const squadNameSet = new Set(squadNames);
+  const squadIdSet = new Set(squadElements);
   const inRows = snapshot.players.filter((player) => {
-    if (squadNameSet.has(player.name)) return false;
+    if (squadIdSet.has(player.element)) return false;
     if (outgoing && player.position !== outgoing.position) return false;
     if (inFilter !== "ALL" && player.position !== inFilter) return false;
     if (player.value_m > priceMax) return false;

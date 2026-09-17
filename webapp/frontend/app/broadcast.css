@@ -1531,3 +1531,10 @@
 
   /* Over budget is a state the user has to fix, not a neutral number. */
   .rail-stat strong.is-over{color:var(--pink)}
+
+  /* ── News: chance-of-playing badge ───────────────────────────────────────── */
+  .chance-badge{display:inline-flex;align-items:center;font:700 10px/1 var(--data);letter-spacing:.06em;padding:3px 7px;clip-path:var(--blade-sm);white-space:nowrap}
+  .chance-badge.is-bad{background:rgba(233,0,82,.18);color:var(--pink)}
+  .chance-badge.is-mid{background:rgba(255,138,0,.18);color:var(--orange)}
+  .chance-badge.is-ok{background:rgba(255,212,90,.18);color:var(--yellow)}
+  .wire-more{width:100%;margin-top:var(--space-3)}
