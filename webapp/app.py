@@ -58,6 +58,14 @@ def state() -> dict:
     path = opt.PREDICTIONS
     if not _state:
         return reload_predictions()
+    # A cached error has no mtime to compare against, so the staleness check
+    # below could never fire and the process stayed broken for its whole life
+    # even once the file it was complaining about had been generated. Retry
+    # whenever the file exists and the last attempt failed: the work is one
+    # CSV read, and the alternative is telling someone to restart the server
+    # after running the pipeline the error message just told them to run.
+    if _state.get('error') and os.path.exists(path):
+        return reload_predictions()
     if os.path.exists(path) and ('mtime' in _state and os.path.getmtime(path) != _state['mtime']):
         return reload_predictions()
     return _state
@@ -165,6 +173,17 @@ def fail(message: str, code: int = 400):
     return jsonify({'ok': False, 'error': message}), code
 
 
+def unavailable(message: str):
+    """503 for anything that needs predictions that have not been generated.
+
+    Distinct from fail()'s 400: the request was fine, the server just has no
+    model output to answer it with yet, and the fix is to run the prediction
+    pipeline rather than to send something different. A caching layer or a
+    client retry should treat the two completely differently.
+    """
+    return fail(message, 503)
+
+
 @app.errorhandler(Exception)
 def on_error(exc):
     # A stack trace in the terminal, a readable sentence in the browser.
@@ -178,18 +197,24 @@ def on_error(exc):
 @app.route('/api/meta')
 def api_meta():
     s = state()
-    if s.get('error'):
-        return fail(s['error'])
+    # Deliberately not gated on predictions. This endpoint describes the models
+    # and the season, which are on disk whether or not an export has been
+    # generated, and the frontend reads it for the model footnote. Failing here
+    # when predictions are missing took down that footnote on every page for a
+    # reason that has nothing to do with it.
     mtime = s.get('mtime')
     updated_at = None
     if mtime:
         updated_at = datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc).isoformat()
     return jsonify({
         'ok': True,
-        'season': s['season'],
-        'gameweek': s['gameweek'],
-        'players': len(s['players']),
-        'model': s['model'],
+        'predictions_available': not s.get('error'),
+        'predictions_error': s.get('error'),
+        'season': s.get('season'),
+        'gameweek': s.get('gameweek'),
+        # players is a DataFrame, so it cannot be truth-tested with `or`.
+        'players': 0 if s.get('players') is None else len(s['players']),
+        'model': s.get('model') if s.get('model') else model_summary(),
         'budget_default': DEFAULT_BUDGET,
         'squad_size': opt.SQUAD_SIZE,
         'xi_size': opt.XI_SIZE,
@@ -344,7 +369,7 @@ def api_players():
     """Everyone, for the pickers. Includes the unavailable, flagged as such."""
     s = state()
     if s.get('error'):
-        return fail(s['error'])
+        return unavailable(s['error'])
     return jsonify({'ok': True, 'players': enriched_players()})
 
 
@@ -352,7 +377,7 @@ def api_players():
 def api_squad():
     s = state()
     if s.get('error'):
-        return fail(s['error'])
+        return unavailable(s['error'])
 
     body = request.get_json(force=True) or {}
     try:
@@ -418,7 +443,7 @@ def api_squad():
 def api_transfers():
     s = state()
     if s.get('error'):
-        return fail(s['error'])
+        return unavailable(s['error'])
 
     body = request.get_json(force=True) or {}
     names = [n for n in body.get('squad', []) if n]
@@ -448,7 +473,7 @@ def api_transfers():
 def api_chips():
     s = state()
     if s.get('error'):
-        return fail(s['error'])
+        return unavailable(s['error'])
 
     body = request.get_json(force=True) or {}
     names = [n for n in body.get('squad', []) if n]
@@ -477,7 +502,7 @@ def api_chips():
 def api_watchlist():
     s = state()
     if s.get('error'):
-        return fail(s['error'])
+        return unavailable(s['error'])
     try:
         max_ownership = float(request.args.get('max_ownership', 10))
         top = int(request.args.get('top', 12))
@@ -494,7 +519,7 @@ def api_reload():
     _state.clear()
     s = state()
     if s.get('error'):
-        return fail(s['error'])
+        return unavailable(s['error'])
     return jsonify({'ok': True, 'players': len(s['players']),
                     'gameweek': s['gameweek']})
 

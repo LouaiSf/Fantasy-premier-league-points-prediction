@@ -72,3 +72,10 @@ Extended the element-id squad fix to ownership checks on News, Comparison and Tr
 
 ## 2026-09-17 — Task 12: Comparison page
 Comparison bars now carry a 3px minimum width, so a genuine zero shows as a sliver instead of disappearing (verified: Goals 4 v 0 renders 452px v 3px). Added a width transition so changing a seat animates, disabled under `prefers-reduced-motion`, and moved the bar colours out of inline styles into `.side-a`/`.side-b` classes with an `.is-leader` highlight on the winning side of each category. The picker now opens on the "My squad" pool when a squad exists, applied once so it never resets the user's own choice. "Projected points" was already the first metric (12.3) and the shareable URL was done in 12.4.
+
+## 2026-09-17 — Task 16: Backend hardening
+16.1 (join on element) and 16.4 (`prediction_available` / `prediction_timestamp`) were already done; verified. 16.2 verified — every endpoint returns `{ok: false, error}`.
+
+16.3: prediction-dependent endpoints now return **503** rather than 400, via a dedicated `unavailable()` helper — the request is fine, the server has no model output to answer it with. `/api/platform` already degraded correctly (659 players, `predicted_points: null`, `prediction_available: false`).
+
+Two bugs found while testing it. `/api/meta` was gated on predictions although it reports model metadata read from `saved_models/`, so a missing export took down the model footnote on every page; it is now ungated and reports `predictions_available` instead. And `state()` only re-read the file via an `mtime` comparison, which the error path never sets — so once predictions went missing the process stayed broken for its whole life, even after the pipeline it told you to run had produced the file. It now retries whenever the file exists and the last attempt failed. Verified: 503 → 200 in the same process, no restart.
