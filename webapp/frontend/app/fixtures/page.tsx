@@ -71,7 +71,7 @@ export default function FixturesPage() {
     .slice(0, 4);
 
   return (
-    <section className="page fix-page">
+    <section className="page fix-page" aria-label="Fixture matrix">
       <div className="shell">
         <div className="section-head">
           <div>

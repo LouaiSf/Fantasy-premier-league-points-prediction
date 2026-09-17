@@ -81,7 +81,7 @@ export default function TeamPage() {
   }
 
   return (
-    <section className="page">
+    <section className="page" aria-label="My team">
       <div className="hero-team">
         <div className="hero-glow" aria-hidden="true" />
         <div className="hero-rays" aria-hidden="true" />

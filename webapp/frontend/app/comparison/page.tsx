@@ -142,7 +142,7 @@ function ComparisonPageInner() {
   }
 
   return (
-    <section className="page cmp-page">
+    <section className="page cmp-page" aria-label="Player comparison">
       <div className="shell">
         <div className="section-head">
           <div>

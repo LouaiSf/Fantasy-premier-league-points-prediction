@@ -183,11 +183,11 @@ export default function TransfersPage() {
     : null;
 
   return (
-    <section className="page studio">
+    <section className="page studio" aria-label="Transfer studio">
       <div className="shell-wide">
         <div className="section-head">
           <div>
-            <p className="eyebrow" style={{ color: "var(--pink)" }}>
+            <p className="eyebrow alert">
               Decision room
             </p>
             <h1>Transfer studio</h1>

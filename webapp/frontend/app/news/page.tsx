@@ -117,11 +117,11 @@ export default function NewsPage() {
   const rest = showAll ? allRest : allRest.slice(0, 24);
 
   return (
-    <section className="page news-page paper-scope">
+    <section className="page news-page paper-scope" aria-label="Team news">
       <div className="shell">
         <div className="section-head on-paper">
           <div>
-            <p className="eyebrow" style={{ color: "var(--pink)" }}>
+            <p className="eyebrow alert">
               Team news // local desk
             </p>
             <h1>Matchday wire</h1>

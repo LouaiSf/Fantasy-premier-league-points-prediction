@@ -79,3 +79,12 @@ Comparison bars now carry a 3px minimum width, so a genuine zero shows as a sliv
 16.3: prediction-dependent endpoints now return **503** rather than 400, via a dedicated `unavailable()` helper — the request is fine, the server has no model output to answer it with. `/api/platform` already degraded correctly (659 players, `predicted_points: null`, `prediction_available: false`).
 
 Two bugs found while testing it. `/api/meta` was gated on predictions although it reports model metadata read from `saved_models/`, so a missing export took down the model footnote on every page; it is now ungated and reports `predictions_available` instead. And `state()` only re-read the file via an `mtime` comparison, which the error path never sets — so once predictions went missing the process stayed broken for its whole life, even after the pipeline it told you to run had produced the file. It now retries whenever the file exists and the last attempt failed. Verified: 503 → 200 in the same process, no restart.
+
+## 2026-09-17 — Task 17: Accessibility (17.2–17.5)
+Ran a real contrast audit in the browser rather than working from the token values — walked every text node on all eight pages, resolved the effective background, and measured against AA.
+
+The plan's premise was wrong: `--muted-mid` on `--night-900` is **6.08:1** and already passes. The genuine failures were elsewhere. The muted tokens are tuned for the dark pages but reused inside the light `paper-scope` sections, where they fall to 2.91:1 and 1.62:1 — fixed by rebinding them within that scope, so no call site changes. `--pink` reaches only 4.30:1 on dark and 4.12:1 on paper for small text, so each scope now has its own variant (6.16 and 5.50). Two inline `style={{ color: "var(--pink)" }}` eyebrows became `.eyebrow.alert`, which also removes an inline colour the plan disallows.
+
+All flat-background failures are now clear. What remains in the audit is text over club-colour gradients and `rgba(0,0,0,0)` decorative ghost numerals, which the walker cannot resolve a background for.
+
+17.3: global `:focus-visible` outline, purple inside paper sections; verified every element in the tab order shows a ring. 17.4: the existing reduced-motion block already covers the ticker, page entry, transitions and the spinner; verified with an emulated `prefers-reduced-motion`. 17.5: `<main>`, `<nav>` and `<header>` were already present; added `aria-label` to the content `<section>` of all eight pages.

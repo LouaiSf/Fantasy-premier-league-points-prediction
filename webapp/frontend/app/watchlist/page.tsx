@@ -163,7 +163,7 @@ export default function WatchlistPage() {
   ];
 
   return (
-    <section className="page watchlist-page">
+    <section className="page watchlist-page" aria-label="Watchlist">
       <div className="shell">
         <header className="section-head" style={{ marginTop: "var(--space-6)" }}>
           <div>

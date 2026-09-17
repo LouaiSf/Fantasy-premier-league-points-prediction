@@ -1547,3 +1547,40 @@
   .chance-badge.is-mid{background:rgba(255,138,0,.18);color:var(--orange)}
   .chance-badge.is-ok{background:rgba(255,212,90,.18);color:var(--yellow)}
   .wire-more{width:100%;margin-top:var(--space-3)}
+
+  /* ── Accessibility ───────────────────────────────────────────────────────── */
+
+  /* The muted tokens are tuned for the dark pages, where muted-mid reaches
+     6.08:1 on night-900 and passes comfortably. The light "paper" sections
+     reuse the same names, and there the same values fall to 2.91:1 and 1.62:1
+     -- well under AA. Rebinding them inside the scope keeps every call site
+     unchanged and fixes both at once. Measured on #f5f2f3: 5.63 and 4.54. */
+  .paper-scope{
+    --muted-mid:#6c5b6d;
+    --muted-light:#7b697d;
+  }
+  /* Pink text inside a paper section needs the darker variant for the same
+     reason the muted tokens do. */
+  .paper-scope .price-tick.falling,
+  .paper-scope .watch-tag.trap,
+  .paper-scope .chance-badge.is-bad{color:var(--pink-on-paper)}
+
+  /* --pink is the alert colour and reaches only 4.30:1 on night-900, just
+     under the 4.5 small text needs. The solid fills that use it as a
+     background are unaffected; this is the variant for pink *text*. */
+  :root{ --pink-text:#ff4b80; --pink-on-paper:#c40045; }
+  .eyebrow[style*="--pink"],
+  .price-tick.falling,
+  .watch-tag.trap,
+  .chance-badge.is-bad{color:var(--pink-text)}
+
+  /* Keyboard users need to see where they are. Applies to everything focusable,
+     including the elements that used to carry their styling inline. */
+  :focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .paper-scope :focus-visible{outline-color:var(--pl-purple)}
+  /* An alert eyebrow, replacing an inline colour that also beat the contrast
+     rule above it. Pink is short of AA on both backgrounds for small text --
+     4.30:1 on night-900 and 4.12:1 on paper -- so each scope gets its own
+     variant: lighter on dark, darker on light. Measured 6.16 and 5.50. */
+  .eyebrow.alert{color:var(--pink-text)}
+  .paper-scope .eyebrow.alert{color:var(--pink-on-paper)}
