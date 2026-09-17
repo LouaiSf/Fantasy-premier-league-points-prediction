@@ -152,6 +152,13 @@ def solve_squad(players: pd.DataFrame, budget: float, *, squad_size: int = SQUAD
     for i in idx:
         problem += in_xi[i] <= in_squad[i]
         problem += is_cap[i] <= in_xi[i]
+        # Never the goalkeeper. A keeper's ceiling is a clean sheet, a few
+        # saves and three bonus, so doubling one is the wrong bet against any
+        # starting outfielder even in a week where the projection likes him.
+        # The armband was the one place this could go wrong unchecked: the
+        # squad itself still needs two keepers and they are picked on merit.
+        if position[i] == 'GK':
+            problem += is_cap[i] == 0
 
     problem += pulp.lpSum(in_squad.values()) == squad_size
     problem += pulp.lpSum(in_xi.values()) == XI_SIZE
