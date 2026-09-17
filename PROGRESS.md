@@ -86,3 +86,38 @@ Two-stage alone is worth R² +0.004/+0.003 and lower MAE in both test seasons.
 in the current feature build, so a retrain via `train.py` is worth doing before
 trusting `train_availability.py`'s reuse of those lists (it currently detects
 the staleness and derives the compact set instead).
+
+## 2026-09-17 — Multi-gameweek squad planning
+
+The squad optimiser bought the best fifteen for the next gameweek only. Added
+a horizon: `predict_gameweek.py --horizon N` predicts each gameweek in the
+window, `optimise.py squad --horizon` buys one squad to hold across all of
+them, rechoosing the XI and armband each week.
+
+A future gameweek is predicted by freezing the player — form, price, minutes,
+availability all stay as they are today — and moving only the fixture. Only the
+`fx_*` family depends on which match is played and nothing about the player
+enters it, so it alone is recomputed. `scripts/horizon.py` reproduces the real
+pipeline exactly (400/400 values match on the last played gameweek of 2025-26).
+Signal retained vs a next-gameweek prediction: 95.9% at k=1, 87.4% at k=5.
+
+Backtest over 28 six-gameweek windows: horizon +17.8 points, better in 19/28
+(t=2.20). Overlapping windows, so suggestive rather than settled. `--decay`
+defaults to 1.0; discounting later gameweeks measured monotonically worse.
+
+**Also fixed a leak.** `add_fixture_features` keyed its team-match table on
+`game_number`, a per-player index, so one row could blend several gameweeks —
+Arsenal's 37 matches became 75 rows — and the rolling form attached to a match
+could include that match's own scoreline. Team-attack-form correlated with the
+current match's goals at r=0.295 vs r=0.133 once keyed on `fixture`. Test R²
+falls at every position as a result (GK 0.4586→0.4297, MID 0.3483→0.3383);
+that is the leak leaving, not accuracy. Window length was checked as an
+alternative explanation and every setting lands within 0.004.
+
+Also: the optimiser could still captain a goalkeeper (only the captain *page*
+was fixed before), and `p_plays` ignored published injury news — Maatsen made
+an XI at 6.10 points on a 25%-chance ankle injury. Both fixed.
+
+**Not done:** transfers are not modelled across the horizon. The horizon says
+which squad is worth holding; getting there from an existing squad is still
+the single-gameweek `transfers` subcommand.
