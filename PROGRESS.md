@@ -54,3 +54,35 @@ Added `--source olbauday` mode to `scripts/fetch_data.py` that downloads from `o
 ## Discovered Issues
 - Several pages (watchlist, chips, comparison, fixtures, news, team, transfers, plus deadline-clock, toast, club-crest, error-boundary, pitch, squad-editor) still contain non-trivial numbers of inline `style={{ }}` props beyond what's been cleaned up so far — some are legitimately dynamic (widths, gradients, transforms) and allowed per the rules, but a good number are static layout/color choices that should move into broadcast.css. A full pass wasn't done this session (large surface area); flagging so it isn't mistaken for finished.
 - `python` on PATH (C:\Python313) does not have lightgbm/xgboost installed; the anaconda3 install at `C:\Users\HP\anaconda3\python.exe` does. Use that interpreter for `predict_gameweek.py` and any other modelling script until the environments are reconciled.
+
+## 2026-09-17 — Prediction quality: repaired the live season, split the points model
+
+Traced "the model keeps recommending goalkeepers as captain" to the olbauday
+translation layer rather than to the models. `fetch_data.py` mapped a fixed
+column list out of each gameweek file and let `build_dataset.py` zero-fill the
+rest, so fourteen columns the source does provide were never copied — position,
+team, influence/creativity/threat, tackles/recoveries/CBI (and therefore
+defensive contribution), transfers in/out, round, both scorelines — and `value`
+was copied in millions where every training season is in tenths.
+
+Goalkeeping features were among the few that survived, so keepers kept their
+signal while attackers arrived looking like players who had done nothing.
+Confirmed by corrupting a clean holdout season the same way: captain picks went
+from {FWD 21, MID 10, DEF 6, GK 1} to {FWD 20, GK 14, DEF 4}.
+
+Fixed the mapping, added real fixture difficulty from opponent venue strength,
+added a `build_dataset.py` guard that fails when the latest season is blank
+somewhere earlier seasons are not, added a two-stage model
+(`scripts/train_availability.py`: P(plays) × E[points | plays]), and dropped
+goalkeepers from the captain shortlist.
+
+Measured over 76 gameweeks of 2024-25 and 2025-26, captain pick mean return
+5.05 → 6.71 points, blanks (≤2 pts) 46.1% → 30.3%, hauls 13.2% → 19.7%.
+Two-stage alone is worth R² +0.004/+0.003 and lower MAE in both test seasons.
+
+**Not done:** the direct models were not retrained. They were trained on
+2016-17..2023-24, which was never affected, so they are still valid — but
+`saved_models/direct/*/features.json` lists 20-26 features that no longer exist
+in the current feature build, so a retrain via `train.py` is worth doing before
+trusting `train_availability.py`'s reuse of those lists (it currently detects
+the staleness and derives the compact set instead).
