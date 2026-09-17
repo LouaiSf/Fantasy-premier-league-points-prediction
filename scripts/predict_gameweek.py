@@ -421,6 +421,21 @@ def predict(featured: pd.DataFrame, models: dict) -> pd.DataFrame:
             Xa = block[avail_feats].replace([np.inf, -np.inf], np.nan).fillna(0)
             Za = spec['availability_scaler'].transform(Xa)
             block['p_plays'] = spec['availability'].predict_proba(Za)[:, 1]
+
+            # Team news the model cannot see. Every avail_* feature is built
+            # from minutes already played, so a player who started the last
+            # four matches and turned an ankle on Thursday still scores about
+            # 0.97 here. FPL publishes a percentage for exactly that case and
+            # it is the better estimate whenever it is lower -- a 25% chance
+            # of playing is direct information, not a forecast to average
+            # against. Taking the minimum rather than replacing outright
+            # keeps the model's own doubts about a rotation risk that the
+            # flag says nothing about.
+            if 'chance' in block.columns:
+                chance = pd.to_numeric(block['chance'], errors='coerce') / 100.0
+                block['p_plays'] = np.where(chance.notna(),
+                                            np.minimum(block['p_plays'], chance),
+                                            block['p_plays'])
             block['predicted_points_if_plays'] = spec['conditional'].predict(Za)
             block['predicted_points_single_stage'] = block['predicted_points']
             block['predicted_points'] = (block['p_plays']
@@ -626,7 +641,7 @@ def main() -> int:
             # a different proposition from a 6.0 built from a half-chance of
             # playing and a big one, and only these two columns tell them apart.
             'p_plays', 'predicted_points_if_plays', 'predicted_points_single_stage',
-            'selected_by', 'status', 'model']
+            'selected_by', 'status', 'chance', 'model']
     cols = [c for c in cols if c in predictions.columns]
     predictions[cols].to_csv(args.out, index=False)
 
