@@ -97,6 +97,9 @@
     clip-path:polygon(0 0,100% 0,92% 100%,8% 100%);transition:left var(--motion-panel) var(--ease-out),width var(--motion-panel) var(--ease-out)}
   .tab-count{margin-left:6px;padding:2px 5px;background:var(--pink);color:var(--white);font:700 9px var(--data)}
   .nav-actions{display:flex;align-items:center;justify-self:end;gap:var(--space-2)}
+  .refresh-icon{display:inline-block;transition:transform .8s linear}
+  .refresh-icon.is-spinning{transform:rotate(360deg)}
+  .refresh-label{margin-left:4px}
   .deadline{min-height:44px;padding:5px 12px;border:1px solid rgba(255,255,255,.24);background:#200025}
   .deadline strong{display:block;font:700 9px var(--data);letter-spacing:.14em;color:var(--lime)}
   .deadline span{font:700 12px var(--data);font-variant-numeric:tabular-nums}
@@ -1109,8 +1112,10 @@
     .cand-meters{grid-column:3/-1}
   }
   @media (max-width:1080px){
-    .main-nav-row{grid-template-columns:auto minmax(0,1fr)}
-    .nav-actions{display:none}
+    .main-nav-row{grid-template-columns:auto minmax(0,1fr) auto}
+    .nav-actions{gap:var(--space-2)}
+    .refresh-label,.deadline-context{display:none}
+    .deadline{min-height:36px;padding:5px 9px}
     .pitch-layout{grid-template-columns:1fr}
     .rail{position:static;grid-template-columns:1fr 1fr}
     .hero-grid{grid-template-columns:1fr;min-height:0}

@@ -111,7 +111,7 @@ export function MainNav() {
             <span className="nav-ink" ref={inkRef} aria-hidden="true" />
           </nav>
         </div>
-        <div className="nav-actions" style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+        <div className="nav-actions">
           <button
             type="button"
             className="btn ghost sm"
@@ -120,10 +120,10 @@ export function MainNav() {
             title="Fetch latest season fixtures, odds, and predictions from backend"
             aria-label="Refresh season data"
           >
-            <span style={{ display: "inline-block", transform: refreshing ? "rotate(360deg)" : "none", transition: "transform 0.8s linear" }}>
+            <span className={`refresh-icon${refreshing ? " is-spinning" : ""}`} aria-hidden="true">
               ↻
             </span>
-            <span style={{ marginLeft: "4px" }}>{refreshing ? "Updating…" : "Refresh"}</span>
+            <span className="refresh-label">{refreshing ? "Updating…" : "Refresh"}</span>
           </button>
           <DeadlineClock />
         </div>
