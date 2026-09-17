@@ -545,6 +545,76 @@ def check_distribution(predictions: pd.DataFrame, history: pd.DataFrame) -> None
         )
 
 
+def predict_horizon(featured: pd.DataFrame, first: pd.DataFrame, models: dict,
+                    season: str, first_gw: int, horizon: int,
+                    history: pd.DataFrame) -> pd.DataFrame:
+    """Repeat the prediction for each gameweek in the horizon.
+
+    The player is frozen -- form, price, minutes history, availability all stay
+    as they are today -- and only the fixture moves. See scripts/horizon.py for
+    why that is the honest way to do this and how much of the signal survives
+    the distance (about 87% at five gameweeks out).
+
+    Blanks and doubles fall out of the schedule rather than needing special
+    cases: a club with no fixture contributes no rows that week, and a club
+    with two contributes two, which the caller sums.
+    """
+    import horizon as hz
+
+    print(f"\n{'=' * 78}\nHORIZON: GW{first_gw}..GW{first_gw + horizon - 1}\n{'=' * 78}")
+
+    fixtures_path = os.path.join('data', season, 'fixtures.csv')
+    if not os.path.exists(fixtures_path):
+        print(f"  {fixtures_path} not found; horizon limited to GW{first_gw}")
+        return first
+    fixtures = read_csv_tolerant(fixtures_path)
+
+    teams = read_csv_tolerant(os.path.join('data', season, 'teams.csv'))
+    id_to_name = dict(zip(teams['id'], teams['name']))
+
+    played = featured[featured['is_prediction_row'] == False]  # noqa: E712
+    overall, venue = hz.team_form_snapshot(played, season)
+    if not overall:
+        print(f"  no played matches for {season}; horizon limited to GW{first_gw}")
+        return first
+    schedule = hz.upcoming_fixtures(fixtures, first_gw, horizon, id_to_name)
+
+    base = featured[featured['is_prediction_row'] == True].copy()  # noqa: E712
+    feature_names = sorted({f for spec in models.values() for f in spec['features']}
+                           | {f for spec in models.values()
+                              for f in spec.get('availability_features', [])})
+
+    first = first.copy()
+    first['GW'] = first_gw
+    frames = [first]
+    for gw in range(first_gw + 1, first_gw + horizon):
+        aimed = hz.project(base, feature_names, schedule, overall, venue, gw)
+        if aimed.empty:
+            print(f"  GW{gw}: no fixtures")
+            continue
+        frames.append(predict(aimed, models))
+
+    out = pd.concat(frames, ignore_index=True)
+
+    # A double gameweek is two rows for one player; his week is the sum.
+    keys = ['element', 'GW']
+    sums = {'predicted_points': 'sum', 'predicted_points_if_plays': 'sum'}
+    sums = {k: v for k, v in sums.items() if k in out.columns}
+    doubles = out.groupby(keys).size()
+    n_doubles = int((doubles > 1).sum())
+    if n_doubles:
+        print(f"  {n_doubles} player-gameweeks are doubles; their points are summed")
+
+    per_gw = out.groupby('GW')['predicted_points'].agg(['size', 'mean']).round(2)
+    print("\n  gameweek coverage:")
+    for gw, row in per_gw.iterrows():
+        blanks = sorted(set(id_to_name.values()) - set(out[out['GW'] == gw]['team']))
+        note = f"   blank: {', '.join(blanks)}" if blanks else ""
+        print(f"    GW{int(gw):<3} {int(row['size']):>4} player-fixtures  "
+              f"mean {row['mean']:.2f}{note}")
+    return out
+
+
 def check_coverage(predictions: pd.DataFrame, expected: int) -> None:
     """The failure the old pipeline shipped silently: 54 rows out of 811."""
     got, teams = len(predictions), predictions['team'].nunique()
@@ -568,6 +638,11 @@ def main() -> int:
     ap.add_argument('--top', type=int, default=30)
     ap.add_argument('--no-api', action='store_true', help='use local files only')
     ap.add_argument('--out', default='predictions_next_gw.csv')
+    ap.add_argument('--horizon', type=int, default=1, metavar='N',
+                    help='also predict the N-1 gameweeks after the target, with '
+                         'each player frozen as he is today and only the fixture '
+                         'moving. The output gains a GW column and one row per '
+                         'player per gameweek. Default 1 (next gameweek only).')
     ap.add_argument('--include-unavailable', action='store_true',
                     help='keep injured and suspended players in the output')
     ap.add_argument('--debug-row', metavar='NAME',
@@ -621,6 +696,10 @@ def main() -> int:
     check_coverage(predictions, expected)
     check_distribution(predictions, history)
 
+    if args.horizon > 1:
+        predictions = predict_horizon(
+            featured, predictions, models, season, gameweek, args.horizon, history)
+
     if not args.include_unavailable:
         before = len(predictions)
         predictions = predictions[~predictions['status'].isin(UNAVAILABLE_STATUS)]
@@ -629,12 +708,16 @@ def main() -> int:
             print(f"  dropped {dropped} injured/suspended/unavailable players "
                   f"(--include-unavailable keeps them)")
 
-    predictions = predictions.sort_values('predicted_points', ascending=False)
+    if args.horizon > 1:
+        predictions = predictions.sort_values(['GW', 'predicted_points'],
+                                              ascending=[True, False])
+    else:
+        predictions = predictions.sort_values('predicted_points', ascending=False)
 
     # element is the FPL player id. Carrying it lets anything downstream join
     # back to players_raw.csv on an id rather than on a name, which is the only
     # reliable way to pick up photos, nationality and the rest of the metadata.
-    cols = ['element', 'name', 'team', 'position', 'opponent_team', 'was_home', 'value_m',
+    cols = ['element', 'name', 'team', 'position', 'GW', 'opponent_team', 'was_home', 'value_m',
             'predicted_points', 'points_per_million', 'has_prior_history',
             # Present only when the availability models are trained. Worth
             # carrying: a 6.0 built from a certain start and a modest return is
@@ -645,10 +728,29 @@ def main() -> int:
     cols = [c for c in cols if c in predictions.columns]
     predictions[cols].to_csv(args.out, index=False)
 
-    print(f"\n{'=' * 78}\nTOP {args.top} FOR GW{gameweek}\n{'=' * 78}")
-    show = predictions[cols].head(args.top).copy()
-    show['predicted_points'] = show['predicted_points'].round(2)
-    show['points_per_million'] = show['points_per_million'].round(3)
+    last_gw = gameweek + args.horizon - 1
+    header = (f"TOP {args.top} OVER GW{gameweek}..GW{last_gw}, BY TOTAL"
+              if args.horizon > 1 else f"TOP {args.top} FOR GW{gameweek}")
+    print(f"\n{'=' * 78}\n{header}\n{'=' * 78}")
+    if args.horizon > 1:
+        # Ranked on the total over the horizon, which is the question a squad
+        # meant to last several gameweeks is actually answering. gws counts the
+        # weeks a player has a fixture at all, so a blank shows up as a total
+        # spread over fewer matches rather than as a quietly smaller number.
+        show = (predictions.groupby(['element', 'name', 'team', 'position'],
+                                    as_index=False)
+                .agg(total=('predicted_points', 'sum'),
+                     gws=('GW', 'nunique'),
+                     value_m=('value_m', 'first')))
+        show['per_gw'] = show['total'] / show['gws'].clip(lower=1)
+        show['per_million'] = show['total'] / show['value_m'].replace(0, np.nan)
+        show = show.sort_values('total', ascending=False).head(args.top).round(2)
+    else:
+        show = predictions[cols].head(args.top).copy()
+    if 'predicted_points' in show.columns:
+        show['predicted_points'] = show['predicted_points'].round(2)
+    if 'points_per_million' in show.columns:
+        show['points_per_million'] = show['points_per_million'].round(3)
     print(show.to_string(index=False))
 
     print(f"\nby position:")
@@ -660,7 +762,12 @@ def main() -> int:
         print(f"  {position:<4} {best['name'][:28]:<30} {best['predicted_points']:.2f} pts "
               f"({best['value_m']:.1f}m, {best['team']})")
 
-    print(f"\nwrote {args.out} ({len(predictions):,} players)")
+    if args.horizon > 1:
+        print(f"\nwrote {args.out} ({predictions['element'].nunique():,} players "
+              f"x {predictions['GW'].nunique()} gameweeks, "
+              f"{len(predictions):,} rows)")
+    else:
+        print(f"\nwrote {args.out} ({len(predictions):,} players)")
     print("\nThese are expected points, not certainties: test MAE is around one")
     print("point per player, so treat small gaps between players as noise.")
     return 0
