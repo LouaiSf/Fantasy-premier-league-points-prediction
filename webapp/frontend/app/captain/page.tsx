@@ -7,6 +7,7 @@ import { ClubCrest } from "@/components/club-crest";
 import { clubStyle } from "@/lib/club-colors";
 import { money, num } from "@/lib/format";
 import type { PlayerRecord, TeamRecord } from "@/lib/types";
+import { Loading } from "@/components/loading";
 
 function captainScore(player: PlayerRecord, predictionAvailable: boolean): number {
   return predictionAvailable ? Number(player.predicted_points ?? 0) : Number(player.form ?? 0);
@@ -32,8 +33,8 @@ export default function CaptainPage() {
   if (loading || !snapshot) {
     return (
       <section className="page">
-        <div className="shell" style={{ paddingBlock: "var(--space-16)" }}>
-          <p>Loading the local season data…</p>
+        <div className="shell">
+          <Loading label="Loading season data…" />
         </div>
       </section>
     );

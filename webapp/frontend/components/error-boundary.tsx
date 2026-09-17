@@ -41,10 +41,11 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       return (
         <section className="page" style={{ display: "grid", placeItems: "center", minHeight: "60vh" }}>
           <div
-            className="panel card-tint"
             style={{
               maxWidth: 540,
               padding: "var(--space-8)",
+              background: "rgba(255,255,255,.04)",
+              border: "1px solid rgba(255,255,255,.12)",
               textAlign: "center",
               display: "flex",
               flexDirection: "column",
@@ -58,12 +59,12 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             <h2 style={{ margin: 0, font: "800 24px/1.2 var(--display)" }}>
               Something went wrong
             </h2>
-            <p style={{ color: "var(--muted-foreground)", fontSize: 14, margin: 0 }}>
+            <p style={{ color: "var(--muted-mid)", fontSize: 14, margin: 0 }}>
               {this.state.error?.message || "An unexpected error occurred while rendering this surface."}
             </p>
             <button
               type="button"
-              className="btn btn-primary"
+              className="btn"
               onClick={this.handleReload}
               style={{ marginTop: "var(--space-2)" }}
             >

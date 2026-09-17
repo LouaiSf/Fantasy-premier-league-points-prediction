@@ -4,14 +4,47 @@ import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
 import { api } from "@/lib/api";
 import { num } from "@/lib/format";
+import { Loading } from "@/components/loading";
+import { EmptyState } from "@/components/empty-state";
 import type { ChipRecommendation, ChipRow, ChipsResult } from "@/lib/types";
 
-function fdrColor(fdr: number): string {
-  if (fdr <= 2.2) return "var(--fdr-2)";
-  if (fdr <= 3.2) return "var(--fdr-3)";
-  if (fdr <= 4.0) return "var(--fdr-4)";
-  return "var(--fdr-5)";
+function fdrClass(fdr: number): string {
+  if (fdr <= 2.2) return "fdr-2";
+  if (fdr <= 3.2) return "fdr-3";
+  if (fdr <= 4.0) return "fdr-4";
+  return "fdr-5";
 }
+
+const CHIP_METAS = [
+  {
+    id: "3xc",
+    title: "Triple Captain",
+    iconLabel: "TC",
+    iconBg: "var(--gold)",
+    iconColor: "var(--ink)",
+  },
+  {
+    id: "bboost",
+    title: "Bench Boost",
+    iconLabel: "BB",
+    iconBg: "var(--cyan)",
+    iconColor: "var(--ink)",
+  },
+  {
+    id: "freehit",
+    title: "Free Hit",
+    iconLabel: "FH",
+    iconBg: "var(--pink)",
+    iconColor: "var(--white)",
+  },
+  {
+    id: "wildcard",
+    title: "Wildcard",
+    iconLabel: "WC",
+    iconBg: "var(--lime)",
+    iconColor: "var(--ink)",
+  },
+];
 
 export default function ChipsPage() {
   const { snapshot, loading, squadNames } = useApp();
@@ -59,8 +92,8 @@ export default function ChipsPage() {
   if (loading || !snapshot) {
     return (
       <section className="page">
-        <div className="shell" style={{ paddingBlock: "var(--space-16)" }}>
-          <p>Loading the local season data…</p>
+        <div className="shell">
+          <Loading label="Loading season data…" />
         </div>
       </section>
     );
@@ -70,18 +103,10 @@ export default function ChipsPage() {
     return (
       <section className="page">
         <div className="shell" style={{ paddingBlock: "var(--space-12)" }}>
-          <div className="empty-state" style={{ maxWidth: "640px", margin: "0 auto", textAlign: "center" }}>
-            <h2 style={{ fontSize: "var(--type-h2)", textTransform: "uppercase", marginBottom: "var(--space-3)" }}>
-              Predictions Unavailable
-            </h2>
-            <p style={{ color: "var(--muted-light)", marginBottom: "var(--space-6)" }}>
-              The Chip Advisor requires model projections and current gameweek schedule data to evaluate optimal play windows.
-              {snapshot.prediction_error ? ` (${snapshot.prediction_error})` : ""}
-            </p>
-            <p style={{ fontSize: "var(--type-small)", color: "var(--muted-mid)" }}>
-              Run the prediction pipeline or click <strong>↻ Refresh</strong> in the top header once the model output is ready.
-            </p>
-          </div>
+          <EmptyState
+            title="Predictions Unavailable"
+            message={`The Chip Advisor requires model projections to evaluate optimal play windows.${snapshot.prediction_error ? ` (${snapshot.prediction_error})` : ""} Run the prediction pipeline or click Refresh in the header.`}
+          />
         </div>
       </section>
     );
@@ -95,135 +120,80 @@ export default function ChipsPage() {
     if (rec.chip.includes("Wildcard")) recsByChip.set("wildcard", rec);
   }
 
-  const CHIP_METAS = [
-    {
-      id: "3xc",
-      title: "Triple Captain",
-      accent: "var(--cyan)",
-      badgeClass: "badge-cyan",
-      desc: "Multiplies captain points by 3. Best deployed on favourable double gameweeks or standout home fixtures.",
-      icon: "⚡",
-    },
-    {
-      id: "bboost",
-      title: "Bench Boost",
-      accent: "var(--lime)",
-      badgeClass: "badge-lime",
-      desc: "Points scored by all 4 bench substitutes are added to your overall gameweek total.",
-      icon: "👥",
-    },
-    {
-      id: "freehit",
-      title: "Free Hit",
-      accent: "var(--pink)",
-      badgeClass: "badge-pink",
-      desc: "Make unlimited free transfers for a single gameweek. Your previous squad returns immediately the following week.",
-      icon: "🎯",
-    },
-    {
-      id: "wildcard",
-      title: "Wildcard",
-      accent: "#FFD700",
-      badgeClass: "badge-gold",
-      desc: "Permanently restructure your entire 15-player squad without incurring point hit penalties.",
-      icon: "🃏",
-    },
-  ];
-
   return (
     <section className="page chips-page">
       <div className="shell">
         <header className="section-head" style={{ marginTop: "var(--space-6)" }}>
           <div>
-            <span className="badge" style={{ marginBottom: "var(--space-2)", background: "rgba(0,255,135,0.15)", color: "var(--lime)" }}>
+            <span className="badge" style={{ background: "rgba(0,255,135,0.15)", color: "var(--lime)" }}>
               Tactical Strategy Engine
             </span>
-            <h1>Chip Advisor & Timing</h1>
+            <h1>Chip Advisor &amp; Timing</h1>
             <p>
               Fixture congestion, double gameweeks, blank postponements, and schedule difficulty evaluated across the horizon.
             </p>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
-              <label htmlFor="chips-horizon" style={{ fontSize: "12px", color: "var(--muted-mid)", textTransform: "uppercase", letterSpacing: ".05em" }}>
-                Horizon:
-              </label>
-              <select
-                id="chips-horizon"
-                value={effectiveHorizon}
-                onChange={(e) => setHorizon(Number(e.target.value))}
-                style={{
-                  background: "rgba(255,255,255,0.08)",
-                  border: "1px solid rgba(255,255,255,0.16)",
-                  color: "inherit",
-                  padding: "4px 8px",
-                  borderRadius: "4px",
-                  fontSize: "12px",
-                }}
+            <div className="filter-row">
+              <label
+                htmlFor="chips-horizon"
+                className="kicker"
+                style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}
               >
-                {[4, 6, 8, 10, 12, 16].filter((h) => h <= maxPossibleHorizon).map((h) => (
-                  <option key={h} value={h}>
-                    {h} Gameweeks
-                  </option>
-                ))}
-              </select>
+                Horizon:
+                <select
+                  id="chips-horizon"
+                  value={effectiveHorizon}
+                  onChange={(e) => setHorizon(Number(e.target.value))}
+                  style={{
+                    background: "rgba(255,255,255,0.08)",
+                    border: "1px solid rgba(255,255,255,0.16)",
+                    color: "inherit",
+                    padding: "4px 8px",
+                    fontSize: "12px",
+                  }}
+                >
+                  {[4, 6, 8, 10, 12, 16].filter((h) => h <= maxPossibleHorizon).map((h) => (
+                    <option key={h} value={h}>{h} Gameweeks</option>
+                  ))}
+                </select>
+              </label>
             </div>
 
             <button
               type="button"
               className={`btn sm ${useSquad ? "" : "ghost"}`}
               onClick={() => setUseSquad((prev) => !prev)}
-              title={squadNames.length === 15 ? "Evaluate with your active 15-player squad" : "Build a 15-player squad in My Team for squad-specific advice"}
+              title={
+                squadNames.length === 15
+                  ? "Evaluate with your active 15-player squad"
+                  : "Build a squad in My Team for squad-specific advice"
+              }
             >
-              {useSquad && squadNames.length === 15 ? "✓ Squad Tailored" : "League Generic"}
+              {useSquad && squadNames.length === 15 ? "Squad Tailored" : "League Generic"}
             </button>
           </div>
         </header>
 
         {useSquad && squadNames.length < 15 && (
-          <div
-            style={{
-              padding: "var(--space-3) var(--space-4)",
-              background: "rgba(255, 215, 0, 0.1)",
-              border: "1px solid rgba(255, 215, 0, 0.3)",
-              borderRadius: "4px",
-              color: "#FFD700",
-              fontSize: "13px",
-              marginBottom: "var(--space-6)",
-              display: "flex",
-              alignItems: "center",
-              gap: "var(--space-3)",
-            }}
-          >
-            <span>ℹ</span>
+          <div className="chip-squad-notice">
+            <span className="kicker" style={{ color: "var(--gold)" }}>i</span>
             <span>
-              Your saved squad currently has {squadNames.length}/15 players. Chip recommendations are using league-wide fixture trends. Head to <strong>My Team</strong> to complete your 15 players for squad-specific fixture analysis.
+              Your squad has {squadNames.length}/15 players. Using league-wide fixture trends.
+              Head to <strong>My Team</strong> to complete your squad for tailored analysis.
             </span>
           </div>
         )}
 
-        {fetching && (
-          <div style={{ paddingBlock: "var(--space-6)", color: "var(--muted-light)" }}>
-            Calculating schedule matrices and fixture difficulty…
-          </div>
-        )}
+        {fetching && <Loading label="Calculating schedule matrices and fixture difficulty…" />}
 
         {fetchError && (
-          <div style={{ padding: "var(--space-4)", background: "rgba(255,40,130,0.1)", border: "1px solid var(--pink)", borderRadius: "4px", color: "var(--pink)", marginBottom: "var(--space-6)" }}>
-            {fetchError}
-          </div>
+          <div className="chip-error">{fetchError}</div>
         )}
 
         {/* Four Chip Cards */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-            gap: "var(--space-4)",
-            marginBottom: "var(--space-8)",
-          }}
-        >
+        <div className="chip-advisor-grid">
           {CHIP_METAS.map((meta) => {
             const rec = recsByChip.get(meta.id);
             const targetGw = rec?.gw ? `GW${rec.gw}` : "Hold";
@@ -233,82 +203,45 @@ export default function ChipsPage() {
             return (
               <div
                 key={meta.id}
-                style={{
-                  background: "rgba(255, 255, 255, 0.04)",
-                  border: `1px solid ${rec?.gw ? meta.accent : "rgba(255, 255, 255, 0.12)"}`,
-                  borderTop: `4px solid ${meta.accent}`,
-                  borderRadius: "4px",
-                  padding: "var(--space-5)",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "space-between",
-                  gap: "var(--space-4)",
-                  transition: "transform 0.15s ease",
-                }}
+                className={`chip-advisor-card${rec?.gw ? " is-active" : ""}`}
               >
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-2)" }}>
-                    <span style={{ fontSize: "12px", fontFamily: "var(--data)", fontWeight: 700, color: meta.accent, textTransform: "uppercase", letterSpacing: ".06em" }}>
-                      {meta.icon} {meta.title}
-                    </span>
+                <div className="chip-advisor-header">
+                  <div className="chip-advisor-name">
                     <span
-                      style={{
-                        fontSize: "10px",
-                        fontFamily: "var(--data)",
-                        fontWeight: 700,
-                        padding: "2px 6px",
-                        borderRadius: "2px",
-                        textTransform: "uppercase",
-                        background:
-                          confidence === "high"
-                            ? "rgba(0, 255, 135, 0.2)"
-                            : confidence === "medium"
-                            ? "rgba(2, 227, 247, 0.2)"
-                            : "rgba(255, 255, 255, 0.1)",
-                        color:
-                          confidence === "high"
-                            ? "var(--lime)"
-                            : confidence === "medium"
-                            ? "var(--cyan)"
-                            : "var(--muted-light)",
-                      }}
+                      className="chip-advisor-icon"
+                      style={{ background: meta.iconBg, color: meta.iconColor }}
                     >
-                      {confidence} confidence
+                      {meta.iconLabel}
                     </span>
+                    {meta.title}
                   </div>
-
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-2)", marginBlock: "var(--space-2)" }}>
-                    <span style={{ fontSize: "clamp(1.8rem, 2.8vw, 2.4rem)", fontWeight: 900, fontFamily: "var(--display)", color: isHold ? "var(--muted-light)" : "var(--white)" }}>
-                      {targetGw}
-                    </span>
-                    <span style={{ fontSize: "11px", color: "var(--muted-mid)", textTransform: "uppercase" }}>
-                      {isHold ? "Preserve for future" : "Recommended window"}
-                    </span>
-                  </div>
-
-                  <p style={{ fontSize: "13px", color: "var(--muted-light)", lineHeight: 1.4, margin: "0 0 var(--space-2) 0" }}>
-                    {rec?.reason ?? meta.desc}
-                  </p>
-
-                  {rec?.note && (
-                    <p style={{ fontSize: "11px", color: "#FFD700", margin: 0, fontStyle: "italic" }}>
-                      ℹ {rec.note}
-                    </p>
-                  )}
+                  <span className={`chip-conf ${confidence}`}>
+                    {confidence} conf
+                  </span>
                 </div>
 
-                <div
-                  style={{
-                    paddingTop: "var(--space-3)",
-                    borderTop: "1px solid rgba(255, 255, 255, 0.08)",
-                    fontSize: "11px",
-                    color: "var(--muted-mid)",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <span>{meta.desc}</span>
+                <div>
+                  <div className={`chip-advisor-target${isHold ? " hold" : ""}`}>
+                    {targetGw}
+                  </div>
+                  <p className="chip-advisor-sub">
+                    {isHold ? "Preserve for future" : "Recommended window"}
+                  </p>
+                </div>
+
+                <p className="chip-advisor-desc">
+                  {rec?.reason ?? "No recommendation yet — adjust the horizon or add your squad."}
+                </p>
+
+                {rec?.note && (
+                  <p className="chip-advisor-note">{rec.note}</p>
+                )}
+
+                <div className="chip-advisor-footer">
+                  {meta.title === "Triple Captain" && "Multiplies captain points by 3."}
+                  {meta.title === "Bench Boost" && "Points scored by all 4 bench players are counted."}
+                  {meta.title === "Free Hit" && "Unlimited free transfers for one gameweek."}
+                  {meta.title === "Wildcard" && "Permanently restructure your squad without penalties."}
                 </div>
               </div>
             );
@@ -318,22 +251,25 @@ export default function ChipsPage() {
         {/* Schedule & Congestion Matrix */}
         <div style={{ marginBottom: "var(--space-12)" }}>
           <div className="sub-head">
-            <h3>Gameweek Fixture & FDR Heatmap</h3>
+            <h3>Gameweek Fixture &amp; FDR Heatmap</h3>
             <span className="rule" />
-            <small>Schedule Congestion GW{data?.first_gw ?? snapshot.gameweek}–GW{data?.last_gw ?? ((snapshot.gameweek ?? 1) + effectiveHorizon - 1)}</small>
+            <small>
+              Schedule Congestion GW{data?.first_gw ?? snapshot.gameweek}–GW
+              {data?.last_gw ?? ((snapshot.gameweek ?? 1) + effectiveHorizon - 1)}
+            </small>
           </div>
 
           <div style={{ overflowX: "auto" }}>
-            <table className="stable" style={{ width: "100%", textAlign: "left", fontSize: "13px" }}>
+            <table className="chip-advisor-heatmap">
               <thead>
                 <tr>
-                  <th style={{ width: "90px" }}>GW</th>
+                  <th style={{ width: "80px" }}>GW</th>
                   <th>Fixtures</th>
                   {data?.has_squad && <th>Squad Active</th>}
                   <th>DGW Teams</th>
                   <th>Blank Teams</th>
-                  <th>Average FDR</th>
-                  <th>Key Signal</th>
+                  <th>Avg FDR</th>
+                  <th>Signal</th>
                 </tr>
               </thead>
               <tbody>
@@ -344,23 +280,26 @@ export default function ChipsPage() {
                   const hasSquad = data.has_squad;
 
                   let signal = "Standard run";
-                  let signalColor = "var(--muted-light)";
+                  let signalClass = "trend flat";
                   if (isDgw) {
-                    signal = `🔥 Double GW (${row.dgw_teams} teams)`;
-                    signalColor = "var(--lime)";
+                    signal = `Double GW (${row.dgw_teams} teams)`;
+                    signalClass = "trend up";
                   } else if (isBgw) {
-                    signal = `⚠️ Blank GW (${row.blank_teams} teams)`;
-                    signalColor = "var(--pink)";
+                    signal = `Blank GW (${row.blank_teams} teams)`;
+                    signalClass = "trend down";
                   } else if (avgFdr <= 2.8) {
-                    signal = "⭐ Favourable Matchups";
-                    signalColor = "var(--cyan)";
+                    signal = "Favourable Matchups";
+                    signalClass = "trend up";
                   } else if (avgFdr >= 3.4) {
-                    signal = "⚡ High Difficulty";
-                    signalColor = "#FFD700";
+                    signal = "High Difficulty";
+                    signalClass = "trend flat";
                   }
 
                   return (
-                    <tr key={row.gw} style={{ background: isDgw ? "rgba(0, 255, 135, 0.05)" : isBgw ? "rgba(255, 40, 130, 0.05)" : undefined }}>
+                    <tr
+                      key={row.gw}
+                      className={isDgw ? "is-dgw" : isBgw ? "is-bgw" : undefined}
+                    >
                       <td style={{ fontWeight: 800, fontFamily: "var(--data)" }}>
                         GW{row.gw}
                       </td>
@@ -379,42 +318,28 @@ export default function ChipsPage() {
                           )}
                         </td>
                       )}
-                      <td>
-                        {row.dgw_teams > 0 ? (
-                          <span style={{ color: "var(--lime)", fontWeight: 700, fontFamily: "var(--data)" }}>
-                            +{row.dgw_teams}
-                          </span>
-                        ) : (
-                          <span style={{ color: "var(--muted-mid)" }}>0</span>
-                        )}
+                      <td style={{ fontFamily: "var(--data)", color: row.dgw_teams > 0 ? "var(--lime)" : "var(--muted-mid)", fontWeight: row.dgw_teams > 0 ? 700 : 400 }}>
+                        {row.dgw_teams > 0 ? `+${row.dgw_teams}` : "0"}
                       </td>
-                      <td>
-                        {row.blank_teams > 0 ? (
-                          <span style={{ color: "var(--pink)", fontWeight: 700, fontFamily: "var(--data)" }}>
-                            {row.blank_teams}
-                          </span>
-                        ) : (
-                          <span style={{ color: "var(--muted-mid)" }}>0</span>
-                        )}
+                      <td style={{ fontFamily: "var(--data)", color: row.blank_teams > 0 ? "var(--pink)" : "var(--muted-mid)", fontWeight: row.blank_teams > 0 ? 700 : 400 }}>
+                        {row.blank_teams > 0 ? row.blank_teams : "0"}
                       </td>
                       <td>
                         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
                           <span
-                            style={{
-                              display: "inline-block",
-                              width: "12px",
-                              height: "12px",
-                              borderRadius: "2px",
-                              background: fdrColor(avgFdr),
-                            }}
+                            className={`fdr`}
+                            data-fdr={Math.round(avgFdr)}
+                            style={{ minWidth: "12px", height: "12px" }}
                           />
                           <span style={{ fontFamily: "var(--data)", fontWeight: 700 }}>
                             {num(avgFdr, 1)}
                           </span>
                         </div>
                       </td>
-                      <td style={{ color: signalColor, fontWeight: 600, fontSize: "12px" }}>
-                        {signal}
+                      <td>
+                        <span className={signalClass} style={{ fontSize: "12px" }}>
+                          {signal}
+                        </span>
                       </td>
                     </tr>
                   );
@@ -424,24 +349,17 @@ export default function ChipsPage() {
           </div>
         </div>
 
-        {/* Honest Tactical Caveat */}
-        <div
-          style={{
-            padding: "var(--space-4) var(--space-5)",
-            background: "rgba(255, 255, 255, 0.03)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-            borderRadius: "4px",
-            marginBottom: "var(--space-16)",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-3)" }}>
-            <span style={{ fontSize: "18px", lineHeight: 1 }}>📐</span>
-            <div style={{ fontSize: "12px", color: "var(--muted-light)", lineHeight: 1.5 }}>
-              <strong style={{ color: "var(--white)", textTransform: "uppercase", letterSpacing: ".04em", display: "block", marginBottom: "4px" }}>
-                Model Architecture Note
-              </strong>
-              Per-player model predictions do not vary arbitrarily across future gameweeks. Predictions are derived from player form, expected underlying metrics, and team baseline performance. Signal across upcoming gameweeks is generated through fixture count (Double/Blank GWs) and Fixture Difficulty Rating (FDR). Double and Blank gameweeks generally manifest later in the campaign once domestic cups (FA Cup, EFL Cup) and continental ties induce postponements.
-            </div>
+        {/* Architecture note */}
+        <div className="chip-note-banner">
+          <span style={{ fontFamily: "var(--display)", fontWeight: 900, fontSize: "1.1rem", lineHeight: 1, flexShrink: 0 }}>
+            i
+          </span>
+          <div style={{ fontSize: "12px", color: "var(--muted-light)", lineHeight: 1.5 }}>
+            <strong style={{ color: "var(--white)", textTransform: "uppercase", letterSpacing: ".04em", display: "block", marginBottom: "4px" }}>
+              Model Architecture Note
+            </strong>
+            Per-player predictions are derived from player form, expected metrics, and team baseline performance. Signal across
+            upcoming gameweeks is generated through fixture count (Double/Blank GWs) and Fixture Difficulty Rating (FDR).
           </div>
         </div>
       </div>

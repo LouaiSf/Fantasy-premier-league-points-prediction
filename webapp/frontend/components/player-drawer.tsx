@@ -8,6 +8,7 @@ import { ClubCrest } from "@/components/club-crest";
 import { api } from "@/lib/api";
 import { clubStyle } from "@/lib/club-colors";
 import { money, num } from "@/lib/format";
+import { Loading } from "@/components/loading";
 import type { PlayerHistoryRecord, TeamRecord } from "@/lib/types";
 
 function fixtureRibbon(team: TeamRecord | undefined, gameweek: number | null) {
@@ -177,7 +178,7 @@ export function PlayerDrawer() {
                     <span className="rule" />
                   </div>
                   {visibleHistoryLoading ? (
-                    <p style={{ color: "var(--muted-ink)", fontSize: 12 }}>Loading history…</p>
+                    <Loading label="Loading history…" />
                   ) : visibleHistory.length > 0 ? (
                     <table className="stable">
                       <thead>

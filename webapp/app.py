@@ -120,6 +120,8 @@ def model_summary() -> dict:
     import json
     meta_path = os.path.join('saved_models', 'direct', 'meta.json')
     if not os.path.exists(meta_path):
+        meta_path = os.path.join('fpl_results', 'saved_models', 'direct', 'meta.json')
+    if not os.path.exists(meta_path):
         return {}
     with open(meta_path, encoding='utf-8') as f:
         meta = json.load(f)
@@ -206,9 +208,13 @@ def api_platform():
     snapshot = build_local_snapshot(Path(ROOT), season)
     prediction_available = not bool(s.get('error'))
     if prediction_available:
-        predictions = {player['name']: player for player in enriched_players()}
+        predictions = {
+            player['element']: player
+            for player in enriched_players()
+            if player.get('element') is not None
+        }
         for player in snapshot['players']:
-            prediction = predictions.get(player['name'])
+            prediction = predictions.get(player.get('element'))
             if prediction is None:
                 continue
             for key in ('predicted_points', 'points_per_million', 'opponent_team',
