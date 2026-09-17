@@ -36,6 +36,18 @@ Added `prediction_timestamp` to `/api/platform`. New `ModelInfo` component shows
 ## 2026-09-17 — Task 2.5: NEW badge for players with no PL history
 Added `.badge.new` and surfaced it in the Captain shortlist, Transfer Studio rows, and the Player Drawer (plus a caveat note in the drawer). Captain ranking now tie-breaks near-equal scores (within 0.3 pts) in favour of players with prior history. Also replaced two remaining inline-styled eyebrow badges (Chips, Watchlist) with `.badge` color modifiers while in the area.
 
+## 2026-09-17 — Task 15: Dead code cleanup
+Removed 12 unused shadcn/ui components (all zero-importer outside their own dead cross-references; only `tooltip.tsx` is actually used, via `layout.tsx`'s `TooltipProvider`), `lib/utils.ts` (zero importers), the now-unused `lucide-react`/`cmdk`/`class-variance-authority` deps, the default create-next-app SVGs in `public/`, and stripped `globals.css` down to the tailwind/tw-animate-css/broadcast.css imports plus the two theme tokens `tooltip.tsx` still reads.
+
+## 2026-09-17 — Task 17.1: Lazy-load images
+`PlayerPhoto` and `ClubCrest` now default to `loading="lazy" decoding="async"`; the Captain page's above-the-fold hero portrait opts back in to `loading="eager" fetchPriority="high"`.
+
+## 2026-09-17 — Task 11.2/11.4: Transfer Studio price indicators + market cap
+Threaded `cost_change_event` from `players_raw.csv` through `platform_data.py` into `/api/platform`; Transfer Studio rows now show a rising/falling triangle when a player's price moved this event. Raised the incoming-player list cap from 120 to 200.
+
+## 2026-09-17 — Task 12.4: Shareable comparison URL
+Comparison page seats now mirror to `?a=<element>&b=<element>` via `useSearchParams`/`router.replace`, wrapped in `React.Suspense` per Next's requirement for `useSearchParams` in a statically-rendered route.
+
 ## Discovered Issues
 - Several pages (watchlist, chips, comparison, fixtures, news, team, transfers, plus deadline-clock, toast, club-crest, error-boundary, pitch, squad-editor) still contain non-trivial numbers of inline `style={{ }}` props beyond what's been cleaned up so far — some are legitimately dynamic (widths, gradients, transforms) and allowed per the rules, but a good number are static layout/color choices that should move into broadcast.css. A full pass wasn't done this session (large surface area); flagging so it isn't mistaken for finished.
 - `python` on PATH (C:\Python313) does not have lightgbm/xgboost installed; the anaconda3 install at `C:\Users\HP\anaconda3\python.exe` does. Use that interpreter for `predict_gameweek.py` and any other modelling script until the environments are reconciled.
