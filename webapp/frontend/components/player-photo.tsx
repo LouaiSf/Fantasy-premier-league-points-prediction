@@ -18,7 +18,16 @@ export function getInitials(name?: string, fallback = ""): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-export function PlayerPhoto({ alt, name, src, className, onError, ...props }: PlayerPhotoProps) {
+export function PlayerPhoto({
+  alt,
+  name,
+  src,
+  className,
+  onError,
+  loading = "lazy",
+  decoding = "async",
+  ...props
+}: PlayerPhotoProps) {
   const [failedSrc, setFailedSrc] = React.useState<string | Blob | null>(null);
   const hasError = !src || failedSrc === src;
 
@@ -36,6 +45,8 @@ export function PlayerPhoto({ alt, name, src, className, onError, ...props }: Pl
       alt={alt}
       src={src}
       className={className}
+      loading={loading}
+      decoding={decoding}
       onError={(event) => {
         setFailedSrc(src);
         onError?.(event);
