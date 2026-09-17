@@ -43,7 +43,7 @@ export function DeadlineClock() {
     if (snapshot?.season) {
       return (
         <div className="deadline" aria-live="polite">
-          <strong>Season {snapshot.season}</strong>
+          <strong className="deadline-context">Season {snapshot.season}</strong>
           <span>Fixtures pending</span>
         </div>
       );
@@ -58,7 +58,7 @@ export function DeadlineClock() {
 
   return (
     <div className={`deadline${urgent ? " urgent" : ""}`} aria-live="polite">
-      <strong>GW{snapshot?.gameweek} {inProgress ? "matchday" : "deadline"}</strong>
+      <strong className="deadline-context">GW{snapshot?.gameweek} {inProgress ? "matchday" : "deadline"}</strong>
       <span>{formatCountdown(remaining, snapshot?.gameweek ?? null)}</span>
       <div className="deadline-tension" aria-hidden="true">
         <i style={{ width: `${tension}%` }} />

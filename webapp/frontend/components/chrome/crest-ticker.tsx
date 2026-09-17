@@ -12,12 +12,12 @@ export function CrestTicker() {
       <div className="shell ticker-inner">
         <span className="ticker-label">Local season</span>
         {teams.map((team) => (
-          <button
+          <span
             key={team.id}
-            type="button"
             className="crest-btn"
             data-team={team.short_name}
-            title={team.name}
+            role="img"
+            aria-label={`${team.name} crest`}
           >
             <ClubCrest
               code={team.code}
@@ -28,7 +28,7 @@ export function CrestTicker() {
               height={24}
               loading="lazy"
             />
-          </button>
+          </span>
         ))}
       </div>
     </div>
