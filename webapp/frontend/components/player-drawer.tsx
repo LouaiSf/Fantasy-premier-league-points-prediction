@@ -106,7 +106,10 @@ export function PlayerDrawer() {
                     <span className="kicker">
                       {player.team} {player.flag ?? ""}
                     </span>
-                    <h2 id="drawerName">{player.web_name || player.name}</h2>
+                    <h2 id="drawerName">
+                      {player.web_name || player.name}
+                      {player.has_prior_history === false && <span className="badge new">New</span>}
+                    </h2>
                     <div className="drawer-meta">
                       <span>{player.position}</span>
                       <span>{money(player.value_m)}</span>
@@ -116,6 +119,12 @@ export function PlayerDrawer() {
                   <div className="drawer-status" data-status={player.status !== "a" ? "out" : "fit"}>
                     {player.news || (player.status === "a" ? "Fully available in the local snapshot." : `Status: ${player.status}`)}
                   </div>
+                  {player.has_prior_history === false && (
+                    <p className="drawer-new-note">
+                      New to the Premier League — predicted points are less reliable and lean on
+                      baseline position priors rather than this player&apos;s own history.
+                    </p>
+                  )}
                   <DialogPrimitive.Close
                     className="drawer-close"
                     aria-label="Close player profile"

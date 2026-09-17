@@ -14,6 +14,19 @@ function captainScore(player: PlayerRecord, predictionAvailable: boolean): numbe
   return predictionAvailable ? Number(player.predicted_points ?? 0) : Number(player.form ?? 0);
 }
 
+// Predictions for players with no PL history lean on baseline priors rather
+// than their own form, so at a near-tied score a proven player is the safer
+// armband -- only break the tie this way, never override a real gap.
+function compareCaptains(a: PlayerRecord, b: PlayerRecord, predictionAvailable: boolean): number {
+  const diff = captainScore(b, predictionAvailable) - captainScore(a, predictionAvailable);
+  if (Math.abs(diff) < 0.3) {
+    const hasHistoryA = a.has_prior_history !== false;
+    const hasHistoryB = b.has_prior_history !== false;
+    if (hasHistoryA !== hasHistoryB) return hasHistoryA ? -1 : 1;
+  }
+  return diff;
+}
+
 function riskFor(player: PlayerRecord): { label: string; level: "low" | "med" | "high" } {
   const chance = player.chance_of_playing_next_round ?? 100;
   if (player.status !== "a" || chance < 50) return { label: "High risk", level: "high" };
@@ -45,7 +58,7 @@ export default function CaptainPage() {
   const basePool = pool === "squad" ? squadPlayers : snapshot.players;
   const ranked = [...basePool]
     .filter((player) => player.status === "a")
-    .sort((a, b) => captainScore(b, predictionAvailable) - captainScore(a, predictionAvailable))
+    .sort((a, b) => compareCaptains(a, b, predictionAvailable))
     .slice(0, 10);
   const topPick = ranked[0] ?? null;
   const lead = (selectedElement != null && ranked.find((p) => p.element === selectedElement)) || topPick;
@@ -197,7 +210,10 @@ export default function CaptainPage() {
                   <PlayerPhoto src={player.photo ?? undefined} alt={player.name} name={player.name} loading="lazy" />
                 </span>
                 <span className="cand-id">
-                  <b>{player.web_name || player.name}</b>
+                  <b>
+                    {player.web_name || player.name}
+                    {player.has_prior_history === false && <span className="badge new">New</span>}
+                  </b>
                   <span className="muted">
                     {player.team} · {player.position}
                   </span>

@@ -167,7 +167,7 @@ export default function WatchlistPage() {
       <div className="shell">
         <header className="section-head" style={{ marginTop: "var(--space-6)" }}>
           <div>
-            <span className="badge" style={{ background: "rgba(4,245,255,0.15)", color: "var(--cyan)" }}>
+            <span className="badge cyan">
               Tactical Market Wire
             </span>
             <h1>Watchlist &amp; Differentials</h1>

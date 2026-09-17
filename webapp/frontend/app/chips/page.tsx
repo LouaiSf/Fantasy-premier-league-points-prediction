@@ -125,7 +125,7 @@ export default function ChipsPage() {
       <div className="shell">
         <header className="section-head" style={{ marginTop: "var(--space-6)" }}>
           <div>
-            <span className="badge" style={{ background: "rgba(0,255,135,0.15)", color: "var(--lime)" }}>
+            <span className="badge lime">
               Tactical Strategy Engine
             </span>
             <h1>Chip Advisor &amp; Timing</h1>

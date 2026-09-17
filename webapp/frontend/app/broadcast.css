@@ -1409,6 +1409,11 @@
 
   /* ── Generic badge (page header eyebrow labels) ─────────────────────────── */
   .badge{display:inline-flex;align-items:center;padding:3px 10px;font:700 10px/1 var(--data);letter-spacing:.1em;text-transform:uppercase;margin-bottom:var(--space-2)}
+  .badge.lime{background:rgba(0,255,135,.15);color:var(--lime)}
+  .badge.cyan{background:rgba(4,245,255,.15);color:var(--cyan)}
+  .badge.new{background:rgba(255,200,0,.15);color:var(--gold)}
+  .cand-id b .badge.new,#drawerName .badge.new,.prow-id b .badge.new{margin:0 0 0 8px;padding:2px 7px;vertical-align:middle}
+  .drawer-new-note{font-family:var(--ui);font-size:12px;color:var(--gold);margin-top:var(--space-2);font-style:italic}
 
   /* ── Model info footnote ─────────────────────────────────────────────────── */
   .model-info{font-family:var(--data);font-size:11px;color:var(--muted-mid);letter-spacing:.02em;margin-top:var(--space-3)}
