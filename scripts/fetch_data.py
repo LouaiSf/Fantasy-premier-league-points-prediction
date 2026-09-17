@@ -60,6 +60,7 @@ import time
 import urllib.error
 import urllib.request
 
+import numpy as np
 import pandas as pd
 
 RAW = 'https://raw.githubusercontent.com/vaastav/Fantasy-Premier-League/master/data'
@@ -199,6 +200,27 @@ def _col(df: pd.DataFrame, col: str, default=0) -> pd.Series:
     return df[col] if col in df.columns else pd.Series(default, index=df.index)
 
 
+def _cost_to_tenths(costs: pd.Series) -> pd.Series:
+    """Normalise a price column to FPL tenths-of-a-million.
+
+    olbauday reports now_cost in millions (5.5); vaastav -- and therefore every
+    season this project trained on -- reports it in tenths (55). Left
+    unconverted the entire current season sits an order of magnitude below any
+    price the models ever saw, and `value` is the largest feature family in the
+    compact set. That is enough on its own to make every prediction for the
+    live season meaningless while each individual step still succeeds.
+
+    Detected rather than assumed, because the source could start reporting
+    tenths at any point: a Premier League squad's median price is around 5m,
+    never below 3.0 and never above 30 in either unit's overlap.
+    """
+    costs = pd.to_numeric(costs, errors='coerce')
+    median = costs.median()
+    if pd.notna(median) and median < 30:
+        return (costs * 10).round()
+    return costs
+
+
 def fetch_season_olbauday(local_season: str, force: bool) -> dict:
     """Download from olbauday/FPL-Core-Insights and write vaastav-format files."""
     print(f"\n{'=' * 72}\n{local_season} (source: olbauday)\n{'=' * 72}")
@@ -226,13 +248,31 @@ def fetch_season_olbauday(local_season: str, force: bool) -> dict:
     if not os.path.exists(teams_path) or force:
         print("  Fetching teams …")
         raw = pd.read_csv(io.BytesIO(fetch_ob('teams.csv')))
+        # olbauday leaves the summary `strength` column empty but fills the
+        # per-venue ones, so fall back to those rather than to the constant 3
+        # this used to settle for. A table where every team is equally strong
+        # makes every fixture difficulty identical, which silently removes the
+        # fx_* family -- the one worth the most R2 of any group in the model.
+        home_strength = pd.to_numeric(_col(raw, 'strength_overall_home', np.nan),
+                                      errors='coerce')
+        away_strength = pd.to_numeric(_col(raw, 'strength_overall_away', np.nan),
+                                      errors='coerce')
+        strength = pd.to_numeric(_col(raw, 'strength', np.nan), errors='coerce')
+        strength = strength.fillna(
+            pd.concat([home_strength, away_strength], axis=1).mean(axis=1).round()
+        )
+        if strength.isna().all():
+            print("    WARNING: no usable team strength; fixture difficulty "
+                  "will be flat")
         teams_out = pd.DataFrame({
             'id': raw['id'].astype(int),
             'code': raw['code'].astype(int),
             'name': raw['name'],
             'short_name': _col(raw, 'short_name',
                                raw['name'].str[:3].str.upper()),
-            'strength': _col(raw, 'strength', 3).fillna(3).astype(int),
+            'strength': strength.fillna(3).astype(int),
+            'strength_overall_home': home_strength.fillna(3).astype(int),
+            'strength_overall_away': away_strength.fillna(3).astype(int),
         })
         save_df(teams_out, teams_path)
     else:
@@ -272,6 +312,11 @@ def fetch_season_olbauday(local_season: str, force: bool) -> dict:
                           .map(team_code_to_id).fillna(0).astype(int))
         merged.rename(columns={'player_code': 'code'}, inplace=True)
 
+        # platform_data.py divides now_cost by 10 to get a price in millions,
+        # which is only right if this is in tenths.
+        if 'now_cost' in merged.columns:
+            merged['now_cost'] = _cost_to_tenths(merged['now_cost'])
+
         # Resolve first_name / second_name: stats file has them already,
         # but if missing fall back to players.csv columns.
         if 'first_name' not in merged.columns and 'first_name_x' in merged.columns:
@@ -288,6 +333,14 @@ def fetch_season_olbauday(local_season: str, force: bool) -> dict:
 
     player_id_to_team: dict = dict(zip(players_out['id'],
                                        players_out['team']))
+    # The per-GW files carry neither position nor club, but both are columns
+    # the dataset builder expects and would otherwise fill with zero --
+    # position silently, even though every model is trained per position.
+    _ELEMENT_TYPE_NAME = {1: 'GK', 2: 'DEF', 3: 'MID', 4: 'FWD'}
+    player_id_to_position: dict = dict(zip(
+        players_out['id'],
+        players_out['element_type'].map(_ELEMENT_TYPE_NAME),
+    ))
 
     # --------------------------------------------------------------- fixtures
     fixtures_path = os.path.join(local_dir, 'fixtures.csv')
@@ -334,15 +387,30 @@ def fetch_season_olbauday(local_season: str, force: bool) -> dict:
             # so the fixture lookup keys match what player_id_to_team returns.
             h_codes = fix_df['home_team'].astype(float).astype(int)
             a_codes = fix_df['away_team'].astype(float).astype(int)
+            team_h_ids = h_codes.map(team_code_to_id)
+            team_a_ids = a_codes.map(team_code_to_id)
+            # Difficulty is the strength of the team you are up against, at
+            # the venue you meet them. Hardcoding 3 made every fixture look
+            # identical, which flattens the whole fx_* feature family to a
+            # constant and removes fixture difficulty from the model entirely.
+            id_to_home_strength = dict(zip(teams_out['id'],
+                                           teams_out['strength_overall_home']))
+            id_to_away_strength = dict(zip(teams_out['id'],
+                                           teams_out['strength_overall_away']))
             fix_out = pd.DataFrame({
                 'id': range(1, len(fix_df) + 1),   # synthetic fixture ID
                 'event': fix_df['gameweek'].astype(int),
-                'team_h': h_codes.map(team_code_to_id),
-                'team_a': a_codes.map(team_code_to_id),
+                'team_h': team_h_ids,
+                'team_a': team_a_ids,
                 'kickoff_time': kt,
                 'finished': _col(fix_df, 'finished', False),
-                'team_h_difficulty': 3,
-                'team_a_difficulty': 3,
+                # The home side's difficulty is how strong the away side is away.
+                'team_h_difficulty': team_a_ids.map(id_to_away_strength).fillna(3).astype(int),
+                'team_a_difficulty': team_h_ids.map(id_to_home_strength).fillna(3).astype(int),
+                'team_h_score': pd.to_numeric(_col(fix_df, 'home_score', np.nan),
+                                              errors='coerce'),
+                'team_a_score': pd.to_numeric(_col(fix_df, 'away_score', np.nan),
+                                              errors='coerce'),
             })
             # Drop rows where team mapping failed (non-PL teams that slipped
             # through the tournament filter).
@@ -360,7 +428,9 @@ def fetch_season_olbauday(local_season: str, force: bool) -> dict:
         skipped += 1
         print(f"    fixtures.csv                     (skipped)")
 
-    # Build fixture lookup {(gw, team_id): (opponent_id, was_home, kickoff_time, fixture_id)}
+    # Build fixture lookup
+    # {(gw, team_id): (opponent_id, was_home, kickoff_time, fixture_id,
+    #                  team_score, opponent_score)}
     fixture_lookup: dict = {}
     if not fixtures_out.empty:
         for _, row in fixtures_out.iterrows():
@@ -369,8 +439,10 @@ def fetch_season_olbauday(local_season: str, force: bool) -> dict:
             a = int(row['team_a'])
             kt = str(row.get('kickoff_time', '') or '')
             fid = int(row.get('id', 0))
-            fixture_lookup[(gw_n, h)] = (a, True, kt, fid)
-            fixture_lookup[(gw_n, a)] = (h, False, kt, fid)
+            hs = pd.to_numeric(row.get('team_h_score'), errors='coerce')
+            as_ = pd.to_numeric(row.get('team_a_score'), errors='coerce')
+            fixture_lookup[(gw_n, h)] = (a, True, kt, fid, hs, as_)
+            fixture_lookup[(gw_n, a)] = (h, False, kt, fid, as_, hs)
 
     # ---------------------------------------------------------- per-GW stats
     print("  Fetching per-GW player stats …")
@@ -416,22 +488,58 @@ def fetch_season_olbauday(local_season: str, force: bool) -> dict:
                 'expected_goals_conceded':
                     _col(src, 'expected_goals_conceded', 0),
                 'starts': _col(src, 'starts', 0),
+                'transfers_in': _col(src, 'transfers_in', 0),
+                'transfers_out': _col(src, 'transfers_out', 0),
                 'transfers_balance':
                     _col(src, 'transfers_in', 0).astype(float)
                     - _col(src, 'transfers_out', 0).astype(float),
                 'selected': _col(src, 'selected_by_percent', 0),
-                'value': _col(src, 'now_cost', 0),
+                'value': _cost_to_tenths(_col(src, 'now_cost', 0)),
+                'round': gw,
+                # The ICT components. ict_index alone was carried through
+                # before, which left influence/creativity/threat at zero for
+                # the whole season -- and those three are where an attacker's
+                # signal lives. Every lag and rolling mean built on top of them
+                # was zero too, so forwards and midfielders arrived at the
+                # model looking like players who had done nothing, while
+                # goalkeepers (whose saves and clean sheets did come through)
+                # rose to the top of the ranking.
+                'influence': _col(src, 'influence', 0),
+                'creativity': _col(src, 'creativity', 0),
+                'threat': _col(src, 'threat', 0),
+                # Defensive actions. build_dataset derives defensive
+                # contribution -- now a live scoring mechanic worth +2 -- from
+                # these three plus position, so zeroes here zero that too.
+                'clearances_blocks_interceptions':
+                    _col(src, 'clearances_blocks_interceptions', 0),
+                'recoveries': _col(src, 'recoveries', 0),
+                'tackles': _col(src, 'tackles', 0),
             })
+
+            # position and team are not in the per-GW file; they come from the
+            # season player list. position in particular is not optional --
+            # models are trained per position and the defensive-contribution
+            # thresholds differ by position.
+            gw_out['position'] = gw_out['element'].map(player_id_to_position)
+            gw_out['team'] = (gw_out['element']
+                              .map(player_id_to_team)
+                              .map(team_id_to_name))
+            unplaced = int(gw_out['position'].isna().sum())
+            if unplaced:
+                print(f"    GW{gw}: {unplaced} players have no position in "
+                      f"players.csv")
+            gw_out['position'] = gw_out['position'].fillna('')
+            gw_out['team'] = gw_out['team'].fillna('')
 
             # Derive opponent_team and was_home from the fixture lookup.
             team_ids = gw_out['element'].map(player_id_to_team)
 
-            _none4 = (None, None, None, None)
+            _blank = (None, None, None, None, None, None)
 
             def _lookup(tid, idx):
                 if pd.isna(tid):
                     return None
-                return fixture_lookup.get((gw, int(tid)), _none4)[idx]
+                return fixture_lookup.get((gw, int(tid)), _blank)[idx]
 
             opponent_ids = team_ids.apply(lambda t: _lookup(t, 0))
             gw_out['opponent_team'] = (opponent_ids
@@ -441,6 +549,13 @@ def fetch_season_olbauday(local_season: str, force: bool) -> dict:
             gw_out['kickoff_time'] = team_ids.apply(lambda t: _lookup(t, 2))
             # fixture — join key used by add_expected_stats in build_dataset.
             gw_out['fixture'] = team_ids.apply(lambda t: _lookup(t, 3))
+            # The scoreline, which the feature stage turns into my_team_score,
+            # opponent_team_score and result.
+            team_score = team_ids.apply(lambda t: _lookup(t, 4))
+            opp_score = team_ids.apply(lambda t: _lookup(t, 5))
+            home = gw_out['was_home'].fillna(False).astype(bool)
+            gw_out['team_h_score'] = team_score.where(home, opp_score)
+            gw_out['team_a_score'] = opp_score.where(home, team_score)
 
             save_df(gw_out, gw_path)
             all_gw_frames.append(gw_out)
