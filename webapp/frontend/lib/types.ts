@@ -82,6 +82,7 @@ export interface PlatformSnapshot {
   teams: TeamRecord[];
   prediction_available: boolean;
   prediction_error: string | null;
+  prediction_timestamp: string | null;
   model: ModelSummary;
 }
 

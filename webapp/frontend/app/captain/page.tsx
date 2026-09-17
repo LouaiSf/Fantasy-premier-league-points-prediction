@@ -8,6 +8,7 @@ import { clubStyle } from "@/lib/club-colors";
 import { money, num } from "@/lib/format";
 import type { PlayerRecord, TeamRecord } from "@/lib/types";
 import { Loading } from "@/components/loading";
+import { ModelInfo } from "@/components/model-info";
 
 function captainScore(player: PlayerRecord, predictionAvailable: boolean): number {
   return predictionAvailable ? Number(player.predicted_points ?? 0) : Number(player.form ?? 0);
@@ -133,6 +134,9 @@ export default function CaptainPage() {
                 <strong>{lead.team_short}</strong>
               </div>
             </div>
+          )}
+          {predictionAvailable && (
+            <ModelInfo model={snapshot.model} timestamp={snapshot.prediction_timestamp} />
           )}
         </div>
       </div>

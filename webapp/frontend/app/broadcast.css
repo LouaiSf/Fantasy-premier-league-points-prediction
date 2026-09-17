@@ -1410,6 +1410,10 @@
   /* ── Generic badge (page header eyebrow labels) ─────────────────────────── */
   .badge{display:inline-flex;align-items:center;padding:3px 10px;font:700 10px/1 var(--data);letter-spacing:.1em;text-transform:uppercase;margin-bottom:var(--space-2)}
 
+  /* ── Model info footnote ─────────────────────────────────────────────────── */
+  .model-info{font-family:var(--data);font-size:11px;color:var(--muted-mid);letter-spacing:.02em;margin-top:var(--space-3)}
+  .model-info strong{color:var(--muted-light);font-weight:700}
+
   /* ── Loading & Empty States ─────────────────────────────────────────────── */
   .loading-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);padding:var(--space-8) 0}
   .loading-spinner{width:32px;height:32px;border:3px solid rgba(255,255,255,.16);border-top-color:var(--cyan);border-radius:50%;animation:spin .8s linear infinite}

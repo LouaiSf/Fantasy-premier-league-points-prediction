@@ -27,3 +27,16 @@ export function signed(value: unknown, digits = 1): string {
 export function crestUrl(code: number, size = 100): string {
   return `https://resources.premierleague.com/premierleague/badges/${size}/t${code}.png`;
 }
+
+export function timeAgo(iso: string | null | undefined): string {
+  if (!iso) return "unknown";
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return "unknown";
+  const minutes = Math.max(0, Math.floor((Date.now() - then) / 60000));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}

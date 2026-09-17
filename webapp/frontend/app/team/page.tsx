@@ -9,6 +9,7 @@ import { Pitch } from "@/components/team/pitch";
 import { SquadEditor } from "@/components/team/squad-editor";
 import { PlayerPhoto } from "@/components/player-photo";
 import { Loading } from "@/components/loading";
+import { ModelInfo } from "@/components/model-info";
 
 export default function TeamPage() {
   const {
@@ -118,6 +119,11 @@ export default function TeamPage() {
             <strong>{predictionAvailable ? "Ready" : "Unavailable"}</strong>
           </div>
         </div>
+        {predictionAvailable && (
+          <div className="shell">
+            <ModelInfo model={snapshot.model} timestamp={snapshot.prediction_timestamp} />
+          </div>
+        )}
       </div>
 
       <div className="pitch-zone">
