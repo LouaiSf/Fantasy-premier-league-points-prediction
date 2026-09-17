@@ -78,7 +78,7 @@ export default function CaptainPage() {
   const leadRisk = lead ? riskFor(lead) : null;
 
   return (
-    <section className="page cap-page paper-scope">
+    <section className="page cap-page paper-scope" aria-label="Captain and form">
       <div className="cap-hero" style={lead ? clubStyle(lead.team) : undefined}>
         {lead && (
           <>

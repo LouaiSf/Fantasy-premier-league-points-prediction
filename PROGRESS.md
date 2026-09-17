@@ -408,3 +408,63 @@ an XI at 6.10 points on a 25%-chance ankle injury. Both fixed.
 **Not done:** transfers are not modelled across the horizon. The horizon says
 which squad is worth holding; getting there from an existing squad is still
 the single-gameweek `transfers` subcommand.
+
+### 2026-09-17 — Task 9: Player drawer enrichment
+Added a Forecast section leading with the projection (colour-banded: lime ≥6, cyan ≥4), beside the inputs it is built from — form over the last five gameweeks from the history endpoint, next opponent, venue, and fixture difficulty (green ≤2, pink ≥4) — with a caveat line for players with no prior PL record. Added a CSS sparkline of the last eight gameweeks scaled to the player's own best in the window, hauls in lime and blanks greyed. Added a Transfer momentum section showing net transfers this gameweek. Replaced the duplicated Projection tile in Season numbers with Points/90.
+
+Fixed `player_history()` in `platform_data.py` reading `opponent_team` as an integer id when the olbauday translation and `build_dataset.py` both resolve it to a club name — every 2026-27 fixture in the drawer read "Team 0 (A)". It now accepts either form, for the current and previous season lookups.
+
+### 2026-09-17 — Task 10: Team page + squad identity fix
+Squads are now held as element ids rather than names. `/api/squad` returns the prediction export's short name ("Haaland") while the snapshot lists players under a full name ("Erling Haaland"), so the old name join matched 0 of 15 players: squad availability read 0/15, the flagged-players warning never fired, `saveSquadData` persisted an empty id list so squads vanished on reload, and the "My squad" pools on Captain, Comparison, Chips and Transfers were all empty. `squadPlayers` now resolves by element; `squadNames` is derived as `web_name`, which is exactly what the API matches on (verified 483/483). The squad editor keys selection on element too, which also removes a latent duplicate-name bug.
+
+Added remaining budget ("In the bank") to the rail, turning pink when a squad is over 100.0m. Formation display (10.4), squad cost (10.1), auto-pick (10.2) and bench ordering (10.3) were already in place and verified against the running stack.
+
+### 2026-09-17 — Task 13: News page
+Added a chance-of-playing badge for the partial cases only — red 25%, orange 50%, yellow 75% — matching the data exactly (3/6/15). 0% is left to the Injured/Unavailable label beside it rather than rendered as "0% fit" on players who have left the club. Added the `n` (not in squad) status label, which previously fell through to the generic one, and made `d` explicit. Replaced the hard cap of 24 wire items with a count and a Show all toggle; a busy week had 228 stories and 204 of them were unreachable. Verified every item opens the player drawer (13.4).
+
+Extended the element-id squad fix to ownership checks on News, Comparison and Transfers — all three compared `squadNames` against `player.name`, the mismatch fixed in Task 10.
+
+### 2026-09-17 — Task 12: Comparison page
+Comparison bars now carry a 3px minimum width, so a genuine zero shows as a sliver instead of disappearing (verified: Goals 4 v 0 renders 452px v 3px). Added a width transition so changing a seat animates, disabled under `prefers-reduced-motion`, and moved the bar colours out of inline styles into `.side-a`/`.side-b` classes with an `.is-leader` highlight on the winning side of each category. The picker now opens on the "My squad" pool when a squad exists, applied once so it never resets the user's own choice. "Projected points" was already the first metric (12.3) and the shareable URL was done in 12.4.
+
+### 2026-09-17 — Task 16: Backend hardening
+16.1 (join on element) and 16.4 (`prediction_available` / `prediction_timestamp`) were already done; verified. 16.2 verified — every endpoint returns `{ok: false, error}`.
+
+16.3: prediction-dependent endpoints now return **503** rather than 400, via a dedicated `unavailable()` helper — the request is fine, the server has no model output to answer it with. `/api/platform` already degraded correctly (659 players, `predicted_points: null`, `prediction_available: false`).
+
+Two bugs found while testing it. `/api/meta` was gated on predictions although it reports model metadata read from `saved_models/`, so a missing export took down the model footnote on every page; it is now ungated and reports `predictions_available` instead. And `state()` only re-read the file via an `mtime` comparison, which the error path never sets — so once predictions went missing the process stayed broken for its whole life, even after the pipeline it told you to run had produced the file. It now retries whenever the file exists and the last attempt failed. Verified: 503 → 200 in the same process, no restart.
+
+### 2026-09-17 — Task 17: Accessibility (17.2–17.5)
+Ran a real contrast audit in the browser rather than working from the token values — walked every text node on all eight pages, resolved the effective background, and measured against AA.
+
+The plan's premise was wrong: `--muted-mid` on `--night-900` is **6.08:1** and already passes. The genuine failures were elsewhere. The muted tokens are tuned for the dark pages but reused inside the light `paper-scope` sections, where they fall to 2.91:1 and 1.62:1 — fixed by rebinding them within that scope, so no call site changes. `--pink` reaches only 4.30:1 on dark and 4.12:1 on paper for small text, so each scope now has its own variant (6.16 and 5.50). Two inline `style={{ color: "var(--pink)" }}` eyebrows became `.eyebrow.alert`, which also removes an inline colour the plan disallows.
+
+All flat-background failures are now clear. What remains in the audit is text over club-colour gradients and `rgba(0,0,0,0)` decorative ghost numerals, which the walker cannot resolve a background for.
+
+17.3: global `:focus-visible` outline, purple inside paper sections; verified every element in the tab order shows a ring. 17.4: the existing reduced-motion block already covers the ticker, page entry, transitions and the spinner; verified with an emulated `prefers-reduced-motion`. 17.5: `<main>`, `<nav>` and `<header>` were already present; added `aria-label` to the content `<section>` of all eight pages.
+
+### 2026-09-17 — Task 14: Fixtures page
+14.1 and 14.3 verified against the running stack: all 20 clubs, GW5–12 starting from the next unfinished gameweek, FDR colours and H/A indicators correct, and an independent recompute of the easiest-run averages from `fixtures.csv` matches the cards (CRY 2.62, HUL 2.75, EVE/COV 2.88).
+
+14.2: blanks were already handled. Doubles were not — the matrix keyed a `Map` on gameweek, so a second fixture in the same week silently replaced the first and was also dropped from the difficulty average. The current fixture list has none (it is the schedule as first published) but they appear every season once postponements are rearranged. Fixtures are now grouped into arrays: a double renders both opponents with a DGW tag, shaded by the harder leg, and both legs count toward the average. Verified by intercepting `/api/platform` and injecting a synthetic double and blank.
+
+### 2026-09-17 — Task 11: Transfer Studio
+11.1 verified end to end against the running stack: staged analysis completes, net is gross minus hit cost, and a freshly auto-picked squad correctly reports "0 transfers lead the model". 11.3: the spinner and status line were already there; wired `.lane.is-live` to the analysing state — broadcast.css has carried that flowing-lime channel animation since the layout landed but nothing ever applied the class.
+
+Found a real problem behind 11.2. Raising the market cap from 120 to 200 did not help, because the list was never sorted — it arrived in `players_raw` order, which is by element id and therefore effectively by club, so the column showed Arsenal, Aston Villa and Bournemouth. **7 of the 10 best players in the game, Haaland included, were unreachable without searching by name.** The market is now ranked by projection.
+
+### 2026-09-17 — Task 2: Player data accuracy
+2.1 verified — `latest_local_season()` resolves 2026-27 and the API reports it. 2.4 verified — zero prediction elements fall outside the 2026-27 roster, and neither `/api/platform` nor `/api/players` returns a ghost entry.
+
+2.2: the photo URL pattern is correct but **half the squad has no portrait**. A sampled check of 24 codes returned 403 for 12. The plan's suggested remedy in 2.3 — retry at 110x140 — does not work: where 250x250 is missing, every size is (checked 110x140, 40x40 and 250x250 for six failing codes, all 403). Adding that retry would have doubled the failed requests for half the roster, so it was deliberately not implemented.
+
+2.3: since the fallback is what a lot of the roster actually renders as, it now draws a silhouette behind the initials rather than initials alone. Failed URLs are recorded in a module-level set shared by every instance, not per-component state — the same player appears in the market column, a shortlist and the pitch at once, and each used to re-request a URL already known to be missing. Verified on a full scroll of the Transfer Studio: 13 fallbacks rendered, 78 distinct CDN URLs requested, **0 requested more than once**.
+
+### 2026-09-18 — Task 18: End-to-end smoke tests
+Automated the plan's manual script (Playwright, all 8 pages, three viewports): 21 checks, all passing, 0 console or page errors. Root redirects to /team, 20 crests, season 2026-27, auto-pick fills the pitch with 11 markers carrying projections and a captain badge, every page renders, no emoji, no plain-text loading states, no horizontal overflow at 1440/768/375.
+
+It found three real defects, all now fixed:
+
+1. **A crash I had introduced in Task 9.** `/api/squad` answers with a trimmed player shape carrying no `transfers_in_event`, so clicking a pitch marker threw on `toLocaleString`. The drawer now resolves the snapshot's full record by element and falls back to whatever it was handed — which also fills in the minutes, ICT and expected-goals the trimmed shape was missing.
+2. **Watchlist overflowed the viewport** by 57px at 1440 and 61px at 375. Two separate causes: `.sub-head` was a nowrap flex row inside a 432px column, and the section grid used `minmax(420px, 1fr)` — a floor the track cannot go below, so at 375px it stayed 420px wide. Now `minmax(min(420px,100%),1fr)` with `min-width:0` on the items. The inline layout styles moved into broadcast.css in the process, per the plan's own rule.
+3. A test-side false positive: markers use `.pm-pred`, not `.pm-pts`.

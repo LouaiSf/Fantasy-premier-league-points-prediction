@@ -86,7 +86,7 @@ function DeskRow({
 }
 
 export default function TransfersPage() {
-  const { snapshot, loading, squadPlayers, squadNames, toast } = useApp();
+  const { snapshot, loading, squadPlayers, squadNames, squadElements, toast } = useApp();
   const [outQuery, setOutQuery] = React.useState("");
   const [inQuery, setInQuery] = React.useState("");
   const [outFilter, setOutFilter] = React.useState<(typeof OUT_FILTERS)[number]>("ALL");
@@ -122,13 +122,24 @@ export default function TransfersPage() {
     return `${player.name} ${player.team}`.toLowerCase().includes(outQuery.trim().toLowerCase());
   });
 
-  const squadNameSet = new Set(squadNames);
+  const squadIdSet = new Set(squadElements);
   const inRows = snapshot.players.filter((player) => {
-    if (squadNameSet.has(player.name)) return false;
+    if (squadIdSet.has(player.element)) return false;
     if (outgoing && player.position !== outgoing.position) return false;
     if (inFilter !== "ALL" && player.position !== inFilter) return false;
     if (player.value_m > priceMax) return false;
     return `${player.name} ${player.team}`.toLowerCase().includes(inQuery.trim().toLowerCase());
+  });
+
+  // Ranked by what the transfer is for. The list arrives in players_raw order,
+  // which is by element id and therefore effectively by club, and it is capped
+  // at 200 -- so before this the market column showed Arsenal, Aston Villa and
+  // Bournemouth, and 7 of the 10 best players in the game, Haaland included,
+  // could not be reached without searching for them by name.
+  inRows.sort((a, b) => {
+    const pa = a.predicted_points ?? a.form ?? 0;
+    const pb = b.predicted_points ?? b.form ?? 0;
+    return pb - pa;
   });
 
   function pickOut(player: PlayerRecord) {
@@ -183,11 +194,11 @@ export default function TransfersPage() {
     : null;
 
   return (
-    <section className="page studio">
+    <section className="page studio" aria-label="Transfer studio">
       <div className="shell-wide">
         <div className="section-head">
           <div>
-            <p className="eyebrow" style={{ color: "var(--pink)" }}>
+            <p className="eyebrow alert">
               Decision room
             </p>
             <h1>Transfer studio</h1>
@@ -335,7 +346,10 @@ export default function TransfersPage() {
               )}
               <span className="slot-tag out">Out</span>
             </div>
-            <div className="lane" aria-hidden="true">
+            {/* broadcast.css has carried .lane.is-live -- a flowing lime dash
+                down the channel -- since the layout landed, but nothing ever
+                set the class, so the optimiser ran with a static channel. */}
+            <div className={`lane${analysing ? " is-live" : ""}`} aria-hidden="true">
               <span className="lane-chev">↓</span>
             </div>
             <div id="slotIn" className={`slot in${incoming ? " is-filled" : ""}`} style={incoming ? clubStyle(incoming.team) : undefined}>

@@ -11,6 +11,9 @@ import { PlayerPhoto } from "@/components/player-photo";
 import { Loading } from "@/components/loading";
 import { ModelInfo } from "@/components/model-info";
 
+// The FPL budget every manager starts a season with.
+const BUDGET = 100.0;
+
 export default function TeamPage() {
   const {
     snapshot,
@@ -19,7 +22,7 @@ export default function TeamPage() {
     squadPlayers,
     teamResult,
     setTeamResult,
-    setSquadNames,
+    setSquadElements,
     toast,
     openProfile,
   } = useApp();
@@ -55,6 +58,10 @@ export default function TeamPage() {
       : preview.xiPoints
     : null;
   const predictionAvailable = snapshot.prediction_available;
+  // FPL gives every manager 100.0m. Prices move during a season, so a squad
+  // saved last week can be worth more than the budget that bought it -- show
+  // that as a negative rather than clamping it to zero and hiding the problem.
+  const bank = preview ? BUDGET - preview.spend : 0;
   const flagged = squadPlayers.filter(
     (player) => player.status !== "a" || (player.chance_of_playing_next_round ?? 100) < 100,
   );
@@ -62,8 +69,8 @@ export default function TeamPage() {
   async function autoPick() {
     setPicking(true);
     try {
-      const result = await api.squad({ budget: 100, lock: [], ban: [] });
-      setSquadNames([...result.xi, ...result.bench].map((player) => player.name));
+      const result = await api.squad({ budget: BUDGET, lock: [], ban: [] });
+      setSquadElements([...result.xi, ...result.bench].map((player) => player.element));
       setTeamResult(result);
       toast("Optimal squad loaded from the prediction pipeline.");
     } catch (err) {
@@ -74,7 +81,7 @@ export default function TeamPage() {
   }
 
   return (
-    <section className="page">
+    <section className="page" aria-label="My team">
       <div className="hero-team">
         <div className="hero-glow" aria-hidden="true" />
         <div className="hero-rays" aria-hidden="true" />
@@ -167,6 +174,12 @@ export default function TeamPage() {
                 <span>Squad availability</span>
                 <strong>
                   {squadPlayers.length - flagged.length}/{squadPlayers.length || 15}
+                </strong>
+              </div>
+              <div className="rail-stat">
+                <span>In the bank</span>
+                <strong className={bank < 0 ? "is-over" : undefined}>
+                  {preview ? money(bank) : "--"}
                 </strong>
               </div>
               <button

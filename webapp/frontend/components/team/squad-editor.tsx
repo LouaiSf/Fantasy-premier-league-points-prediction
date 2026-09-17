@@ -12,17 +12,19 @@ const POSITIONS: PlayerRecord["position"][] = ["GK", "DEF", "MID", "FWD"];
 const NEEDED: Record<string, number> = { GK: 2, DEF: 5, MID: 5, FWD: 3 };
 
 export function SquadEditor() {
-  const { snapshot, squadNames, setSquadNames, toast } = useApp();
+  const { snapshot, squadElements, setSquadElements, toast } = useApp();
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
-  const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  // Keyed on element rather than name: two players can share a display name,
+  // and the rest of the app identifies a squad by id.
+  const [selected, setSelected] = React.useState<Set<number>>(new Set());
 
   const players = snapshot?.players ?? [];
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
     if (next) {
-      setSelected(new Set(squadNames));
+      setSelected(new Set(squadElements));
       setQuery("");
     }
   }
@@ -31,20 +33,20 @@ export function SquadEditor() {
     `${player.name} ${player.team}`.toLowerCase().includes(query.trim().toLowerCase()),
   );
 
-  const chosenPlayers = players.filter((player) => selected.has(player.name));
+  const chosenPlayers = players.filter((player) => selected.has(player.element));
   const problem = validateSquad(chosenPlayers);
 
   function toggle(player: PlayerRecord) {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(player.name)) next.delete(player.name);
-      else if (next.size < 15) next.add(player.name);
+      if (next.has(player.element)) next.delete(player.element);
+      else if (next.size < 15) next.add(player.element);
       return next;
     });
   }
 
   function save() {
-    setSquadNames([...selected]);
+    setSquadElements([...selected]);
     setOpen(false);
     toast("Squad saved on this device.");
   }
@@ -99,7 +101,7 @@ export function SquadEditor() {
                   </div>
                   <div className="ts-rows">
                     {rows.map((player) => {
-                      const isChosen = selected.has(player.name);
+                      const isChosen = selected.has(player.element);
                       return (
                         <button
                           key={player.element}

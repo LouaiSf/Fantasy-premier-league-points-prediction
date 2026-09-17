@@ -42,17 +42,27 @@ export default function ComparisonPage() {
 }
 
 function ComparisonPageInner() {
-  const { snapshot, loading, squadNames } = useApp();
+  const { snapshot, loading, squadElements } = useApp();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [seatA, setSeatA] = React.useState<number | null>(null);
   const [seatB, setSeatB] = React.useState<number | null>(null);
   const [activeSeat, setActiveSeat] = React.useState<"A" | "B">("A");
   const [pool, setPool] = React.useState<(typeof POOLS)[number]["key"]>("all");
+  const [poolDefaulted, setPoolDefaulted] = React.useState(false);
   const [position, setPosition] = React.useState<(typeof POSITIONS)[number]>("ALL");
   const [club, setClub] = React.useState("ALL");
   const [query, setQuery] = React.useState("");
   const [hydratedFromUrl, setHydratedFromUrl] = React.useState(false);
+
+  // Most comparisons start from a player you already own, so open on the squad
+  // pool when there is one. Applied once: after that the pool is the user's
+  // choice and must not be reset underneath them when the squad reloads.
+  React.useEffect(() => {
+    if (poolDefaulted || squadElements.length === 0) return;
+    setPool("squad");
+    setPoolDefaulted(true);
+  }, [poolDefaulted, squadElements.length]);
 
   // Mirror ?a=/?b= into state once hydrated, and keep the URL in sync
   // thereafter so a comparison can be bookmarked or shared. Reading the URL
@@ -91,14 +101,14 @@ function ComparisonPageInner() {
   const teamCodeByName = new Map(snapshot.teams.map((team) => [team.name, team.code]));
   const playerA = seatA != null ? byElement.get(seatA) ?? null : null;
   const playerB = seatB != null ? byElement.get(seatB) ?? null : null;
-  const squadNameSet = new Set(squadNames);
+  const squadIdSet = new Set(squadElements);
   const allSorted = [...snapshot.players].sort((a, b) =>
     (a.web_name || a.name).localeCompare(b.web_name || b.name),
   );
 
   const candidates = snapshot.players.filter((player) => {
-    if (pool === "squad" && !squadNameSet.has(player.name)) return false;
-    if (pool === "market" && squadNameSet.has(player.name)) return false;
+    if (pool === "squad" && !squadIdSet.has(player.element)) return false;
+    if (pool === "market" && squadIdSet.has(player.element)) return false;
     if (position !== "ALL" && player.position !== position) return false;
     if (club !== "ALL" && player.team !== club) return false;
     return `${player.name} ${player.team}`.toLowerCase().includes(query.trim().toLowerCase());
@@ -132,7 +142,7 @@ function ComparisonPageInner() {
   }
 
   return (
-    <section className="page cmp-page">
+    <section className="page cmp-page" aria-label="Player comparison">
       <div className="shell">
         <div className="section-head">
           <div>
@@ -444,8 +454,14 @@ function ComparisonPageInner() {
                         <div className="barcell">
                           <span>{label}</span>
                           <div className="dualbar">
-                            <i style={{ width: `${(a / total) * 100}%`, background: "var(--pl-purple)" }} />
-                            <i style={{ width: `${(b / total) * 100}%`, background: "var(--pink)" }} />
+                            <i
+                              className={`side-a${leader === "l" ? " is-leader" : ""}`}
+                              style={{ width: `${(a / total) * 100}%` }}
+                            />
+                            <i
+                              className={`side-b${leader === "r" ? " is-leader" : ""}`}
+                              style={{ width: `${(b / total) * 100}%` }}
+                            />
                           </div>
                         </div>
                         <strong className={leader === "r" ? "leader r" : ""}>{num(b, digits)}</strong>

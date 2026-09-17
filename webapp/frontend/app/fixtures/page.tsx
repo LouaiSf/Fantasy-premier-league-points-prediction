@@ -3,12 +3,29 @@
 import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
 import { ClubCrest } from "@/components/club-crest";
-import type { TeamRecord } from "@/lib/types";
+import type { FixtureRecord, TeamRecord } from "@/lib/types";
 import { Loading } from "@/components/loading";
 
+// A gameweek can hold more than one fixture for a club. Keying a Map on the
+// gameweek keeps only the last of them, which silently hides the other from
+// the matrix and drops it from the difficulty average. The current fixture
+// list has no doubles -- it is the schedule as first published -- but they
+// appear every season once postponements are rearranged.
+function groupByGameweek(team: TeamRecord): Map<number, FixtureRecord[]> {
+  const byGw = new Map<number, FixtureRecord[]>();
+  for (const fixture of team.fixtures) {
+    const existing = byGw.get(fixture.gameweek);
+    if (existing) existing.push(fixture);
+    else byGw.set(fixture.gameweek, [fixture]);
+  }
+  return byGw;
+}
+
 function averageDifficulty(team: TeamRecord, gameweeks: number[]): number | null {
-  const byGw = new Map(team.fixtures.map((fixture) => [fixture.gameweek, fixture]));
-  const values = gameweeks.map((gw) => byGw.get(gw)?.difficulty).filter((v): v is number => v != null);
+  const byGw = groupByGameweek(team);
+  // Every fixture counts, so a club with a double in the window is averaged
+  // over nine matches rather than eight.
+  const values = gameweeks.flatMap((gw) => (byGw.get(gw) ?? []).map((f) => f.difficulty));
   if (!values.length) return null;
   return values.reduce((sum, v) => sum + v, 0) / values.length;
 }
@@ -71,7 +88,7 @@ export default function FixturesPage() {
     .slice(0, 4);
 
   return (
-    <section className="page fix-page">
+    <section className="page fix-page" aria-label="Fixture matrix">
       <div className="shell">
         <div className="section-head">
           <div>
@@ -145,7 +162,7 @@ export default function FixturesPage() {
                 </div>
               ))}
               {teams.map((team) => {
-                const byGw = new Map(team.fixtures.map((fixture) => [fixture.gameweek, fixture]));
+                const byGw = groupByGameweek(team);
                 return (
                   <React.Fragment key={team.id}>
                     <div className="club-cell">
@@ -159,8 +176,8 @@ export default function FixturesPage() {
                       <span>{team.short_name}</span>
                     </div>
                     {gameweeks.map((gw) => {
-                      const fixture = byGw.get(gw);
-                      if (!fixture) {
+                      const matches = byGw.get(gw) ?? [];
+                      if (matches.length === 0) {
                         return (
                           <div className="fcell blank" key={gw}>
                             <span>–</span>
@@ -168,10 +185,27 @@ export default function FixturesPage() {
                           </div>
                         );
                       }
+                      if (matches.length === 1) {
+                        const fixture = matches[0];
+                        return (
+                          <div className="fcell" data-fdr={fixture.difficulty} key={gw}>
+                            {fixture.opponent}
+                            <small>{fixture.venue}</small>
+                          </div>
+                        );
+                      }
+                      // A double: both opponents, shaded by the harder of the two
+                      // so the cell still reads at a glance as the week it is.
+                      const hardest = Math.max(...matches.map((f) => f.difficulty));
                       return (
-                        <div className="fcell" data-fdr={fixture.difficulty} key={gw}>
-                          {fixture.opponent}
-                          <small>{fixture.venue}</small>
+                        <div className="fcell is-double" data-fdr={hardest} key={gw}>
+                          <span className="double-tag">DGW</span>
+                          {matches.map((fixture, i) => (
+                            <span className="double-leg" key={`${fixture.opponent}-${i}`}>
+                              {fixture.opponent}
+                              <small>{fixture.venue}</small>
+                            </span>
+                          ))}
                         </div>
                       );
                     })}

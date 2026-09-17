@@ -121,7 +121,7 @@ export default function ChipsPage() {
   }
 
   return (
-    <section className="page chips-page">
+    <section className="page chips-page" aria-label="Chip advisor">
       <div className="shell">
         <header className="section-head" style={{ marginTop: "var(--space-6)" }}>
           <div>
