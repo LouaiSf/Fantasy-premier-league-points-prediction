@@ -8,6 +8,7 @@ import { previewSquad } from "@/lib/squad";
 import { Pitch } from "@/components/team/pitch";
 import { SquadEditor } from "@/components/team/squad-editor";
 import { PlayerPhoto } from "@/components/player-photo";
+import { Loading } from "@/components/loading";
 
 export default function TeamPage() {
   const {
@@ -26,8 +27,8 @@ export default function TeamPage() {
   if (loading) {
     return (
       <section className="page">
-        <div className="shell" style={{ paddingBlock: "var(--space-16)" }}>
-          <p>Loading the local season data…</p>
+        <div className="shell">
+          <Loading label="Loading season data…" />
         </div>
       </section>
     );

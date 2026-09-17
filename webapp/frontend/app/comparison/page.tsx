@@ -7,6 +7,7 @@ import { ClubCrest } from "@/components/club-crest";
 import { clubStyle } from "@/lib/club-colors";
 import { money, num } from "@/lib/format";
 import type { PlayerRecord } from "@/lib/types";
+import { Loading } from "@/components/loading";
 
 const POSITIONS = ["ALL", "GK", "DEF", "MID", "FWD"] as const;
 const POOLS = [
@@ -44,8 +45,8 @@ export default function ComparisonPage() {
   if (loading || !snapshot) {
     return (
       <section className="page">
-        <div className="shell" style={{ paddingBlock: "var(--space-16)" }}>
-          <p>Loading the local season data…</p>
+        <div className="shell">
+          <Loading label="Loading season data…" />
         </div>
       </section>
     );

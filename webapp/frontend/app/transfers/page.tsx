@@ -8,6 +8,7 @@ import { ClubCrest } from "@/components/club-crest";
 import { clubStyle } from "@/lib/club-colors";
 import { money, num, signed } from "@/lib/format";
 import type { PlayerRecord, TransferResult } from "@/lib/types";
+import { Loading } from "@/components/loading";
 
 const OUT_FILTERS = ["ALL", "GK", "DEF", "MID", "FWD", "FLAG"] as const;
 const IN_FILTERS = ["ALL", "GK", "DEF", "MID", "FWD"] as const;
@@ -92,8 +93,8 @@ export default function TransfersPage() {
   if (loading || !snapshot) {
     return (
       <section className="page">
-        <div className="shell" style={{ paddingBlock: "var(--space-16)" }}>
-          <p>Loading the local season data…</p>
+        <div className="shell">
+          <Loading label="Loading season data…" />
         </div>
       </section>
     );

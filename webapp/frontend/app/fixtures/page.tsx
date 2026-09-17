@@ -4,6 +4,7 @@ import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
 import { ClubCrest } from "@/components/club-crest";
 import type { TeamRecord } from "@/lib/types";
+import { Loading } from "@/components/loading";
 
 function averageDifficulty(team: TeamRecord, gameweeks: number[]): number | null {
   const byGw = new Map(team.fixtures.map((fixture) => [fixture.gameweek, fixture]));
@@ -49,8 +50,8 @@ export default function FixturesPage() {
   if (loading || !snapshot) {
     return (
       <section className="page">
-        <div className="shell" style={{ paddingBlock: "var(--space-16)" }}>
-          <p>Loading the local season data…</p>
+        <div className="shell">
+          <Loading label="Loading season data…" />
         </div>
       </section>
     );
