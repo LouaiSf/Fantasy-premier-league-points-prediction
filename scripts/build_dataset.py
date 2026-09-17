@@ -258,7 +258,8 @@ def add_game_number(df: pd.DataFrame) -> pd.DataFrame:
     anchor = "# Assign game_number using kickoff_time for ALL seasons"
     ns = run_range(
         NOTEBOOK, first=anchor, last=anchor,
-        namespace={'pd': pd, 'np': np, 'all_seasons_df': df},
+        namespace={'pd': pd, 'np': np, 'all_seasons_df': df,
+                   'all_seasons_data': df},   # alias used in some notebook cells
         verbose=False,
     )
     out = ns['all_seasons_updated']
