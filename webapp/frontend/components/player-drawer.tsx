@@ -19,11 +19,43 @@ function fixtureRibbon(team: TeamRecord | undefined, gameweek: number | null) {
     .slice(0, 5);
 }
 
+// The scale the drawer colours a projection on. A gameweek's predicted points
+// average a little over one, so six is a genuinely strong forecast rather than
+// an arbitrary round number.
+function projectionBand(points: number | null): "is-high" | "is-mid" | "is-low" | "is-none" {
+  if (points == null || !Number.isFinite(points)) return "is-none";
+  if (points >= 6) return "is-high";
+  if (points >= 4) return "is-mid";
+  return "is-low";
+}
+
+// The model reads a player's recent matches, not the season total, so the form
+// shown beside a projection is the same window: the last five gameweeks the
+// snapshot has for him. The history endpoint returns oldest first, so the
+// recent end is the tail. Falls back to FPL's own form figure when the
+// endpoint has nothing.
+function recentForm(history: PlayerHistoryRecord[], fallback: number): number {
+  const window = history.slice(-5);
+  if (!window.length) return fallback;
+  return window.reduce((sum, row) => sum + row.total_points, 0) / window.length;
+}
+
+function difficultyClass(difficulty: number | undefined): string {
+  if (difficulty == null) return "";
+  if (difficulty <= 2) return " fdr-easy";
+  if (difficulty >= 4) return " fdr-hard";
+  return "";
+}
+
 export function PlayerDrawer() {
   const { selectedPlayer: player, closeProfile, snapshot } = useApp();
   const team = snapshot?.teams.find((t) => t.name === player?.team);
   const ribbon = fixtureRibbon(team, snapshot?.gameweek ?? null);
+  const nextUp = ribbon[0] ?? null;
   const predictionAvailable = snapshot?.prediction_available ?? false;
+  // Heavily transferred in means the market has spotted something; heavily out
+  // usually means news the snapshot's status field has not caught up with yet.
+  const netTransfers = (player?.transfers_in_event ?? 0) - (player?.transfers_out_event ?? 0);
 
   const [history, setHistory] = React.useState<PlayerHistoryRecord[]>([]);
   const [historyLoading, setHistoryLoading] = React.useState(false);
@@ -135,15 +167,66 @@ export function PlayerDrawer() {
 
                 <div className="dsec">
                   <div className="slate">
+                    <i>Forecast</i>
+                    <b>Next gameweek</b>
+                    <span className="rule" />
+                  </div>
+                  <div className="proj-panel">
+                    <div className={`proj-figure ${projectionBand(predictionAvailable ? player.predicted_points : null)}`}>
+                      <i>Projected</i>
+                      <strong>{predictionAvailable ? num(player.predicted_points) : "--"}</strong>
+                      <small>{predictionAvailable ? "points" : "unavailable"}</small>
+                    </div>
+                    <dl className="proj-why">
+                      <div>
+                        <dt>Form</dt>
+                        <dd>{num(recentForm(visibleHistory, player.form))}</dd>
+                      </div>
+                      {nextUp && (
+                        <>
+                          <div>
+                            <dt>Opponent</dt>
+                            <dd>{nextUp.opponent}</dd>
+                          </div>
+                          <div>
+                            <dt>Venue</dt>
+                            <dd>{nextUp.venue === "H" ? "Home" : "Away"}</dd>
+                          </div>
+                          <div>
+                            <dt>Difficulty</dt>
+                            <dd className={difficultyClass(nextUp.difficulty).trim()}>
+                              {nextUp.difficulty}/5
+                            </dd>
+                          </div>
+                        </>
+                      )}
+                      <div>
+                        <dt>Owned</dt>
+                        <dd>{num(player.selected_by)}%</dd>
+                      </div>
+                    </dl>
+                  </div>
+                  {player.has_prior_history === false && (
+                    <p className="proj-caveat">
+                      No prior Premier League record, so this figure comes from position
+                      baselines rather than from what this player has actually done.
+                    </p>
+                  )}
+                </div>
+
+                <div className="dsec">
+                  <div className="slate">
                     <i>Output</i>
                     <b>Season numbers</b>
                     <span className="rule" />
                   </div>
                   <div className="dbugs">
                     <div className="dbug key">
-                      <span>Projection</span>
-                      <strong>{predictionAvailable ? num(player.predicted_points) : "--"}</strong>
-                      <small>{predictionAvailable ? "next GW" : "unavailable"}</small>
+                      <span>Points / 90</span>
+                      <strong>
+                        {player.minutes > 0 ? num((player.total_points * 90) / player.minutes) : "0.0"}
+                      </strong>
+                      <small>rate, not total</small>
                     </div>
                     <div className="dbug">
                       <span>Form</span>
@@ -189,7 +272,49 @@ export function PlayerDrawer() {
                   {visibleHistoryLoading ? (
                     <Loading label="Loading history…" />
                   ) : visibleHistory.length > 0 ? (
-                    <table className="stable">
+                    <>
+                      {/* Bars are scaled to this player's own best in the window,
+                          so the shape reads as his rhythm rather than against a
+                          league maximum that would flatten most players to nothing. */}
+                      <div
+                        className="sparkline"
+                        role="img"
+                        aria-label={`Points in the last ${visibleHistory.length} gameweeks: ${visibleHistory
+                          .map((row) => `GW${row.gameweek} ${row.total_points}`)
+                          .join(", ")}`}
+                      >
+                        {visibleHistory.map((row, idx) => {
+                          const peak = Math.max(
+                            ...visibleHistory.map((r) => Math.abs(r.total_points)),
+                            1,
+                          );
+                          const height = Math.max(
+                            4,
+                            Math.round((Math.abs(row.total_points) / peak) * 100),
+                          );
+                          const tone =
+                            row.total_points < 0
+                              ? " is-negative"
+                              : row.total_points >= 10
+                                ? " is-haul"
+                                : row.minutes === 0
+                                  ? " is-blank"
+                                  : "";
+                          return (
+                            <div className="sparkline-col" key={`spark-${row.season}-${row.gameweek}-${idx}`}>
+                              <span className="sparkline-label">{row.total_points}</span>
+                              <span className="sparkline-track">
+                                <span
+                                  className={`sparkline-bar${tone}`}
+                                  style={{ height: `${height}%` }}
+                                />
+                              </span>
+                              <span className="sparkline-label">{row.gameweek}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <table className="stable">
                       <thead>
                         <tr>
                           <th>GW</th>
@@ -225,12 +350,35 @@ export function PlayerDrawer() {
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                      </table>
+                    </>
                   ) : (
                     <p style={{ color: "var(--muted-ink)", fontSize: 12 }}>
                       No recent gameweek history recorded in local snapshot.
                     </p>
                   )}
+                </div>
+
+                <div className="dsec">
+                  <div className="slate">
+                    <i>Market</i>
+                    <b>Transfer momentum</b>
+                    <span className="rule" />
+                  </div>
+                  <div className="xfer-row">
+                    <span
+                      className={`xfer-net ${
+                        netTransfers > 0 ? "is-in" : netTransfers < 0 ? "is-out" : "is-flat"
+                      }`}
+                    >
+                      {netTransfers > 0 ? "+" : ""}
+                      {netTransfers.toLocaleString()}
+                    </span>
+                    <span className="xfer-detail">
+                      net this gameweek · {player.transfers_in_event.toLocaleString()} in,{" "}
+                      {player.transfers_out_event.toLocaleString()} out
+                    </span>
+                  </div>
                 </div>
 
                 <div className="dsec">

@@ -250,10 +250,34 @@ def player_history(
     teams_path = season_dir / "teams.csv"
 
     team_names: dict[int, tuple[str, str]] = {}
+    teams_by_name: dict[str, tuple[str, str]] = {}
     if teams_path.exists():
         for row in _read_rows(teams_path):
             tid = _integer(row.get("id"))
-            team_names[tid] = (row.get("short_name", ""), row.get("name", ""))
+            short_name = row.get("short_name", "")
+            full_name = row.get("name", "")
+            team_names[tid] = (short_name, full_name)
+            if full_name:
+                teams_by_name[full_name.casefold()] = (short_name, full_name)
+
+    def _opponent(raw: object) -> tuple[str, str]:
+        """Resolve opponent_team, which is an id in some seasons and a name in others.
+
+        vaastav's merged_gw.csv stores the opponent as a team id. The olbauday
+        translation resolves it to a club name at fetch time, and
+        build_dataset.py maps ids to names for any season it appends
+        generically -- so by the time a season reaches this function the column
+        may hold either. Reading it as an id unconditionally turned every
+        2026-27 fixture in the drawer into "Team 0 (A)".
+        """
+        text = str(raw or "").strip()
+        if not text:
+            return ("", "Unknown")
+        named = teams_by_name.get(text.casefold())
+        if named:
+            return named
+        opp_id = _integer(raw)
+        return team_names.get(opp_id, ("", text if not text.isdigit() else f"Team {opp_id}"))
 
     player_name: str | None = None
     if merged_path.exists():
@@ -262,8 +286,7 @@ def player_history(
         if player_rows:
             player_name = player_rows[0].get("name")
             for r in player_rows:
-                opp_id = _integer(r.get("opponent_team"))
-                short_opp, full_opp = team_names.get(opp_id, ("", f"Team {opp_id}"))
+                short_opp, full_opp = _opponent(r.get("opponent_team"))
                 history.append({
                     "season": season,
                     "gameweek": _integer(r.get("GW") or r.get("round")),
@@ -287,18 +310,27 @@ def player_history(
             prev_merged = prev_dir / "gws" / "merged_gw.csv"
             prev_teams_path = prev_dir / "teams.csv"
             prev_teams: dict[int, tuple[str, str]] = {}
+            prev_by_name: dict[str, tuple[str, str]] = {}
             if prev_teams_path.exists():
                 for row in _read_rows(prev_teams_path):
                     tid = _integer(row.get("id"))
-                    prev_teams[tid] = (row.get("short_name", ""), row.get("name", ""))
+                    short_name = row.get("short_name", "")
+                    full_name = row.get("name", "")
+                    prev_teams[tid] = (short_name, full_name)
+                    if full_name:
+                        prev_by_name[full_name.casefold()] = (short_name, full_name)
             if prev_merged.exists():
                 prev_rows = _read_rows(prev_merged)
                 matched_prev = [r for r in prev_rows if (player_name and r.get("name") == player_name)]
                 for r in reversed(matched_prev):
                     if len(history) >= limit:
                         break
-                    opp_id = _integer(r.get("opponent_team"))
-                    short_opp, full_opp = prev_teams.get(opp_id, ("", f"Team {opp_id}"))
+                    raw_opp = str(r.get("opponent_team") or "").strip()
+                    short_opp, full_opp = prev_by_name.get(
+                        raw_opp.casefold(),
+                        prev_teams.get(_integer(raw_opp),
+                                       ("", raw_opp or "Unknown")),
+                    )
                     history.insert(0, {
                         "season": prev_season,
                         "gameweek": _integer(r.get("GW") or r.get("round")),

@@ -1483,3 +1483,48 @@
     .watch-card{padding:var(--space-2) var(--space-3)}
     .watch-pts{font-size:var(--type-body)}
   }
+
+  /* ── Player drawer: projection, reasoning, sparkline, transfers ─────────── */
+  .proj-panel{display:flex;align-items:flex-end;gap:var(--space-4);padding:var(--space-4);background:var(--night-850);clip-path:var(--blade)}
+  .proj-figure{display:flex;flex-direction:column;gap:2px;flex-shrink:0}
+  .proj-figure i{font:700 8.5px/1.3 var(--data);letter-spacing:.13em;text-transform:uppercase;color:var(--muted-mid);font-style:normal}
+  .proj-figure strong{font:800 34px/1 var(--data)}
+  .proj-figure small{font:600 9px var(--data);color:var(--muted-mid)}
+  .proj-figure.is-high strong{color:var(--lime)}
+  .proj-figure.is-mid strong{color:var(--cyan)}
+  .proj-figure.is-low strong{color:var(--muted-light)}
+  .proj-figure.is-none strong{color:var(--muted-mid)}
+
+  /* Why this prediction: the inputs the number is actually built from. */
+  .proj-why{display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-4);flex:1}
+  .proj-why div{display:flex;flex-direction:column;gap:2px;min-width:74px}
+  .proj-why dt{font:700 8.5px/1.3 var(--data);letter-spacing:.11em;text-transform:uppercase;color:var(--muted-mid)}
+  .proj-why dd{margin:0;font:700 13px/1.2 var(--data);color:var(--white)}
+  .proj-why dd.fdr-easy{color:var(--lime)}
+  .proj-why dd.fdr-hard{color:var(--pink)}
+  .proj-caveat{font-family:var(--ui);font-size:12px;font-style:italic;color:var(--gold);margin:var(--space-3) 0 0}
+
+  /* Last eight gameweeks, tallest bar = that player's own best in the window. */
+  .sparkline{display:flex;align-items:flex-end;gap:4px;margin-top:var(--space-2)}
+  .sparkline-col{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;max-width:38px}
+  /* A percentage height needs a parent with a definite one, so the bar sits in
+     its own fixed-height track rather than in the label column -- otherwise it
+     resolves against auto and collapses to the 2px minimum. */
+  .sparkline-track{display:flex;align-items:flex-end;width:100%;height:46px}
+  .sparkline-bar{width:100%;min-height:3px;background:var(--cyan);transition:height var(--motion-fast) var(--ease-out)}
+  .sparkline-bar.is-haul{background:var(--lime)}
+  .sparkline-bar.is-blank{background:rgba(255,255,255,.18)}
+  .sparkline-bar.is-negative{background:var(--pink)}
+  .sparkline-label{font:600 8.5px/1 var(--data);color:var(--muted-mid);white-space:nowrap}
+  .sparkline-scale{display:flex;justify-content:space-between;font:600 9px var(--data);color:var(--muted-mid);margin-top:4px}
+
+  .xfer-row{display:flex;align-items:baseline;gap:var(--space-3);flex-wrap:wrap}
+  .xfer-net{font:800 20px/1 var(--data)}
+  .xfer-net.is-in{color:var(--lime)}
+  .xfer-net.is-out{color:var(--pink)}
+  .xfer-net.is-flat{color:var(--muted-light)}
+  .xfer-detail{font:600 11px var(--data);color:var(--muted-mid)}
+  @media (max-width:560px){
+    .proj-panel{flex-direction:column;align-items:stretch;gap:var(--space-3)}
+    .proj-figure strong{font-size:28px}
+  }
