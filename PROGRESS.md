@@ -98,3 +98,10 @@ All flat-background failures are now clear. What remains in the audit is text ov
 11.1 verified end to end against the running stack: staged analysis completes, net is gross minus hit cost, and a freshly auto-picked squad correctly reports "0 transfers lead the model". 11.3: the spinner and status line were already there; wired `.lane.is-live` to the analysing state — broadcast.css has carried that flowing-lime channel animation since the layout landed but nothing ever applied the class.
 
 Found a real problem behind 11.2. Raising the market cap from 120 to 200 did not help, because the list was never sorted — it arrived in `players_raw` order, which is by element id and therefore effectively by club, so the column showed Arsenal, Aston Villa and Bournemouth. **7 of the 10 best players in the game, Haaland included, were unreachable without searching by name.** The market is now ranked by projection.
+
+## 2026-09-17 — Task 2: Player data accuracy
+2.1 verified — `latest_local_season()` resolves 2026-27 and the API reports it. 2.4 verified — zero prediction elements fall outside the 2026-27 roster, and neither `/api/platform` nor `/api/players` returns a ghost entry.
+
+2.2: the photo URL pattern is correct but **half the squad has no portrait**. A sampled check of 24 codes returned 403 for 12. The plan's suggested remedy in 2.3 — retry at 110x140 — does not work: where 250x250 is missing, every size is (checked 110x140, 40x40 and 250x250 for six failing codes, all 403). Adding that retry would have doubled the failed requests for half the roster, so it was deliberately not implemented.
+
+2.3: since the fallback is what a lot of the roster actually renders as, it now draws a silhouette behind the initials rather than initials alone. Failed URLs are recorded in a module-level set shared by every instance, not per-component state — the same player appears in the market column, a shortlist and the pitch at once, and each used to re-request a URL already known to be missing. Verified on a full scroll of the Transfer Studio: 13 fallbacks rendered, 78 distinct CDN URLs requested, **0 requested more than once**.

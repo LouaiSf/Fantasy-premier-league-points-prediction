@@ -1590,3 +1590,18 @@
   .fcell.is-double .double-leg{display:block}
   .fcell.is-double .double-leg small{margin-left:3px;opacity:.75}
   .fcell.is-double .double-tag{position:absolute;top:2px;right:3px;font:800 7px/1 var(--data);letter-spacing:.06em;opacity:.8}
+
+  /* ── Player photo fallback ───────────────────────────────────────────────── */
+  /* Roughly half the current squad has no CDN portrait, so this is a normal
+     state rather than an error state: a silhouette to read as "a player", with
+     the initials over it to say which one. The grid stacks them in one cell. */
+  .photo-fb{position:relative}
+  .photo-fb-silhouette{position:absolute;inset:0;margin:auto;width:58%;height:58%;
+    fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;opacity:.28}
+  .photo-fb-silhouette circle{fill:currentColor;stroke:none}
+  .photo-fb-initials{position:relative;z-index:1}
+  /* In the big cutout slots the mark is already a ghost, so the silhouette
+     would fight the initials. Keep it, but fainter. */
+  .cmp-card .photo-fb-silhouette,.cap-shot .photo-fb-silhouette,.lead-shot .photo-fb-silhouette,
+  .drawer-portrait .photo-fb-silhouette,.battle-pick .photo-fb-silhouette,
+  .plinth .photo-fb-silhouette,.wire-item.feature .photo-fb-silhouette{opacity:.16;width:44%;height:44%}
