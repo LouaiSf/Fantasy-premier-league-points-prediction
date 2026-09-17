@@ -88,3 +88,8 @@ The plan's premise was wrong: `--muted-mid` on `--night-900` is **6.08:1** and a
 All flat-background failures are now clear. What remains in the audit is text over club-colour gradients and `rgba(0,0,0,0)` decorative ghost numerals, which the walker cannot resolve a background for.
 
 17.3: global `:focus-visible` outline, purple inside paper sections; verified every element in the tab order shows a ring. 17.4: the existing reduced-motion block already covers the ticker, page entry, transitions and the spinner; verified with an emulated `prefers-reduced-motion`. 17.5: `<main>`, `<nav>` and `<header>` were already present; added `aria-label` to the content `<section>` of all eight pages.
+
+## 2026-09-17 — Task 14: Fixtures page
+14.1 and 14.3 verified against the running stack: all 20 clubs, GW5–12 starting from the next unfinished gameweek, FDR colours and H/A indicators correct, and an independent recompute of the easiest-run averages from `fixtures.csv` matches the cards (CRY 2.62, HUL 2.75, EVE/COV 2.88).
+
+14.2: blanks were already handled. Doubles were not — the matrix keyed a `Map` on gameweek, so a second fixture in the same week silently replaced the first and was also dropped from the difficulty average. The current fixture list has none (it is the schedule as first published) but they appear every season once postponements are rearranged. Fixtures are now grouped into arrays: a double renders both opponents with a DGW tag, shaded by the harder leg, and both legs count toward the average. Verified by intercepting `/api/platform` and injecting a synthetic double and blank.

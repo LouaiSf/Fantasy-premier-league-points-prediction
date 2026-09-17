@@ -1584,3 +1584,9 @@
      variant: lighter on dark, darker on light. Measured 6.16 and 5.50. */
   .eyebrow.alert{color:var(--pink-text)}
   .paper-scope .eyebrow.alert{color:var(--pink-on-paper)}
+
+  /* A double gameweek holds two opponents in one cell. */
+  .fcell.is-double{position:relative;display:flex;flex-direction:column;justify-content:center;gap:1px;line-height:1.05}
+  .fcell.is-double .double-leg{display:block}
+  .fcell.is-double .double-leg small{margin-left:3px;opacity:.75}
+  .fcell.is-double .double-tag{position:absolute;top:2px;right:3px;font:800 7px/1 var(--data);letter-spacing:.06em;opacity:.8}
