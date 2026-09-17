@@ -131,6 +131,17 @@ export default function TransfersPage() {
     return `${player.name} ${player.team}`.toLowerCase().includes(inQuery.trim().toLowerCase());
   });
 
+  // Ranked by what the transfer is for. The list arrives in players_raw order,
+  // which is by element id and therefore effectively by club, and it is capped
+  // at 200 -- so before this the market column showed Arsenal, Aston Villa and
+  // Bournemouth, and 7 of the 10 best players in the game, Haaland included,
+  // could not be reached without searching for them by name.
+  inRows.sort((a, b) => {
+    const pa = a.predicted_points ?? a.form ?? 0;
+    const pb = b.predicted_points ?? b.form ?? 0;
+    return pb - pa;
+  });
+
   function pickOut(player: PlayerRecord) {
     setOutId(player.element);
     if (incoming && incoming.position !== player.position) setInId(null);
@@ -335,7 +346,10 @@ export default function TransfersPage() {
               )}
               <span className="slot-tag out">Out</span>
             </div>
-            <div className="lane" aria-hidden="true">
+            {/* broadcast.css has carried .lane.is-live -- a flowing lime dash
+                down the channel -- since the layout landed, but nothing ever
+                set the class, so the optimiser ran with a static channel. */}
+            <div className={`lane${analysing ? " is-live" : ""}`} aria-hidden="true">
               <span className="lane-chev">↓</span>
             </div>
             <div id="slotIn" className={`slot in${incoming ? " is-filled" : ""}`} style={incoming ? clubStyle(incoming.team) : undefined}>
