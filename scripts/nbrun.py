@@ -10,32 +10,17 @@ the pipeline with it, and the two cannot drift apart.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from console import force_utf8  # noqa: E402
 
-def _force_utf8_output() -> None:
-    """Stop a console codepage from killing a finished training run.
-
-    Notebook cells and their headings contain em dashes, arrows and player
-    names with accents. On Windows stdout defaults to cp1252, and redirecting
-    it to a file keeps that default, so printing a heading raises
-    UnicodeEncodeError -- after the models have trained but before anything is
-    saved. The work is lost to a print statement.
-
-    errors='replace' rather than strict: a character that will not encode
-    should cost a question mark in a log, not the run.
-    """
-    for stream in (sys.stdout, sys.stderr):
-        reconfigure = getattr(stream, 'reconfigure', None)
-        if reconfigure is not None:
-            try:
-                reconfigure(encoding='utf-8', errors='replace')
-            except (ValueError, OSError):
-                pass
-
-
-_force_utf8_output()
+# Notebook cell headings carry em dashes and arrows, and the data is full of
+# names cp1252 cannot encode. Without this a redirected training run dies on a
+# print after the models have been fitted and before they are saved.
+force_utf8()
 
 
 class _Display:
