@@ -37,6 +37,11 @@ import sys
 import numpy as np
 import pandas as pd
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from console import force_utf8  # noqa: E402
+
+force_utf8()
+
 PREDICTIONS = 'predictions_next_gw.csv'
 
 # An FPL squad is exactly this shape, and the XI drawn from it must satisfy
