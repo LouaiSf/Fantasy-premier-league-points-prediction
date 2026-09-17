@@ -61,7 +61,10 @@ function DeskRow({
         )}
       </span>
       <span className="prow-id">
-        <b>{player.web_name || player.name}</b>
+        <b>
+          {player.web_name || player.name}
+          {player.has_prior_history === false && <span className="badge new">New</span>}
+        </b>
         <span>
           {player.team_short} · {money(player.value_m)}
         </span>
