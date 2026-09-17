@@ -10,8 +10,17 @@ the pipeline with it, and the two cannot drift apart.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from console import force_utf8  # noqa: E402
+
+# Notebook cell headings carry em dashes and arrows, and the data is full of
+# names cp1252 cannot encode. Without this a redirected training run dies on a
+# print after the models have been fitted and before they are saved.
+force_utf8()
 
 
 class _Display:

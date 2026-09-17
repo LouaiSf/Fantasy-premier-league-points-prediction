@@ -37,6 +37,11 @@ import sys
 import numpy as np
 import pandas as pd
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from console import force_utf8  # noqa: E402
+
+force_utf8()
+
 PREDICTIONS = 'predictions_next_gw.csv'
 
 # An FPL squad is exactly this shape, and the XI drawn from it must satisfy
@@ -74,6 +79,71 @@ def load_predictions(path: str, drop_unavailable: bool = True) -> pd.DataFrame:
     # buy the same player twice.
     df = df.sort_values('predicted_points', ascending=False).drop_duplicates('name')
     return df.reset_index(drop=True)
+
+
+def load_horizon(path: str, drop_unavailable: bool = True) -> tuple:
+    """A predictions file with a GW column, as (one row per player, points by GW).
+
+    predict_gameweek.py --horizon writes one row per player per gameweek. This
+    collapses it to the shape the optimiser wants: a player table to buy from,
+    and a matrix of what each player is worth in each week. A double gameweek
+    is two rows for one player and sums; a blank is no row at all and becomes
+    a zero, which is exactly how a blank should price.
+    """
+    if not os.path.exists(path):
+        raise SystemExit(f"{path} not found.\n"
+                         f"Run: python scripts/predict_gameweek.py --horizon 6")
+
+    df = pd.read_csv(path)
+    if 'GW' not in df.columns:
+        raise SystemExit(
+            f"{path} has no GW column, so it covers a single gameweek.\n"
+            f"Regenerate it with: python scripts/predict_gameweek.py --horizon 6")
+    for required in ('name', 'team', 'position', 'value_m', 'predicted_points'):
+        if required not in df.columns:
+            raise SystemExit(f"{path} has no '{required}' column")
+
+    df = df[df['value_m'] > 0].copy()
+    if drop_unavailable and 'status' in df.columns:
+        df = df[~df['status'].isin({'i', 'u', 's', 'n'})]
+    if df.empty:
+        raise SystemExit(f"{path} has no available players")
+
+    key = 'element' if 'element' in df.columns else 'name'
+    gameweeks = sorted(int(g) for g in df['GW'].dropna().unique())
+
+    points = (df.groupby([key, 'GW'])['predicted_points'].sum()
+              .unstack('GW').reindex(columns=gameweeks).fillna(0.0))
+
+    # One descriptive row per player. Price and club are properties of the
+    # player, not of a gameweek, so the first row will do.
+    players = (df.sort_values('GW').groupby(key, as_index=False).first())
+    players = players.set_index(key).loc[points.index].reset_index()
+    points = points.reset_index(drop=True)
+
+    return players, points, gameweeks
+
+
+def horizon_weights(gameweeks: list, decay: float) -> dict:
+    """How much each gameweek counts, relative to the first.
+
+    Discounting the far end looks obviously right and measures out wrong. A
+    frozen-form prediction does lose about 2.6% of its ranking per gameweek
+    (scripts/horizon.py), so the instinct is to weight later weeks down. But
+    the squad is being held through all of those weeks and every one of them
+    pays the same points, so a discount buys nothing and costs the far
+    fixtures their say. Over 28 six-gameweek windows of 2024-25 and 2025-26,
+    against picking on the next gameweek alone:
+
+        decay 1.0   +17.8 points      decay 0.90   +12.5
+        decay 0.97  +15.5             decay 0.80   +10.8
+
+    Monotonic, so the default is 1.0. The argument is kept because a manager
+    planning around a wildcard or a known return may genuinely want the near
+    fixtures weighted more heavily than the far ones.
+    """
+    first = gameweeks[0]
+    return {gw: decay ** (gw - first) for gw in gameweeks}
 
 
 def read_squad_file(path: str, players: pd.DataFrame) -> pd.DataFrame:
@@ -152,6 +222,13 @@ def solve_squad(players: pd.DataFrame, budget: float, *, squad_size: int = SQUAD
     for i in idx:
         problem += in_xi[i] <= in_squad[i]
         problem += is_cap[i] <= in_xi[i]
+        # Never the goalkeeper. A keeper's ceiling is a clean sheet, a few
+        # saves and three bonus, so doubling one is the wrong bet against any
+        # starting outfielder even in a week where the projection likes him.
+        # The armband was the one place this could go wrong unchecked: the
+        # squad itself still needs two keepers and they are picked on merit.
+        if position[i] == 'GK':
+            problem += is_cap[i] == 0
 
     problem += pulp.lpSum(in_squad.values()) == squad_size
     problem += pulp.lpSum(in_xi.values()) == XI_SIZE
@@ -192,6 +269,148 @@ def solve_squad(players: pd.DataFrame, budget: float, *, squad_size: int = SQUAD
         'bench': players.loc[[i for i in chosen if i not in starters]],
         'captain': players.loc[skipper[0]] if skipper else None,
     }, status
+
+
+def solve_squad_horizon(players: pd.DataFrame, points: pd.DataFrame, budget: float,
+                        weights: dict, *, bench_weight: float = BENCH_WEIGHT,
+                        locked=None, banned=None):
+    """The best fifteen to own across several gameweeks, not just the next one.
+
+    One squad is bought once and kept for the whole horizon; the XI and the
+    armband are chosen again every week, which is what a manager actually does.
+    That is the difference from running the single-gameweek solver six times
+    and hoping the answers agree -- here the fifteen are picked knowing they
+    have to cover all six weeks, so a player with one glamour fixture and five
+    poor ones loses to one who is useful throughout.
+
+    Transfers are deliberately not modelled. The horizon says which squad is
+    worth holding; scripts/optimise.py transfers answers how to get there from
+    the squad you own.
+    """
+    import pulp
+
+    idx = list(players.index)
+    gameweeks = list(points.columns)
+    cost = players['value_m'].to_dict()
+    position = players['position'].to_dict()
+    club = players['team'].to_dict()
+
+    problem = pulp.LpProblem('fpl_squad_horizon', pulp.LpMaximize)
+    in_squad = pulp.LpVariable.dicts('own', idx, cat='Binary')
+    in_xi = pulp.LpVariable.dicts('start', (idx, gameweeks), cat='Binary')
+    is_cap = pulp.LpVariable.dicts('cap', (idx, gameweeks), cat='Binary')
+
+    objective = []
+    for gw in gameweeks:
+        weight = weights[gw]
+        column = points[gw]
+        for i in idx:
+            value = float(column.iloc[i])
+            # Starting is worth the points; the armband is worth them again;
+            # the bench only pays off on a Bench Boost or an auto-sub.
+            objective.append(weight * value * in_xi[i][gw])
+            objective.append(weight * value * is_cap[i][gw])
+            objective.append(weight * bench_weight * value
+                             * (in_squad[i] - in_xi[i][gw]))
+    problem += pulp.lpSum(objective)
+
+    problem += pulp.lpSum(in_squad.values()) == SQUAD_SIZE
+    problem += pulp.lpSum(cost[i] * in_squad[i] for i in idx) <= budget
+
+    for pos, need in SQUAD_SHAPE.items():
+        members = [i for i in idx if position[i] == pos]
+        problem += pulp.lpSum(in_squad[i] for i in members) == need
+
+    for name in players['team'].unique():
+        members = [i for i in idx if club[i] == name]
+        problem += pulp.lpSum(in_squad[i] for i in members) <= MAX_PER_CLUB
+
+    for gw in gameweeks:
+        problem += pulp.lpSum(in_xi[i][gw] for i in idx) == XI_SIZE
+        problem += pulp.lpSum(is_cap[i][gw] for i in idx) == 1
+        for pos in SQUAD_SHAPE:
+            members = [i for i in idx if position[i] == pos]
+            problem += pulp.lpSum(in_xi[i][gw] for i in members) >= XI_MIN[pos]
+            problem += pulp.lpSum(in_xi[i][gw] for i in members) <= XI_MAX[pos]
+        for i in idx:
+            problem += in_xi[i][gw] <= in_squad[i]
+            problem += is_cap[i][gw] <= in_xi[i][gw]
+            if position[i] == 'GK':
+                problem += is_cap[i][gw] == 0
+
+    for i in (locked or []):
+        problem += in_squad[i] == 1
+    for i in (banned or []):
+        problem += in_squad[i] == 0
+
+    problem.solve(pulp.PULP_CBC_CMD(msg=0))
+    status = pulp.LpStatus[problem.status]
+    if status != 'Optimal':
+        return None, status
+
+    chosen = [i for i in idx if in_squad[i].value() > 0.5]
+    weeks = {}
+    for gw in gameweeks:
+        starters = [i for i in chosen if in_xi[i][gw].value() > 0.5]
+        skipper = [i for i in chosen if is_cap[i][gw].value() > 0.5]
+        weeks[gw] = {
+            'xi': players.loc[starters],
+            'bench': players.loc[[i for i in chosen if i not in starters]],
+            'captain': players.loc[skipper[0]] if skipper else None,
+            'points': points[gw],
+        }
+    return {'squad': players.loc[chosen], 'weeks': weeks, 'points': points}, status
+
+
+def show_squad_horizon(result: dict, budget: float, weights: dict) -> None:
+    squad, weeks = result['squad'], result['weeks']
+    points = result['points']
+    gameweeks = list(weeks)
+    spend = squad['value_m'].sum()
+
+    order = {'GK': 0, 'DEF': 1, 'MID': 2, 'FWD': 3}
+    totals = points.loc[squad.index].sum(axis=1)
+    listing = squad.assign(_o=squad['position'].map(order), total=totals)
+    listing = listing.sort_values(['_o', 'total'], ascending=[True, False])
+
+    print(f"\n{'=' * 78}")
+    print(f"SQUAD FOR GW{gameweeks[0]}..GW{gameweeks[-1]}")
+    print("=" * 78)
+    head = f"  {'':<4} {'player':<24}{'club':<15}{'£':>6}  " + "".join(
+        f"GW{gw:<4}" for gw in gameweeks) + f"{'total':>7}"
+    print(head)
+    print("  " + "-" * (len(head) - 2))
+    for i, row in listing.iterrows():
+        cells = "".join(f"{points.loc[i, gw]:>5.1f} " for gw in gameweeks)
+        starts = sum(1 for gw in gameweeks if i in weeks[gw]['xi'].index)
+        flag = ' ' if starts == len(gameweeks) else '~'
+        print(f"  {row['position']:<4} {row['name'][:22]:<24}{row['team'][:13]:<15}"
+              f"{row['value_m']:>5.1f} {flag}{cells}{row['total']:>6.1f}")
+
+    print(f"\n  '~' marks a player who is not in the XI every week.")
+
+    print(f"\n{'=' * 78}\nWEEK BY WEEK\n{'=' * 78}")
+    print(f"  {'gw':<5}{'formation':<12}{'captain':<24}{'XI':>7}{'+ armband':>11}{'weight':>8}")
+    print("  " + "-" * 65)
+    running = 0.0
+    for gw in gameweeks:
+        week = weeks[gw]
+        xi = week['xi']
+        shape = xi['position'].value_counts()
+        formation = f"{shape.get('DEF', 0)}-{shape.get('MID', 0)}-{shape.get('FWD', 0)}"
+        xi_points = points.loc[xi.index, gw].sum()
+        cap = week['captain']
+        bonus = points.loc[cap.name, gw] if cap is not None else 0.0
+        running += xi_points + bonus
+        print(f"  {gw:<5}{formation:<12}{(cap['name'][:22] if cap is not None else '-'):<24}"
+              f"{xi_points:>7.2f}{xi_points + bonus:>11.2f}{weights[gw]:>8.2f}")
+
+    print(f"\n  spend             {spend:>6.1f}m of {budget:.1f}m (bank {budget - spend:.1f}m)")
+    print(f"  expected total    {running:>6.2f} across {len(gameweeks)} gameweeks "
+          f"({running / len(gameweeks):.2f} per gameweek)")
+    print(f"\n  The squad is bought once and held; the XI and armband are rechosen")
+    print(f"  each week. Transfers are not modelled -- use the transfers subcommand")
+    print(f"  to plan the route from the squad you already own.")
 
 
 def show_squad(result: dict, budget: float) -> None:
@@ -309,8 +528,13 @@ def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
 
 
 def squad_records(frame: pd.DataFrame) -> list:
-    """Rows as plain dicts, for JSON and for templates."""
-    cols = [c for c in ('name', 'team', 'position', 'opponent_team', 'was_home',
+    """Rows as plain dicts, for JSON and for templates.
+
+    Includes `element` when present so API rows have stable identity within a
+    prediction export. FPL element ids are season-scoped, so callers must
+    verify the season roster before joining them to another dataset.
+    """
+    cols = [c for c in ('element', 'name', 'team', 'position', 'opponent_team', 'was_home',
                         'value_m', 'predicted_points', 'points_per_million',
                         'selected_by', 'status', 'has_prior_history')
             if c in frame.columns]
@@ -352,7 +576,7 @@ def suggest_transfers(current: pd.DataFrame, players: pd.DataFrame,
         print(f"  {row['transfers']:<7}{row['gross']:>8.2f}{row['hit']:>6}"
               f"{row['net']:>8.2f}{row['gain']:>+8.2f}")
 
-    best = max(rows, key=lambda r: r['net'])
+    best = max(data['rows'], key=lambda r: r['net'])
     print(f"\n  best: {best['transfers']} transfer(s), "
           f"net {best['net']:.2f} ({best['gain']:+.2f} vs standing pat)")
     if best['transfers']:
@@ -657,6 +881,16 @@ def main() -> int:
     p_squad.add_argument('--budget', type=float, default=100.0)
     p_squad.add_argument('--lock', nargs='+', default=[], help='names to force in')
     p_squad.add_argument('--ban', nargs='+', default=[], help='names to exclude')
+    p_squad.add_argument('--horizon', action='store_true',
+                         help='pick a squad to hold across every gameweek in the '
+                              'predictions file, rather than for the next one '
+                              'only. Needs a file written by predict_gameweek.py '
+                              '--horizon N.')
+    p_squad.add_argument('--decay', type=float, default=1.0, metavar='D',
+                         help='how much each further gameweek counts, as D**k. '
+                              'Default 1.0 -- every week in the horizon counts '
+                              'the same, which backtested better than any '
+                              'discount. Below 1.0 favours the near fixtures.')
     p_squad.add_argument('--formation-only-xi', action='store_true',
                          help='pick 11 rather than a 15-man squad')
 
@@ -676,8 +910,15 @@ def main() -> int:
     p_watch.add_argument('--top', type=int, default=10)
 
     args = ap.parse_args()
-    players = load_predictions(args.predictions)
-    print(f"{len(players):,} available players from {args.predictions}")
+
+    horizon_mode = args.command == 'squad' and getattr(args, 'horizon', False)
+    if horizon_mode:
+        players, points, gameweeks = load_horizon(args.predictions)
+        print(f"{len(players):,} available players from {args.predictions}, "
+              f"GW{gameweeks[0]}..GW{gameweeks[-1]}")
+    else:
+        players = load_predictions(args.predictions)
+        print(f"{len(players):,} available players from {args.predictions}")
 
     season = args.season
     if season is None:
@@ -687,12 +928,20 @@ def main() -> int:
     if args.command == 'squad':
         lock = read_squad_file_names(args.lock, players) if args.lock else []
         ban = read_squad_file_names(args.ban, players) if args.ban else []
-        size = XI_SIZE if args.formation_only_xi else SQUAD_SIZE
-        result, status = solve_squad(players, args.budget, squad_size=size,
-                                     locked=lock, banned=ban)
-        if result is None:
-            raise SystemExit(f"no legal squad at {args.budget}m ({status})")
-        show_squad(result, args.budget)
+        if horizon_mode:
+            weights = horizon_weights(gameweeks, args.decay)
+            result, status = solve_squad_horizon(players, points, args.budget,
+                                                 weights, locked=lock, banned=ban)
+            if result is None:
+                raise SystemExit(f"no legal squad at {args.budget}m ({status})")
+            show_squad_horizon(result, args.budget, weights)
+        else:
+            size = XI_SIZE if args.formation_only_xi else SQUAD_SIZE
+            result, status = solve_squad(players, args.budget, squad_size=size,
+                                         locked=lock, banned=ban)
+            if result is None:
+                raise SystemExit(f"no legal squad at {args.budget}m ({status})")
+            show_squad(result, args.budget)
 
     elif args.command == 'transfers':
         current = read_squad_file(args.squad, players)
