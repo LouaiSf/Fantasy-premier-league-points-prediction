@@ -49,10 +49,20 @@ function ComparisonPageInner() {
   const [seatB, setSeatB] = React.useState<number | null>(null);
   const [activeSeat, setActiveSeat] = React.useState<"A" | "B">("A");
   const [pool, setPool] = React.useState<(typeof POOLS)[number]["key"]>("all");
+  const [poolDefaulted, setPoolDefaulted] = React.useState(false);
   const [position, setPosition] = React.useState<(typeof POSITIONS)[number]>("ALL");
   const [club, setClub] = React.useState("ALL");
   const [query, setQuery] = React.useState("");
   const [hydratedFromUrl, setHydratedFromUrl] = React.useState(false);
+
+  // Most comparisons start from a player you already own, so open on the squad
+  // pool when there is one. Applied once: after that the pool is the user's
+  // choice and must not be reset underneath them when the squad reloads.
+  React.useEffect(() => {
+    if (poolDefaulted || squadElements.length === 0) return;
+    setPool("squad");
+    setPoolDefaulted(true);
+  }, [poolDefaulted, squadElements.length]);
 
   // Mirror ?a=/?b= into state once hydrated, and keep the URL in sync
   // thereafter so a comparison can be bookmarked or shared. Reading the URL
@@ -444,8 +454,14 @@ function ComparisonPageInner() {
                         <div className="barcell">
                           <span>{label}</span>
                           <div className="dualbar">
-                            <i style={{ width: `${(a / total) * 100}%`, background: "var(--pl-purple)" }} />
-                            <i style={{ width: `${(b / total) * 100}%`, background: "var(--pink)" }} />
+                            <i
+                              className={`side-a${leader === "l" ? " is-leader" : ""}`}
+                              style={{ width: `${(a / total) * 100}%` }}
+                            />
+                            <i
+                              className={`side-b${leader === "r" ? " is-leader" : ""}`}
+                              style={{ width: `${(b / total) * 100}%` }}
+                            />
                           </div>
                         </div>
                         <strong className={leader === "r" ? "leader r" : ""}>{num(b, digits)}</strong>
