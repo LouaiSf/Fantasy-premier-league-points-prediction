@@ -1,0 +1,42 @@
+{
+  "GK": {
+    "n_features": 66,
+    "train_rows": 21370,
+    "test_rows": 6296,
+    "availability_auc": 0.9732699731481617,
+    "played_rate": 0.24412325285895806,
+    "combined_test_r2": 0.41560040471820103,
+    "combined_test_mae": 0.6499475289939759,
+    "conditional_test_r2_on_players_who_played": -0.0043423619297870975
+  },
+  "DEF": {
+    "n_features": 74,
+    "train_rows": 66405,
+    "test_rows": 18879,
+    "availability_auc": 0.9309587454669737,
+    "played_rate": 0.4098204354044176,
+    "combined_test_r2": 0.300169829937598,
+    "combined_test_mae": 1.1047047199832323,
+    "conditional_test_r2_on_players_who_played": 0.0805690179550298
+  },
+  "MID": {
+    "n_features": 74,
+    "train_rows": 82187,
+    "test_rows": 25559,
+    "availability_auc": 0.9398358177782457,
+    "played_rate": 0.43370241402245785,
+    "combined_test_r2": 0.3453704146827762,
+    "combined_test_mae": 0.9474145372411636,
+    "conditional_test_r2_on_players_who_played": 0.12478398793247136
+  },
+  "FWD": {
+    "n_features": 74,
+    "train_rows": 26475,
+    "test_rows": 6297,
+    "availability_auc": 0.9463701068128705,
+    "played_rate": 0.4286168016515801,
+    "combined_test_r2": 0.3516623884355742,
+    "combined_test_mae": 1.0590902279456758,
+    "conditional_test_r2_on_players_who_played": 0.1283874101276462
+  }
+}

@@ -121,6 +121,28 @@ def load_models() -> dict:
             'name': best,
         }
         print(f"  {position:<4} {best:<12} {len(features):>3} features")
+
+        # The availability half, if scripts/train_availability.py has run.
+        # Optional on purpose: a checkout that has only ever run train.py must
+        # still predict, just with the single-stage number.
+        avail_path = os.path.join(pos_dir, 'availability.joblib')
+        cond_path = os.path.join(pos_dir, 'conditional.joblib')
+        avail_scaler_path = os.path.join(pos_dir, 'availability_scaler.joblib')
+        avail_feat_path = os.path.join(pos_dir, 'availability_features.json')
+        if all(os.path.exists(p) for p in
+               (avail_path, cond_path, avail_scaler_path, avail_feat_path)):
+            avail_scaler = joblib.load(avail_scaler_path)
+            avail_features = list(getattr(avail_scaler, 'feature_names_in_', []))
+            if not avail_features:
+                avail_features = json.load(open(avail_feat_path, encoding='utf-8'))
+            models[position].update({
+                'availability': joblib.load(avail_path),
+                'conditional': joblib.load(cond_path),
+                'availability_scaler': avail_scaler,
+                'availability_features': avail_features,
+            })
+            print(f"       + two-stage  {len(avail_features):>3} features "
+                  f"(P(plays) x E[points | plays])")
     return models
 
 
@@ -381,6 +403,30 @@ def predict(featured: pd.DataFrame, models: dict) -> pd.DataFrame:
         X = block[spec['features']].replace([np.inf, -np.inf], np.nan).fillna(0)
         block['predicted_points'] = spec['model'].predict(spec['scaler'].transform(X))
         block['model'] = spec['name']
+
+        if 'availability' in spec:
+            # Two questions, asked separately: will he be on the pitch, and
+            # what does he return if he is. Multiplying them back together
+            # gives an expected score that stops treating "might not play" and
+            # "will play, quiet game" as the same prediction -- which is what
+            # let players who were not going to feature reach the top of the
+            # ranking.
+            avail_feats = spec['availability_features']
+            missing_avail = [f for f in avail_feats if f not in block.columns]
+            for feature in missing_avail:
+                block[feature] = 0
+            if missing_avail:
+                print(f"  {position}: filling {len(missing_avail)} availability "
+                      f"features with zero")
+            Xa = block[avail_feats].replace([np.inf, -np.inf], np.nan).fillna(0)
+            Za = spec['availability_scaler'].transform(Xa)
+            block['p_plays'] = spec['availability'].predict_proba(Za)[:, 1]
+            block['predicted_points_if_plays'] = spec['conditional'].predict(Za)
+            block['predicted_points_single_stage'] = block['predicted_points']
+            block['predicted_points'] = (block['p_plays']
+                                         * block['predicted_points_if_plays'])
+            block['model'] = f"{spec['name']}+availability"
+
         out.append(block)
 
     predictions = pd.concat(out, ignore_index=True)
@@ -575,6 +621,11 @@ def main() -> int:
     # reliable way to pick up photos, nationality and the rest of the metadata.
     cols = ['element', 'name', 'team', 'position', 'opponent_team', 'was_home', 'value_m',
             'predicted_points', 'points_per_million', 'has_prior_history',
+            # Present only when the availability models are trained. Worth
+            # carrying: a 6.0 built from a certain start and a modest return is
+            # a different proposition from a 6.0 built from a half-chance of
+            # playing and a big one, and only these two columns tell them apart.
+            'p_plays', 'predicted_points_if_plays', 'predicted_points_single_stage',
             'selected_by', 'status', 'model']
     cols = [c for c in cols if c in predictions.columns]
     predictions[cols].to_csv(args.out, index=False)
