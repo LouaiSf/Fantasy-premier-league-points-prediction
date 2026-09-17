@@ -257,17 +257,10 @@ export default function WatchlistPage() {
           <div className="watch-error">{fetchError}</div>
         )}
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: activeSection === "all" ? "repeat(auto-fit, minmax(420px, 1fr))" : "1fr",
-            gap: "var(--space-8)",
-            paddingBottom: "var(--space-16)",
-          }}
-        >
+        <div className={`watch-sections${activeSection === "all" ? "" : " is-single"}`}>
           {/* 1. Best Value */}
           {(activeSection === "all" || activeSection === "value") && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+            <div className="watch-section">
               <div className="sub-head">
                 <h3 style={{ color: "var(--lime)" }}>Best Value (Pts / £m)</h3>
                 <span className="rule" />
@@ -289,7 +282,7 @@ export default function WatchlistPage() {
 
           {/* 2. Differentials */}
           {(activeSection === "all" || activeSection === "differentials") && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+            <div className="watch-section">
               <div className="sub-head">
                 <h3 style={{ color: "var(--cyan)" }}>Differentials (≤{maxOwnership}%)</h3>
                 <span className="rule" />
@@ -311,7 +304,7 @@ export default function WatchlistPage() {
 
           {/* 3. Overpriced / Traps */}
           {(activeSection === "all" || activeSection === "overpriced") && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+            <div className="watch-section">
               <div className="sub-head">
                 <h3 style={{ color: "var(--pink)" }}>Overpriced Traps (≥£8.0m)</h3>
                 <span className="rule" />
@@ -333,7 +326,7 @@ export default function WatchlistPage() {
 
           {/* 4. No History */}
           {(activeSection === "all" || activeSection === "no_history") && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+            <div className="watch-section">
               <div className="sub-head">
                 <h3 style={{ color: "var(--gold)" }}>Promoted &amp; New Signings</h3>
                 <span className="rule" />

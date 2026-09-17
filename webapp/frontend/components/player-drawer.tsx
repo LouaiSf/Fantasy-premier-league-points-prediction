@@ -48,14 +48,27 @@ function difficultyClass(difficulty: number | undefined): string {
 }
 
 export function PlayerDrawer() {
-  const { selectedPlayer: player, closeProfile, snapshot } = useApp();
+  const { selectedPlayer, closeProfile, snapshot } = useApp();
+  // The drawer can be opened from anywhere, and not every caller holds a full
+  // record: /api/squad answers with a trimmed shape carrying no minutes, ICT,
+  // transfers or expected goals, so a marker on the pitch used to open a
+  // drawer with holes in it -- and, once this component started reading
+  // transfers_in_event, to throw on the way. Resolve the snapshot's own copy
+  // by element and fall back to whatever was passed.
+  const player = React.useMemo(() => {
+    if (!selectedPlayer) return null;
+    const full = snapshot?.players.find((p) => p.element === selectedPlayer.element);
+    return full ?? selectedPlayer;
+  }, [selectedPlayer, snapshot]);
   const team = snapshot?.teams.find((t) => t.name === player?.team);
   const ribbon = fixtureRibbon(team, snapshot?.gameweek ?? null);
   const nextUp = ribbon[0] ?? null;
   const predictionAvailable = snapshot?.prediction_available ?? false;
   // Heavily transferred in means the market has spotted something; heavily out
   // usually means news the snapshot's status field has not caught up with yet.
-  const netTransfers = (player?.transfers_in_event ?? 0) - (player?.transfers_out_event ?? 0);
+  const transfersIn = player?.transfers_in_event ?? 0;
+  const transfersOut = player?.transfers_out_event ?? 0;
+  const netTransfers = transfersIn - transfersOut;
 
   const [history, setHistory] = React.useState<PlayerHistoryRecord[]>([]);
   const [historyLoading, setHistoryLoading] = React.useState(false);
@@ -375,8 +388,8 @@ export function PlayerDrawer() {
                       {netTransfers.toLocaleString()}
                     </span>
                     <span className="xfer-detail">
-                      net this gameweek · {player.transfers_in_event.toLocaleString()} in,{" "}
-                      {player.transfers_out_event.toLocaleString()} out
+                      net this gameweek · {transfersIn.toLocaleString()} in,{" "}
+                      {transfersOut.toLocaleString()} out
                     </span>
                   </div>
                 </div>

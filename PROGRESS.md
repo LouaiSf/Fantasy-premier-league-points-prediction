@@ -105,3 +105,12 @@ Found a real problem behind 11.2. Raising the market cap from 120 to 200 did not
 2.2: the photo URL pattern is correct but **half the squad has no portrait**. A sampled check of 24 codes returned 403 for 12. The plan's suggested remedy in 2.3 — retry at 110x140 — does not work: where 250x250 is missing, every size is (checked 110x140, 40x40 and 250x250 for six failing codes, all 403). Adding that retry would have doubled the failed requests for half the roster, so it was deliberately not implemented.
 
 2.3: since the fallback is what a lot of the roster actually renders as, it now draws a silhouette behind the initials rather than initials alone. Failed URLs are recorded in a module-level set shared by every instance, not per-component state — the same player appears in the market column, a shortlist and the pitch at once, and each used to re-request a URL already known to be missing. Verified on a full scroll of the Transfer Studio: 13 fallbacks rendered, 78 distinct CDN URLs requested, **0 requested more than once**.
+
+## 2026-09-18 — Task 18: End-to-end smoke tests
+Automated the plan's manual script (Playwright, all 8 pages, three viewports): 21 checks, all passing, 0 console or page errors. Root redirects to /team, 20 crests, season 2026-27, auto-pick fills the pitch with 11 markers carrying projections and a captain badge, every page renders, no emoji, no plain-text loading states, no horizontal overflow at 1440/768/375.
+
+It found three real defects, all now fixed:
+
+1. **A crash I had introduced in Task 9.** `/api/squad` answers with a trimmed player shape carrying no `transfers_in_event`, so clicking a pitch marker threw on `toLocaleString`. The drawer now resolves the snapshot's full record by element and falls back to whatever it was handed — which also fills in the minutes, ICT and expected-goals the trimmed shape was missing.
+2. **Watchlist overflowed the viewport** by 57px at 1440 and 61px at 375. Two separate causes: `.sub-head` was a nowrap flex row inside a 432px column, and the section grid used `minmax(420px, 1fr)` — a floor the track cannot go below, so at 375px it stayed 420px wide. Now `minmax(min(420px,100%),1fr)` with `min-width:0` on the items. The inline layout styles moved into broadcast.css in the process, per the plan's own rule.
+3. A test-side false positive: markers use `.pm-pred`, not `.pm-pts`.

@@ -141,7 +141,13 @@
   .section-head h1,.section-head h2{margin:0;font:900 var(--type-h1)/.92 var(--display);text-transform:uppercase;letter-spacing:-.045em}
   .section-head p{max-width:48ch;margin:0;color:var(--muted-light);font-size:var(--type-small)}
   .section-head.on-paper p{color:var(--muted-ink)}
-  .sub-head{display:flex;align-items:center;gap:var(--space-4);margin:var(--space-12) 0 var(--space-5)}
+  /* Wraps at every width, not just on small screens. The row is a nowrap title,
+     a flexible rule and a nowrap label, and the watchlist puts it inside a
+     432px grid column -- where "Overpriced Traps (>=8.0m)" plus its label
+     exceeded the column and pushed the label 57px past the page edge. */
+  .sub-head{display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-4);margin:var(--space-12) 0 var(--space-5)}
+  .sub-head h3{min-width:0}
+  .sub-head .rule{min-width:24px}
   .sub-head h3{margin:0;font:900 clamp(1.05rem,1.7vw,1.7rem)/1 var(--display);text-transform:uppercase;letter-spacing:-.03em;white-space:nowrap}
   .sub-head .rule{flex:1;height:1px;background:currentColor;opacity:.22}
   .sub-head small{font:600 10px var(--data);letter-spacing:.14em;text-transform:uppercase;opacity:.62;white-space:nowrap}
@@ -1486,11 +1492,18 @@
   .watch-photo-wrap{position:relative;width:48px;height:48px;flex-shrink:0}
   .watch-crest-badge{position:absolute;bottom:-2px;right:-4px;width:18px;height:18px;background:var(--ink);border-radius:50%;padding:2px}
   @media (max-width:860px){
-    .watch-grid{grid-template-columns:1fr}
+    /* minmax(0,1fr) rather than 1fr: a bare 1fr track still takes its
+       min-content from the card, and the card's fixture line does not wrap, so
+       the grid stayed 420px wide inside a 375px viewport and pushed the whole
+       page sideways. */
+    .watch-grid{grid-template-columns:minmax(0,1fr)}
   }
   @media (max-width:560px){
     .watch-card{padding:var(--space-2) var(--space-3)}
     .watch-pts{font-size:var(--type-body)}
+    /* Let the fixture line give way before the layout does. */
+    .watch-meta{min-width:0;gap:var(--space-2);overflow:hidden}
+    .watch-meta > *{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   }
 
   /* ── Player drawer: projection, reasoning, sparkline, transfers ─────────── */
@@ -1605,3 +1618,16 @@
   .cmp-card .photo-fb-silhouette,.cap-shot .photo-fb-silhouette,.lead-shot .photo-fb-silhouette,
   .drawer-portrait .photo-fb-silhouette,.battle-pick .photo-fb-silhouette,
   .plinth .photo-fb-silhouette,.wire-item.feature .photo-fb-silhouette{opacity:.16;width:44%;height:44%}
+
+  /* ── Watchlist section layout ────────────────────────────────────────────── */
+  /* minmax(min(420px,100%),1fr) rather than minmax(420px,1fr): a bare 420px
+     minimum is a floor the track cannot go below, so at a 375px viewport the
+     grid stayed 420px wide and pushed the page sideways. min() lets the track
+     fall back to the container when the container is the smaller of the two. */
+  .watch-sections{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));
+    gap:var(--space-8);padding-bottom:var(--space-16)}
+  .watch-sections.is-single{grid-template-columns:minmax(0,1fr)}
+  /* Grid items default to min-width:auto, which let the column below take its
+     min-content width from the cards and overflow its own track. */
+  .watch-sections > *{min-width:0}
+  .watch-section{display:flex;flex-direction:column;gap:var(--space-3);min-width:0}
