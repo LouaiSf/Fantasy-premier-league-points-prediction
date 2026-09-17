@@ -48,6 +48,9 @@ Threaded `cost_change_event` from `players_raw.csv` through `platform_data.py` i
 ## 2026-09-17 — Task 12.4: Shareable comparison URL
 Comparison page seats now mirror to `?a=<element>&b=<element>` via `useSearchParams`/`router.replace`, wrapped in `React.Suspense` per Next's requirement for `useSearchParams` in a statically-rendered route.
 
+## 2026-09-17 — Task 1.0: olbauday data source integration
+Added `--source olbauday` mode to `scripts/fetch_data.py` that downloads from `olbauday/FPL-Core-Insights`, translates to vaastav format, and writes `players_raw.csv` (659 players, all with valid codes/teams/positions), `teams.csv` (20 correct 2026-27 clubs), `fixtures.csv` (380 PL fixtures, GW1-38), and `gws/gw{N}.csv` + `merged_gw.csv` (GW1-4, 2,583 rows) with `kickoff_time`, `fixture`, `opponent_team`, and `was_home` derived from fixture data. Fixed `build_dataset.py` namespace alias bug. Rebuilt `all_seasons_data_final.csv` (256,152 rows) and regenerated `predictions_next_gw.csv` (484 players, all 20 correct 2026-27 teams, mean 1.11 pts GW5).
+
 ## Discovered Issues
 - Several pages (watchlist, chips, comparison, fixtures, news, team, transfers, plus deadline-clock, toast, club-crest, error-boundary, pitch, squad-editor) still contain non-trivial numbers of inline `style={{ }}` props beyond what's been cleaned up so far — some are legitimately dynamic (widths, gradients, transforms) and allowed per the rules, but a good number are static layout/color choices that should move into broadcast.css. A full pass wasn't done this session (large surface area); flagging so it isn't mistaken for finished.
 - `python` on PATH (C:\Python313) does not have lightgbm/xgboost installed; the anaconda3 install at `C:\Users\HP\anaconda3\python.exe` does. Use that interpreter for `predict_gameweek.py` and any other modelling script until the environments are reconciled.
