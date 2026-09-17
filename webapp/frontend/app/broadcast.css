@@ -493,6 +493,9 @@
   .prow-id{min-width:0}
   .prow-id b{display:block;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .prow-id span{display:flex;align-items:center;gap:6px;font:600 10px var(--data);color:var(--muted-mid)}
+  .price-tick{font-size:9px;line-height:1}
+  .price-tick.rising{color:var(--lime)}
+  .price-tick.falling{color:var(--pink)}
   .prow-num{display:flex;align-items:center;gap:10px;text-align:right}
   .prow-num em{display:block;font:800 13px var(--data);font-style:normal}
   .prow-num em small{display:block;font:600 8px var(--data);color:var(--muted-mid);letter-spacing:.08em}

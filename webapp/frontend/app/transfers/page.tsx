@@ -67,6 +67,12 @@ function DeskRow({
         </b>
         <span>
           {player.team_short} · {money(player.value_m)}
+          {player.cost_change_event > 0 && (
+            <span className="price-tick rising" aria-label="Price rising">▲</span>
+          )}
+          {player.cost_change_event < 0 && (
+            <span className="price-tick falling" aria-label="Price falling">▼</span>
+          )}
         </span>
       </span>
       <span className="prow-num">
@@ -473,7 +479,7 @@ export default function TransfersPage() {
               </div>
             </div>
             <div className="desk-list">
-              {inRows.slice(0, 120).map((player) => (
+              {inRows.slice(0, 200).map((player) => (
                 <DeskRow
                   key={player.element}
                   player={player}
