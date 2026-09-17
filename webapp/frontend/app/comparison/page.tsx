@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useApp } from "@/components/providers/app-provider";
 import { PlayerPhoto } from "@/components/player-photo";
 import { ClubCrest } from "@/components/club-crest";
@@ -33,7 +34,17 @@ const METRICS: [string, keyof PlayerRecord, number][] = [
 
 
 export default function ComparisonPage() {
+  return (
+    <React.Suspense fallback={<Loading label="Loading season data…" />}>
+      <ComparisonPageInner />
+    </React.Suspense>
+  );
+}
+
+function ComparisonPageInner() {
   const { snapshot, loading, squadNames } = useApp();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [seatA, setSeatA] = React.useState<number | null>(null);
   const [seatB, setSeatB] = React.useState<number | null>(null);
   const [activeSeat, setActiveSeat] = React.useState<"A" | "B">("A");
@@ -41,6 +52,30 @@ export default function ComparisonPage() {
   const [position, setPosition] = React.useState<(typeof POSITIONS)[number]>("ALL");
   const [club, setClub] = React.useState("ALL");
   const [query, setQuery] = React.useState("");
+  const [hydratedFromUrl, setHydratedFromUrl] = React.useState(false);
+
+  // Mirror ?a=/?b= into state once hydrated, and keep the URL in sync
+  // thereafter so a comparison can be bookmarked or shared. Reading the URL
+  // straight into useState's initializer would mismatch the static-prerendered
+  // (always-empty) markup, so this stays a post-mount effect; the write-back
+  // effect waits for it so it doesn't clobber ?a=/?b= with the pre-hydration
+  // empty state on first paint.
+  React.useEffect(() => {
+    const a = searchParams.get("a");
+    const b = searchParams.get("b");
+    setSeatA(a ? Number(a) : null);
+    setSeatB(b ? Number(b) : null);
+    setHydratedFromUrl(true);
+  }, [searchParams]);
+
+  React.useEffect(() => {
+    if (!hydratedFromUrl) return;
+    const params = new URLSearchParams();
+    if (seatA != null) params.set("a", String(seatA));
+    if (seatB != null) params.set("b", String(seatB));
+    const qs = params.toString();
+    router.replace(qs ? `?${qs}` : "?", { scroll: false });
+  }, [seatA, seatB, hydratedFromUrl, router]);
 
   if (loading || !snapshot) {
     return (
