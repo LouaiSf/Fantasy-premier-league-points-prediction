@@ -24,6 +24,11 @@ build/
 # VS Code
 .vscode/
 
+# Local browser and visual QA artifacts
+.playwright-cli/
+.playwright-mcp/
+output/
+
 # Environment
 .env
 venv/
@@ -58,3 +63,9 @@ all_seasons_data_final.csv
 
 # Your own squad file; example_squad.txt is the template
 my_squad.txt
+
+# Colab scratch/results directory
+fpl_results/
+
+# IDE / tool cache
+.omo/

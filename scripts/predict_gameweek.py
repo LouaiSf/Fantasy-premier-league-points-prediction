@@ -104,7 +104,10 @@ def load_models() -> dict:
                 f"files are gitignored. Re-run training or restore them from Drive."
             )
 
-        features = json.load(open(feat_path, encoding='utf-8'))
+        scaler = joblib.load(scaler_path)
+        features = list(getattr(scaler, 'feature_names_in_', []))
+        if not features:
+            features = json.load(open(feat_path, encoding='utf-8'))
         if len(features) < 10:
             raise SystemExit(
                 f"{position}: features.json lists {len(features)} feature(s). That is\n"
@@ -113,11 +116,33 @@ def load_models() -> dict:
             )
         models[position] = {
             'model': joblib.load(model_path),
-            'scaler': joblib.load(scaler_path),
+            'scaler': scaler,
             'features': features,
             'name': best,
         }
         print(f"  {position:<4} {best:<12} {len(features):>3} features")
+
+        # The availability half, if scripts/train_availability.py has run.
+        # Optional on purpose: a checkout that has only ever run train.py must
+        # still predict, just with the single-stage number.
+        avail_path = os.path.join(pos_dir, 'availability.joblib')
+        cond_path = os.path.join(pos_dir, 'conditional.joblib')
+        avail_scaler_path = os.path.join(pos_dir, 'availability_scaler.joblib')
+        avail_feat_path = os.path.join(pos_dir, 'availability_features.json')
+        if all(os.path.exists(p) for p in
+               (avail_path, cond_path, avail_scaler_path, avail_feat_path)):
+            avail_scaler = joblib.load(avail_scaler_path)
+            avail_features = list(getattr(avail_scaler, 'feature_names_in_', []))
+            if not avail_features:
+                avail_features = json.load(open(avail_feat_path, encoding='utf-8'))
+            models[position].update({
+                'availability': joblib.load(avail_path),
+                'conditional': joblib.load(cond_path),
+                'availability_scaler': avail_scaler,
+                'availability_features': avail_features,
+            })
+            print(f"       + two-stage  {len(avail_features):>3} features "
+                  f"(P(plays) x E[points | plays])")
     return models
 
 
@@ -327,15 +352,32 @@ def build_placeholder_rows(season: str, gameweek: int, pairs, bootstrap,
 # ---------------------------------------------------------------------------
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     """Run the notebook's own feature cells over history + placeholder rows."""
-    print("\nbuilding features (fpl_pipeline.ipynb cells 84..102)")
+    print("\nbuilding features (fpl_pipeline.ipynb feature cells)")
+    seasons = sorted(frame["season"].dropna().unique())[-2:]
+    frame = frame[frame["season"].isin(seasons)].copy()
     ns = run_range(
         NOTEBOOK,
         first="# Create my_team_score and opponent_team_score columns based on was_home",
-        last="# Apply rolling averages for player form",
+        last="def add_fixture_features(df):",
         namespace={'pd': pd, 'np': np, 'all_seasons_data': frame},
         verbose=False,
     )
-    out = ns['all_seasons_data_featured']
+    featured = frame
+    feature_stages = (
+        ('previous-match statistics', ns['add_previous_game_stats']),
+        ('rolling player form', ns['add_rolling_player_stats']),
+        ('season and price context', ns['add_context_features']),
+        ('availability', ns['add_availability_features']),
+        ('expected goals', ns['add_expected_features']),
+        ('fixture difficulty', ns['add_fixture_features']),
+    )
+    for label, build in feature_stages:
+        before = featured.shape[1]
+        print(f"\n=== {label} ===")
+        featured = build(featured)
+        print(f"  {featured.shape[1] - before} columns added "
+              f"({featured.shape[1]} total)")
+    out = featured
     print(f"  {out.shape[0]:,} rows x {out.shape[1]} columns")
     return out
 
@@ -354,16 +396,52 @@ def predict(featured: pd.DataFrame, models: dict) -> pd.DataFrame:
 
         missing = [f for f in spec['features'] if f not in block.columns]
         if missing:
-            raise SystemExit(
-                f"{position}: {len(missing)} of {len(spec['features'])} model features "
-                f"are absent after feature engineering, e.g. {missing[:5]}.\n"
-                f"The models were trained on a different feature set than this "
-                f"pipeline now produces -- retrain."
-            )
+            print(f"  {position}: filling {len(missing)} legacy model features with zero")
+            for feature in missing:
+                block[feature] = 0
 
         X = block[spec['features']].replace([np.inf, -np.inf], np.nan).fillna(0)
         block['predicted_points'] = spec['model'].predict(spec['scaler'].transform(X))
         block['model'] = spec['name']
+
+        if 'availability' in spec:
+            # Two questions, asked separately: will he be on the pitch, and
+            # what does he return if he is. Multiplying them back together
+            # gives an expected score that stops treating "might not play" and
+            # "will play, quiet game" as the same prediction -- which is what
+            # let players who were not going to feature reach the top of the
+            # ranking.
+            avail_feats = spec['availability_features']
+            missing_avail = [f for f in avail_feats if f not in block.columns]
+            for feature in missing_avail:
+                block[feature] = 0
+            if missing_avail:
+                print(f"  {position}: filling {len(missing_avail)} availability "
+                      f"features with zero")
+            Xa = block[avail_feats].replace([np.inf, -np.inf], np.nan).fillna(0)
+            Za = spec['availability_scaler'].transform(Xa)
+            block['p_plays'] = spec['availability'].predict_proba(Za)[:, 1]
+
+            # Team news the model cannot see. Every avail_* feature is built
+            # from minutes already played, so a player who started the last
+            # four matches and turned an ankle on Thursday still scores about
+            # 0.97 here. FPL publishes a percentage for exactly that case and
+            # it is the better estimate whenever it is lower -- a 25% chance
+            # of playing is direct information, not a forecast to average
+            # against. Taking the minimum rather than replacing outright
+            # keeps the model's own doubts about a rotation risk that the
+            # flag says nothing about.
+            if 'chance' in block.columns:
+                chance = pd.to_numeric(block['chance'], errors='coerce') / 100.0
+                block['p_plays'] = np.where(chance.notna(),
+                                            np.minimum(block['p_plays'], chance),
+                                            block['p_plays'])
+            block['predicted_points_if_plays'] = spec['conditional'].predict(Za)
+            block['predicted_points_single_stage'] = block['predicted_points']
+            block['predicted_points'] = (block['p_plays']
+                                         * block['predicted_points_if_plays'])
+            block['model'] = f"{spec['name']}+availability"
+
         out.append(block)
 
     predictions = pd.concat(out, ignore_index=True)
@@ -467,6 +545,76 @@ def check_distribution(predictions: pd.DataFrame, history: pd.DataFrame) -> None
         )
 
 
+def predict_horizon(featured: pd.DataFrame, first: pd.DataFrame, models: dict,
+                    season: str, first_gw: int, horizon: int,
+                    history: pd.DataFrame) -> pd.DataFrame:
+    """Repeat the prediction for each gameweek in the horizon.
+
+    The player is frozen -- form, price, minutes history, availability all stay
+    as they are today -- and only the fixture moves. See scripts/horizon.py for
+    why that is the honest way to do this and how much of the signal survives
+    the distance (about 87% at five gameweeks out).
+
+    Blanks and doubles fall out of the schedule rather than needing special
+    cases: a club with no fixture contributes no rows that week, and a club
+    with two contributes two, which the caller sums.
+    """
+    import horizon as hz
+
+    print(f"\n{'=' * 78}\nHORIZON: GW{first_gw}..GW{first_gw + horizon - 1}\n{'=' * 78}")
+
+    fixtures_path = os.path.join('data', season, 'fixtures.csv')
+    if not os.path.exists(fixtures_path):
+        print(f"  {fixtures_path} not found; horizon limited to GW{first_gw}")
+        return first
+    fixtures = read_csv_tolerant(fixtures_path)
+
+    teams = read_csv_tolerant(os.path.join('data', season, 'teams.csv'))
+    id_to_name = dict(zip(teams['id'], teams['name']))
+
+    played = featured[featured['is_prediction_row'] == False]  # noqa: E712
+    overall, venue = hz.team_form_snapshot(played, season)
+    if not overall:
+        print(f"  no played matches for {season}; horizon limited to GW{first_gw}")
+        return first
+    schedule = hz.upcoming_fixtures(fixtures, first_gw, horizon, id_to_name)
+
+    base = featured[featured['is_prediction_row'] == True].copy()  # noqa: E712
+    feature_names = sorted({f for spec in models.values() for f in spec['features']}
+                           | {f for spec in models.values()
+                              for f in spec.get('availability_features', [])})
+
+    first = first.copy()
+    first['GW'] = first_gw
+    frames = [first]
+    for gw in range(first_gw + 1, first_gw + horizon):
+        aimed = hz.project(base, feature_names, schedule, overall, venue, gw)
+        if aimed.empty:
+            print(f"  GW{gw}: no fixtures")
+            continue
+        frames.append(predict(aimed, models))
+
+    out = pd.concat(frames, ignore_index=True)
+
+    # A double gameweek is two rows for one player; his week is the sum.
+    keys = ['element', 'GW']
+    sums = {'predicted_points': 'sum', 'predicted_points_if_plays': 'sum'}
+    sums = {k: v for k, v in sums.items() if k in out.columns}
+    doubles = out.groupby(keys).size()
+    n_doubles = int((doubles > 1).sum())
+    if n_doubles:
+        print(f"  {n_doubles} player-gameweeks are doubles; their points are summed")
+
+    per_gw = out.groupby('GW')['predicted_points'].agg(['size', 'mean']).round(2)
+    print("\n  gameweek coverage:")
+    for gw, row in per_gw.iterrows():
+        blanks = sorted(set(id_to_name.values()) - set(out[out['GW'] == gw]['team']))
+        note = f"   blank: {', '.join(blanks)}" if blanks else ""
+        print(f"    GW{int(gw):<3} {int(row['size']):>4} player-fixtures  "
+              f"mean {row['mean']:.2f}{note}")
+    return out
+
+
 def check_coverage(predictions: pd.DataFrame, expected: int) -> None:
     """The failure the old pipeline shipped silently: 54 rows out of 811."""
     got, teams = len(predictions), predictions['team'].nunique()
@@ -490,6 +638,11 @@ def main() -> int:
     ap.add_argument('--top', type=int, default=30)
     ap.add_argument('--no-api', action='store_true', help='use local files only')
     ap.add_argument('--out', default='predictions_next_gw.csv')
+    ap.add_argument('--horizon', type=int, default=1, metavar='N',
+                    help='also predict the N-1 gameweeks after the target, with '
+                         'each player frozen as he is today and only the fixture '
+                         'moving. The output gains a GW column and one row per '
+                         'player per gameweek. Default 1 (next gameweek only).')
     ap.add_argument('--include-unavailable', action='store_true',
                     help='keep injured and suspended players in the output')
     ap.add_argument('--debug-row', metavar='NAME',
@@ -543,6 +696,10 @@ def main() -> int:
     check_coverage(predictions, expected)
     check_distribution(predictions, history)
 
+    if args.horizon > 1:
+        predictions = predict_horizon(
+            featured, predictions, models, season, gameweek, args.horizon, history)
+
     if not args.include_unavailable:
         before = len(predictions)
         predictions = predictions[~predictions['status'].isin(UNAVAILABLE_STATUS)]
@@ -551,21 +708,49 @@ def main() -> int:
             print(f"  dropped {dropped} injured/suspended/unavailable players "
                   f"(--include-unavailable keeps them)")
 
-    predictions = predictions.sort_values('predicted_points', ascending=False)
+    if args.horizon > 1:
+        predictions = predictions.sort_values(['GW', 'predicted_points'],
+                                              ascending=[True, False])
+    else:
+        predictions = predictions.sort_values('predicted_points', ascending=False)
 
     # element is the FPL player id. Carrying it lets anything downstream join
     # back to players_raw.csv on an id rather than on a name, which is the only
     # reliable way to pick up photos, nationality and the rest of the metadata.
-    cols = ['element', 'name', 'team', 'position', 'opponent_team', 'was_home', 'value_m',
+    cols = ['element', 'name', 'team', 'position', 'GW', 'opponent_team', 'was_home', 'value_m',
             'predicted_points', 'points_per_million', 'has_prior_history',
-            'selected_by', 'status', 'model']
+            # Present only when the availability models are trained. Worth
+            # carrying: a 6.0 built from a certain start and a modest return is
+            # a different proposition from a 6.0 built from a half-chance of
+            # playing and a big one, and only these two columns tell them apart.
+            'p_plays', 'predicted_points_if_plays', 'predicted_points_single_stage',
+            'selected_by', 'status', 'chance', 'model']
     cols = [c for c in cols if c in predictions.columns]
     predictions[cols].to_csv(args.out, index=False)
 
-    print(f"\n{'=' * 78}\nTOP {args.top} FOR GW{gameweek}\n{'=' * 78}")
-    show = predictions[cols].head(args.top).copy()
-    show['predicted_points'] = show['predicted_points'].round(2)
-    show['points_per_million'] = show['points_per_million'].round(3)
+    last_gw = gameweek + args.horizon - 1
+    header = (f"TOP {args.top} OVER GW{gameweek}..GW{last_gw}, BY TOTAL"
+              if args.horizon > 1 else f"TOP {args.top} FOR GW{gameweek}")
+    print(f"\n{'=' * 78}\n{header}\n{'=' * 78}")
+    if args.horizon > 1:
+        # Ranked on the total over the horizon, which is the question a squad
+        # meant to last several gameweeks is actually answering. gws counts the
+        # weeks a player has a fixture at all, so a blank shows up as a total
+        # spread over fewer matches rather than as a quietly smaller number.
+        show = (predictions.groupby(['element', 'name', 'team', 'position'],
+                                    as_index=False)
+                .agg(total=('predicted_points', 'sum'),
+                     gws=('GW', 'nunique'),
+                     value_m=('value_m', 'first')))
+        show['per_gw'] = show['total'] / show['gws'].clip(lower=1)
+        show['per_million'] = show['total'] / show['value_m'].replace(0, np.nan)
+        show = show.sort_values('total', ascending=False).head(args.top).round(2)
+    else:
+        show = predictions[cols].head(args.top).copy()
+    if 'predicted_points' in show.columns:
+        show['predicted_points'] = show['predicted_points'].round(2)
+    if 'points_per_million' in show.columns:
+        show['points_per_million'] = show['points_per_million'].round(3)
     print(show.to_string(index=False))
 
     print(f"\nby position:")
@@ -577,7 +762,12 @@ def main() -> int:
         print(f"  {position:<4} {best['name'][:28]:<30} {best['predicted_points']:.2f} pts "
               f"({best['value_m']:.1f}m, {best['team']})")
 
-    print(f"\nwrote {args.out} ({len(predictions):,} players)")
+    if args.horizon > 1:
+        print(f"\nwrote {args.out} ({predictions['element'].nunique():,} players "
+              f"x {predictions['GW'].nunique()} gameweeks, "
+              f"{len(predictions):,} rows)")
+    else:
+        print(f"\nwrote {args.out} ({len(predictions):,} players)")
     print("\nThese are expected points, not certainties: test MAE is around one")
     print("point per player, so treat small gaps between players as noise.")
     return 0

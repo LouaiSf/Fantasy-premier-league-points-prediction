@@ -17,20 +17,37 @@ from __future__ import annotations
 import os
 import sys
 import traceback
+import datetime
+import subprocess
+from pathlib import Path
 
 import pandas as pd
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, request
+from flask_cors import CORS
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, 'scripts'))
 os.chdir(ROOT)   # every path in optimise.py is relative to the project root
 
-import optimise as opt  # noqa: E402
+try:
+    from scripts import optimise as opt  # noqa: E402
+except ImportError:
+    import optimise as opt  # noqa: E402
+from webapp.platform_data import (  # noqa: E402
+    build_local_snapshot,
+    latest_local_season,
+    player_history,
+)
 
 # optimise.py takes this as a CLI default rather than a module constant.
 DEFAULT_BUDGET = 100.0
 
 app = Flask(__name__)
+# The Next.js frontend (webapp/frontend) runs on its own dev port and calls
+# this API cross-origin; the Jinja/vanilla-JS pages it is replacing served
+# same-origin and needed none of this.
+CORS(app, resources={r'/api/*': {'origins': '*'}})
 
 # Loaded once. The CSV is small (a few hundred rows) and rereading it per
 # request would just add latency.
@@ -38,8 +55,11 @@ _state: dict = {}
 
 
 def state() -> dict:
+    path = opt.PREDICTIONS
     if not _state:
-        reload_predictions()
+        return reload_predictions()
+    if os.path.exists(path) and ('mtime' in _state and os.path.getmtime(path) != _state['mtime']):
+        return reload_predictions()
     return _state
 
 
@@ -60,6 +80,28 @@ def reload_predictions() -> dict:
         d for d in os.listdir('data')
         if os.path.isdir(os.path.join('data', d)) and d[:4].isdigit()
     )[-1]
+    teams_path = os.path.join('data', season, 'teams.csv')
+    if os.path.exists(teams_path):
+        local_teams = set(pd.read_csv(teams_path)['name'].dropna())
+        prediction_teams = set(everyone['team'].dropna())
+        if local_teams != prediction_teams:
+            only_predictions = ', '.join(sorted(prediction_teams - local_teams))
+            only_local = ', '.join(sorted(local_teams - prediction_teams))
+            _state.update({
+                'error': (
+                    f'{path} does not match local season {season}. '
+                    f'Only in predictions: {only_predictions or "none"}. '
+                    f'Only in local data: {only_local or "none"}. '
+                    'Refresh the local season data or regenerate predictions.'
+                ),
+                'players': pd.DataFrame(),
+                'everyone': pd.DataFrame(),
+                'season': season,
+                'gameweek': opt.infer_next_gameweek(season),
+                'mtime': os.path.getmtime(path),
+                'model': model_summary(),
+            })
+            return _state
 
     _state.update({
         'error': None,
@@ -78,8 +120,11 @@ def model_summary() -> dict:
     import json
     meta_path = os.path.join('saved_models', 'direct', 'meta.json')
     if not os.path.exists(meta_path):
+        meta_path = os.path.join('fpl_results', 'saved_models', 'direct', 'meta.json')
+    if not os.path.exists(meta_path):
         return {}
-    meta = json.load(open(meta_path, encoding='utf-8'))
+    with open(meta_path, encoding='utf-8') as f:
+        meta = json.load(f)
     return {
         pos: {
             'model': v.get('best_model'),
@@ -112,7 +157,7 @@ def squad_from_names(names: list) -> pd.DataFrame:
         indices += opt.read_squad_file_names(fuzzy, everyone)
 
     if len(set(indices)) != len(indices):
-        raise SystemExit('the same player appears twice in that squad')
+        raise ValueError('the same player appears twice in that squad')
     return everyone.loc[indices]
 
 
@@ -128,20 +173,6 @@ def on_error(exc):
 
 
 # ---------------------------------------------------------------------------
-# Pages
-# ---------------------------------------------------------------------------
-@app.route('/')
-def index():
-    s = state()
-    return render_template('index.html',
-                           error=s.get('error'),
-                           season=s.get('season'),
-                           gameweek=s.get('gameweek'),
-                           model=s.get('model', {}),
-                           player_count=len(s.get('players', [])))
-
-
-# ---------------------------------------------------------------------------
 # API
 # ---------------------------------------------------------------------------
 @app.route('/api/meta')
@@ -149,6 +180,10 @@ def api_meta():
     s = state()
     if s.get('error'):
         return fail(s['error'])
+    mtime = s.get('mtime')
+    updated_at = None
+    if mtime:
+        updated_at = datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc).isoformat()
     return jsonify({
         'ok': True,
         'season': s['season'],
@@ -159,7 +194,47 @@ def api_meta():
         'squad_size': opt.SQUAD_SIZE,
         'xi_size': opt.XI_SIZE,
         'hit_cost': opt.HIT_COST,
+        'predictions_updated_at': updated_at,
     })
+
+
+@app.route('/api/platform')
+def api_platform():
+    s = state()
+    season = s.get('season') or latest_local_season(Path(ROOT))
+    if season is None:
+        return fail('no local FPL season data is available')
+
+    snapshot = build_local_snapshot(Path(ROOT), season)
+    prediction_available = not bool(s.get('error'))
+    if prediction_available:
+        predictions = {
+            player['element']: player
+            for player in enriched_players()
+            if player.get('element') is not None
+        }
+        for player in snapshot['players']:
+            prediction = predictions.get(player.get('element'))
+            if prediction is None:
+                continue
+            for key in ('predicted_points', 'points_per_million', 'opponent_team',
+                        'was_home', 'has_prior_history'):
+                if key in prediction:
+                    player[key] = prediction[key]
+
+    mtime = s.get('mtime')
+    prediction_timestamp = (
+        datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc).isoformat()
+        if mtime else None
+    )
+    snapshot.update({
+        'ok': True,
+        'prediction_available': prediction_available,
+        'prediction_error': s.get('error'),
+        'prediction_timestamp': prediction_timestamp,
+        'model': s.get('model') or model_summary(),
+    })
+    return jsonify(snapshot)
 
 
 # Fields worth showing next to a prediction. Everything here comes from
@@ -198,7 +273,8 @@ def load_regions() -> dict:
     path = os.path.join('data', 'fpl_regions.json')
     if not os.path.exists(path):
         return {}
-    return json.load(open(path, encoding='utf-8'))
+    with open(path, encoding='utf-8') as f:
+        return json.load(f)
 
 
 def enriched_players() -> list:
@@ -216,8 +292,7 @@ def enriched_players() -> list:
     if not os.path.exists(raw_path):
         return base
 
-    raw = opt.read_csv_tolerant(raw_path) if hasattr(opt, 'read_csv_tolerant') \
-        else pd.read_csv(raw_path, low_memory=False)
+    raw = pd.read_csv(raw_path, low_memory=False)
     regions = load_regions()
 
     keep = ['id'] + [c for c in PROFILE_NUMERIC + PROFILE_TEXT if c in raw.columns]
@@ -252,7 +327,7 @@ def enriched_players() -> list:
 
         code = row.get('code')
         record['photo'] = (
-            f'https://resources.premierleague.com/premierleague/photos/players/110x140/p{int(code)}.png'
+            f'https://resources.premierleague.com/premierleague/photos/players/250x250/p{int(code)}.png'
             if code is not None and not pd.isna(code) else None
         )
 
@@ -352,7 +427,7 @@ def api_transfers():
 
     try:
         current = squad_from_names(names)
-    except SystemExit as exc:
+    except (ValueError, KeyError) as exc:
         return fail(str(exc))
 
     try:
@@ -383,7 +458,7 @@ def api_chips():
             return fail(f'a squad is {opt.SQUAD_SIZE} players; you gave {len(names)}')
         try:
             squad = squad_from_names(names)
-        except SystemExit as exc:
+        except (ValueError, KeyError) as exc:
             return fail(str(exc))
 
     try:
@@ -422,6 +497,46 @@ def api_reload():
         return fail(s['error'])
     return jsonify({'ok': True, 'players': len(s['players']),
                     'gameweek': s['gameweek']})
+
+
+@app.route('/api/refresh', methods=['POST'])
+def api_refresh():
+    s = state()
+    season = s.get('season') or latest_local_season(Path(ROOT))
+    if not season:
+        return fail('No local season configured.')
+
+    try:
+        res = subprocess.run(
+            [sys.executable, os.path.join(ROOT, 'scripts', 'fetch_data.py'), '--season', season],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        _state.clear()
+        new_state = state()
+        if new_state.get('error'):
+            return jsonify({'ok': False, 'error': new_state['error'], 'output': res.stdout}), 500
+        return jsonify({
+            'ok': True,
+            'message': f'Season {season} data refreshed successfully.',
+            'season': new_state['season'],
+            'gameweek': new_state['gameweek'],
+            'players': len(new_state['players']),
+        })
+    except Exception as exc:
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(exc)}), 500
+
+
+@app.route('/api/player/<int:element_id>/history')
+def api_player_history(element_id: int):
+    s = state()
+    season = s.get('season') or latest_local_season(Path(ROOT)) or '2026-27'
+    history = player_history(Path(ROOT), season, element_id)
+    return jsonify({'ok': True, 'history': history})
+
 
 
 if __name__ == '__main__':

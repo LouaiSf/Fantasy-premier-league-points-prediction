@@ -1,5 +1,7 @@
-"""Fetch season data from the vaastav/Fantasy-Premier-League mirror.
+"""Fetch season data from vaastav/Fantasy-Premier-League or olbauday/FPL-Core-Insights.
 
+vaastav (default source)
+------------------------
 The checked-in 2025-26 snapshot stops at GW9 and is missing GW7 entirely;
 upstream now has all 38. 2026-27 is not in this checkout at all.
 
@@ -19,11 +21,32 @@ Every download is verified as parseable CSV before it replaces anything, and
 the summary at the end reports rows per gameweek so a truncated upstream file
 is visible immediately rather than three stages later.
 
+olbauday source (--source olbauday)
+------------------------------------
+olbauday/FPL-Core-Insights updates twice daily and tracks the current season
+in real time. Its file layout differs from vaastav; this script translates it
+to the vaastav format our pipeline expects.
+
+    files fetched from olbauday:
+        data/{SEASON}/players.csv            player codes and positions
+        data/{SEASON}/playerstats.csv        current cumulative player stats
+        data/{SEASON}/teams.csv              team list
+        data/{SEASON}/By Gameweek/GW{N}/player_gameweek_stats.csv
+        data/{SEASON}/By Gameweek/GW{N}/fixtures.csv
+
+    files written locally (vaastav format):
+        data/{season}/players_raw.csv
+        data/{season}/teams.csv
+        data/{season}/fixtures.csv
+        data/{season}/gws/gw{N}.csv
+        data/{season}/gws/merged_gw.csv
+
 Usage
 -----
     python scripts/fetch_data.py --season 2025-26 --season 2026-27
     python scripts/fetch_data.py --season 2026-27 --force
     python scripts/fetch_data.py --list 2026-27      # what exists upstream
+    python scripts/fetch_data.py --season 2026-27 --source olbauday --force
 """
 
 from __future__ import annotations
@@ -37,6 +60,7 @@ import time
 import urllib.error
 import urllib.request
 
+import numpy as np
 import pandas as pd
 
 RAW = 'https://raw.githubusercontent.com/vaastav/Fantasy-Premier-League/master/data'
@@ -153,6 +177,413 @@ def fetch_season(season: str, force: bool, gw_files: bool = True) -> dict:
     return {'season': season, 'downloaded': downloaded, 'skipped': skipped, 'gws': got}
 
 
+OLBAUDAY_RAW = ('https://raw.githubusercontent.com/olbauday/'
+                'FPL-Core-Insights/main/data')
+
+# Maps olbauday position strings → FPL element_type integers
+_POS_MAP = {'Goalkeeper': 1, 'GK': 1, 'Defender': 2, 'DEF': 2,
+            'Midfielder': 3, 'MID': 3, 'Forward': 4, 'FWD': 4}
+
+
+def _local_to_olbauday_season(local: str) -> str:
+    """'2026-27' → '2026-2027'."""
+    y1, y2s = local.split('-')
+    return f"{y1}-{y1[:2]}{y2s}"
+
+
+def _ob_url(ob_season: str, path: str) -> str:
+    return f"{OLBAUDAY_RAW}/{ob_season}/{path.replace(' ', '%20')}"
+
+
+def _col(df: pd.DataFrame, col: str, default=0) -> pd.Series:
+    """Return df[col] if it exists, else a Series of *default* with matching index."""
+    return df[col] if col in df.columns else pd.Series(default, index=df.index)
+
+
+def _cost_to_tenths(costs: pd.Series) -> pd.Series:
+    """Normalise a price column to FPL tenths-of-a-million.
+
+    olbauday reports now_cost in millions (5.5); vaastav -- and therefore every
+    season this project trained on -- reports it in tenths (55). Left
+    unconverted the entire current season sits an order of magnitude below any
+    price the models ever saw, and `value` is the largest feature family in the
+    compact set. That is enough on its own to make every prediction for the
+    live season meaningless while each individual step still succeeds.
+
+    Detected rather than assumed, because the source could start reporting
+    tenths at any point: a Premier League squad's median price is around 5m,
+    never below 3.0 and never above 30 in either unit's overlap.
+    """
+    costs = pd.to_numeric(costs, errors='coerce')
+    median = costs.median()
+    if pd.notna(median) and median < 30:
+        return (costs * 10).round()
+    return costs
+
+
+def fetch_season_olbauday(local_season: str, force: bool) -> dict:
+    """Download from olbauday/FPL-Core-Insights and write vaastav-format files."""
+    print(f"\n{'=' * 72}\n{local_season} (source: olbauday)\n{'=' * 72}")
+
+    ob_season = _local_to_olbauday_season(local_season)
+    local_dir = os.path.join('data', local_season)
+    os.makedirs(os.path.join(local_dir, 'gws'), exist_ok=True)
+
+    downloaded = skipped = 0
+
+    def fetch_ob(path: str) -> bytes:
+        return http_get(_ob_url(ob_season, path))
+
+    def save_df(df: pd.DataFrame, path: str) -> None:
+        nonlocal downloaded
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + '.part'
+        df.to_csv(tmp, index=False)
+        os.replace(tmp, path)
+        downloaded += 1
+        print(f"    {os.path.basename(path):<30} {len(df):>7,} rows")
+
+    # ------------------------------------------------------------------ teams
+    teams_path = os.path.join(local_dir, 'teams.csv')
+    if not os.path.exists(teams_path) or force:
+        print("  Fetching teams …")
+        raw = pd.read_csv(io.BytesIO(fetch_ob('teams.csv')))
+        # olbauday leaves the summary `strength` column empty but fills the
+        # per-venue ones, so fall back to those rather than to the constant 3
+        # this used to settle for. A table where every team is equally strong
+        # makes every fixture difficulty identical, which silently removes the
+        # fx_* family -- the one worth the most R2 of any group in the model.
+        home_strength = pd.to_numeric(_col(raw, 'strength_overall_home', np.nan),
+                                      errors='coerce')
+        away_strength = pd.to_numeric(_col(raw, 'strength_overall_away', np.nan),
+                                      errors='coerce')
+        strength = pd.to_numeric(_col(raw, 'strength', np.nan), errors='coerce')
+        strength = strength.fillna(
+            pd.concat([home_strength, away_strength], axis=1).mean(axis=1).round()
+        )
+        if strength.isna().all():
+            print("    WARNING: no usable team strength; fixture difficulty "
+                  "will be flat")
+        teams_out = pd.DataFrame({
+            'id': raw['id'].astype(int),
+            'code': raw['code'].astype(int),
+            'name': raw['name'],
+            'short_name': _col(raw, 'short_name',
+                               raw['name'].str[:3].str.upper()),
+            'strength': strength.fillna(3).astype(int),
+            'strength_overall_home': home_strength.fillna(3).astype(int),
+            'strength_overall_away': away_strength.fillna(3).astype(int),
+        })
+        save_df(teams_out, teams_path)
+    else:
+        teams_out = pd.read_csv(teams_path)
+        skipped += 1
+        print(f"    teams.csv                        (skipped)")
+
+    team_code_to_id: dict = dict(zip(teams_out['code'], teams_out['id']))
+    team_id_to_name: dict = dict(zip(teams_out['id'], teams_out['name']))
+
+    # --------------------------------------------------------------- players
+    players_path = os.path.join(local_dir, 'players_raw.csv')
+    if not os.path.exists(players_path) or force:
+        print("  Fetching players.csv + playerstats.csv …")
+        players_df = pd.read_csv(io.BytesIO(fetch_ob('players.csv')))
+        stats_df = pd.read_csv(io.BytesIO(fetch_ob('playerstats.csv')),
+                               low_memory=False)
+
+        # playerstats.csv has one row per player per GW (cumulative snapshot).
+        # Keep only the latest row per player so players_raw.csv has one row.
+        if 'gw' in stats_df.columns:
+            stats_df = (stats_df
+                        .sort_values('gw')
+                        .groupby('id', as_index=False)
+                        .last())
+
+        # olbauday players.csv: player_code, player_id, first_name,
+        #   second_name, web_name, team_code, position
+        # olbauday playerstats.csv: id (=player_id), + all the stats
+        merged = stats_df.merge(
+            players_df[['player_id', 'player_code', 'team_code', 'position']],
+            left_on='id', right_on='player_id', how='left',
+        )
+        merged['element_type'] = (merged['position']
+                                  .map(_POS_MAP).fillna(0).astype(int))
+        merged['team'] = (merged['team_code']
+                          .map(team_code_to_id).fillna(0).astype(int))
+        merged.rename(columns={'player_code': 'code'}, inplace=True)
+
+        # platform_data.py divides now_cost by 10 to get a price in millions,
+        # which is only right if this is in tenths.
+        if 'now_cost' in merged.columns:
+            merged['now_cost'] = _cost_to_tenths(merged['now_cost'])
+
+        # Resolve first_name / second_name: stats file has them already,
+        # but if missing fall back to players.csv columns.
+        if 'first_name' not in merged.columns and 'first_name_x' in merged.columns:
+            merged.rename(columns={'first_name_x': 'first_name',
+                                   'second_name_x': 'second_name',
+                                   'web_name_x': 'web_name'}, inplace=True)
+
+        save_df(merged, players_path)
+        players_out = merged
+    else:
+        players_out = pd.read_csv(players_path, low_memory=False)
+        skipped += 1
+        print(f"    players_raw.csv                  (skipped)")
+
+    player_id_to_team: dict = dict(zip(players_out['id'],
+                                       players_out['team']))
+    # The per-GW files carry neither position nor club, but both are columns
+    # the dataset builder expects and would otherwise fill with zero --
+    # position silently, even though every model is trained per position.
+    _ELEMENT_TYPE_NAME = {1: 'GK', 2: 'DEF', 3: 'MID', 4: 'FWD'}
+    player_id_to_position: dict = dict(zip(
+        players_out['id'],
+        players_out['element_type'].map(_ELEMENT_TYPE_NAME),
+    ))
+
+    # --------------------------------------------------------------- fixtures
+    fixtures_path = os.path.join(local_dir, 'fixtures.csv')
+    if not os.path.exists(fixtures_path) or force:
+        print("  Fetching fixtures from GW folders …")
+        all_fix: list[pd.DataFrame] = []
+        for gw in range(1, 39):
+            try:
+                data = fetch_ob(f"By Gameweek/GW{gw}/fixtures.csv")
+                gw_fix = pd.read_csv(io.BytesIO(data))
+                # Keep Premier League fixtures only.
+                if 'tournament' in gw_fix.columns:
+                    # olbauday uses 'prem' for Premier League fixtures;
+                    # the regex catches 'prem', 'premier-league', etc.
+                    gw_fix = gw_fix[
+                        gw_fix['tournament'].str.match(
+                            r'^prem', case=False, na=False)
+                    ]
+                # Require both team IDs to be present.
+                gw_fix = gw_fix[
+                    gw_fix['home_team'].notna() & gw_fix['away_team'].notna()
+                ]
+                if not gw_fix.empty:
+                    all_fix.append(gw_fix)
+                    print(f"    GW{gw}: {len(gw_fix)} PL fixtures")
+            except urllib.error.HTTPError as exc:
+                if exc.code == 404:
+                    break
+                print(f"    GW{gw}: HTTP {exc.code} — skipped")
+            except Exception as exc:
+                print(f"    GW{gw}: {exc!r} — skipped")
+
+        if all_fix:
+            fix_df = pd.concat(all_fix, ignore_index=True)
+            kt = _col(fix_df, 'kickoff_time', '').astype(str)
+            # Normalise to RFC-3339 / ISO 8601 with UTC timezone that pandas
+            # can parse with %z: append 'Z' when no offset is present.
+            kt = kt.apply(
+                lambda s: s if (s.endswith('Z') or '+' in s[-6:]) else s + 'Z'
+                if s else ''
+            )
+            # olbauday's home_team / away_team are team CODES (e.g. 3 for
+            # Arsenal), not IDs (1 for Arsenal). Convert using team_code_to_id
+            # so the fixture lookup keys match what player_id_to_team returns.
+            h_codes = fix_df['home_team'].astype(float).astype(int)
+            a_codes = fix_df['away_team'].astype(float).astype(int)
+            team_h_ids = h_codes.map(team_code_to_id)
+            team_a_ids = a_codes.map(team_code_to_id)
+            # Difficulty is the strength of the team you are up against, at
+            # the venue you meet them. Hardcoding 3 made every fixture look
+            # identical, which flattens the whole fx_* feature family to a
+            # constant and removes fixture difficulty from the model entirely.
+            id_to_home_strength = dict(zip(teams_out['id'],
+                                           teams_out['strength_overall_home']))
+            id_to_away_strength = dict(zip(teams_out['id'],
+                                           teams_out['strength_overall_away']))
+            fix_out = pd.DataFrame({
+                'id': range(1, len(fix_df) + 1),   # synthetic fixture ID
+                'event': fix_df['gameweek'].astype(int),
+                'team_h': team_h_ids,
+                'team_a': team_a_ids,
+                'kickoff_time': kt,
+                'finished': _col(fix_df, 'finished', False),
+                # The home side's difficulty is how strong the away side is away.
+                'team_h_difficulty': team_a_ids.map(id_to_away_strength).fillna(3).astype(int),
+                'team_a_difficulty': team_h_ids.map(id_to_home_strength).fillna(3).astype(int),
+                'team_h_score': pd.to_numeric(_col(fix_df, 'home_score', np.nan),
+                                              errors='coerce'),
+                'team_a_score': pd.to_numeric(_col(fix_df, 'away_score', np.nan),
+                                              errors='coerce'),
+            })
+            # Drop rows where team mapping failed (non-PL teams that slipped
+            # through the tournament filter).
+            fix_out = fix_out.dropna(subset=['team_h', 'team_a'])
+            fix_out[['team_h', 'team_a']] = (
+                fix_out[['team_h', 'team_a']].astype(int)
+            )
+            save_df(fix_out, fixtures_path)
+            fixtures_out = fix_out
+        else:
+            print("    WARNING: no PL fixtures found — fixtures.csv not written")
+            fixtures_out = pd.DataFrame()
+    else:
+        fixtures_out = pd.read_csv(fixtures_path)
+        skipped += 1
+        print(f"    fixtures.csv                     (skipped)")
+
+    # Build fixture lookup
+    # {(gw, team_id): (opponent_id, was_home, kickoff_time, fixture_id,
+    #                  team_score, opponent_score)}
+    fixture_lookup: dict = {}
+    if not fixtures_out.empty:
+        for _, row in fixtures_out.iterrows():
+            gw_n = int(row['event'])
+            h = int(row['team_h'])
+            a = int(row['team_a'])
+            kt = str(row.get('kickoff_time', '') or '')
+            fid = int(row.get('id', 0))
+            hs = pd.to_numeric(row.get('team_h_score'), errors='coerce')
+            as_ = pd.to_numeric(row.get('team_a_score'), errors='coerce')
+            fixture_lookup[(gw_n, h)] = (a, True, kt, fid, hs, as_)
+            fixture_lookup[(gw_n, a)] = (h, False, kt, fid, as_, hs)
+
+    # ---------------------------------------------------------- per-GW stats
+    print("  Fetching per-GW player stats …")
+    all_gw_frames: list[pd.DataFrame] = []
+    available_gws: list[int] = []
+
+    for gw in range(1, 39):
+        gw_path = os.path.join(local_dir, 'gws', f'gw{gw}.csv')
+        if os.path.exists(gw_path) and not force:
+            df = pd.read_csv(gw_path, low_memory=False)
+            all_gw_frames.append(df)
+            available_gws.append(gw)
+            skipped += 1
+            continue
+
+        try:
+            data = fetch_ob(f"By Gameweek/GW{gw}/player_gameweek_stats.csv")
+            src = pd.read_csv(io.BytesIO(data), low_memory=False)
+
+            gw_out = pd.DataFrame({
+                'element': src['id'],
+                'name': _col(src, 'web_name', ''),
+                'GW': gw,
+                'total_points': _col(src, 'total_points', 0),
+                'minutes': _col(src, 'minutes', 0),
+                'goals_scored': _col(src, 'goals_scored', 0),
+                'assists': _col(src, 'assists', 0),
+                'clean_sheets': _col(src, 'clean_sheets', 0),
+                'goals_conceded': _col(src, 'goals_conceded', 0),
+                'own_goals': _col(src, 'own_goals', 0),
+                'penalties_saved': _col(src, 'penalties_saved', 0),
+                'penalties_missed': _col(src, 'penalties_missed', 0),
+                'yellow_cards': _col(src, 'yellow_cards', 0),
+                'red_cards': _col(src, 'red_cards', 0),
+                'saves': _col(src, 'saves', 0),
+                'bonus': _col(src, 'bonus', 0),
+                'bps': _col(src, 'bps', 0),
+                'ict_index': _col(src, 'ict_index', 0),
+                'expected_goals': _col(src, 'expected_goals', 0),
+                'expected_assists': _col(src, 'expected_assists', 0),
+                'expected_goal_involvements':
+                    _col(src, 'expected_goal_involvements', 0),
+                'expected_goals_conceded':
+                    _col(src, 'expected_goals_conceded', 0),
+                'starts': _col(src, 'starts', 0),
+                'transfers_in': _col(src, 'transfers_in', 0),
+                'transfers_out': _col(src, 'transfers_out', 0),
+                'transfers_balance':
+                    _col(src, 'transfers_in', 0).astype(float)
+                    - _col(src, 'transfers_out', 0).astype(float),
+                'selected': _col(src, 'selected_by_percent', 0),
+                'value': _cost_to_tenths(_col(src, 'now_cost', 0)),
+                'round': gw,
+                # The ICT components. ict_index alone was carried through
+                # before, which left influence/creativity/threat at zero for
+                # the whole season -- and those three are where an attacker's
+                # signal lives. Every lag and rolling mean built on top of them
+                # was zero too, so forwards and midfielders arrived at the
+                # model looking like players who had done nothing, while
+                # goalkeepers (whose saves and clean sheets did come through)
+                # rose to the top of the ranking.
+                'influence': _col(src, 'influence', 0),
+                'creativity': _col(src, 'creativity', 0),
+                'threat': _col(src, 'threat', 0),
+                # Defensive actions. build_dataset derives defensive
+                # contribution -- now a live scoring mechanic worth +2 -- from
+                # these three plus position, so zeroes here zero that too.
+                'clearances_blocks_interceptions':
+                    _col(src, 'clearances_blocks_interceptions', 0),
+                'recoveries': _col(src, 'recoveries', 0),
+                'tackles': _col(src, 'tackles', 0),
+            })
+
+            # position and team are not in the per-GW file; they come from the
+            # season player list. position in particular is not optional --
+            # models are trained per position and the defensive-contribution
+            # thresholds differ by position.
+            gw_out['position'] = gw_out['element'].map(player_id_to_position)
+            gw_out['team'] = (gw_out['element']
+                              .map(player_id_to_team)
+                              .map(team_id_to_name))
+            unplaced = int(gw_out['position'].isna().sum())
+            if unplaced:
+                print(f"    GW{gw}: {unplaced} players have no position in "
+                      f"players.csv")
+            gw_out['position'] = gw_out['position'].fillna('')
+            gw_out['team'] = gw_out['team'].fillna('')
+
+            # Derive opponent_team and was_home from the fixture lookup.
+            team_ids = gw_out['element'].map(player_id_to_team)
+
+            _blank = (None, None, None, None, None, None)
+
+            def _lookup(tid, idx):
+                if pd.isna(tid):
+                    return None
+                return fixture_lookup.get((gw, int(tid)), _blank)[idx]
+
+            opponent_ids = team_ids.apply(lambda t: _lookup(t, 0))
+            gw_out['opponent_team'] = (opponent_ids
+                                       .map(team_id_to_name).fillna(''))
+            gw_out['was_home'] = team_ids.apply(lambda t: _lookup(t, 1))
+            # kickoff_time — needed by build_dataset's game_number assignment.
+            gw_out['kickoff_time'] = team_ids.apply(lambda t: _lookup(t, 2))
+            # fixture — join key used by add_expected_stats in build_dataset.
+            gw_out['fixture'] = team_ids.apply(lambda t: _lookup(t, 3))
+            # The scoreline, which the feature stage turns into my_team_score,
+            # opponent_team_score and result.
+            team_score = team_ids.apply(lambda t: _lookup(t, 4))
+            opp_score = team_ids.apply(lambda t: _lookup(t, 5))
+            home = gw_out['was_home'].fillna(False).astype(bool)
+            gw_out['team_h_score'] = team_score.where(home, opp_score)
+            gw_out['team_a_score'] = opp_score.where(home, team_score)
+
+            save_df(gw_out, gw_path)
+            all_gw_frames.append(gw_out)
+            available_gws.append(gw)
+
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                break
+            print(f"    GW{gw}: HTTP {exc.code} — skipped")
+        except Exception as exc:
+            print(f"    GW{gw}: {exc!r} — skipped")
+
+    # --------------------------------------------------------- merged_gw.csv
+    merged_path = os.path.join(local_dir, 'gws', 'merged_gw.csv')
+    if all_gw_frames and (not os.path.exists(merged_path) or force):
+        merged_df = pd.concat(all_gw_frames, ignore_index=True)
+        save_df(merged_df, merged_path)
+
+    print(f"\n  downloaded {downloaded}, left alone {skipped}"
+          f"{' (use --force to refresh)' if skipped else ''}")
+    return {
+        'season': local_season,
+        'downloaded': downloaded,
+        'skipped': skipped,
+        'gws': available_gws,
+    }
+
+
 def report(season: str) -> None:
     """What the pipeline will actually see for this season."""
     path = os.path.join('data', season, 'gws', 'merged_gw.csv')
@@ -180,11 +611,18 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--season', action='append', dest='seasons',
                     help='season to fetch, repeatable (default: 2025-26 and 2026-27)')
-    ap.add_argument('--force', action='store_true', help='re-download files that already exist')
+    ap.add_argument('--force', action='store_true',
+                    help='re-download files that already exist')
     ap.add_argument('--no-gw-files', action='store_true',
-                    help='fetch only merged_gw.csv, not the per-gameweek files')
+                    help='fetch only merged_gw.csv, not the per-gameweek files '
+                         '(vaastav source only)')
     ap.add_argument('--list', dest='list_season',
-                    help='just report what exists upstream for this season')
+                    help='just report what exists upstream for this season '
+                         '(vaastav source only)')
+    ap.add_argument('--source', choices=['vaastav', 'olbauday'],
+                    default='vaastav',
+                    help='data source: vaastav (default) or olbauday '
+                         '(olbauday/FPL-Core-Insights, updates twice daily)')
     args = ap.parse_args()
 
     if args.list_season:
@@ -193,8 +631,13 @@ def main() -> int:
         return 0
 
     seasons = args.seasons or ['2025-26', '2026-27']
-    for season in seasons:
-        fetch_season(season, force=args.force, gw_files=not args.no_gw_files)
+
+    if args.source == 'olbauday':
+        for season in seasons:
+            fetch_season_olbauday(season, force=args.force)
+    else:
+        for season in seasons:
+            fetch_season(season, force=args.force, gw_files=not args.no_gw_files)
 
     print(f"\n{'=' * 72}\nWHAT THE PIPELINE WILL SEE\n{'=' * 72}")
     for season in seasons:

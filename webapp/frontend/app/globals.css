@@ -1,0 +1,23 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+/* The FPL Assistant Broadcast Design System (see /DESIGN.md), ported verbatim
+   from fpl-assistant-prototype.html. Unlayered, so it wins over the @layer
+   base rules below regardless of import order -- this is deliberate: every
+   screen is built from these tokens and component classes, not Tailwind
+   utilities or shadcn's default theme. */
+@import "./broadcast.css";
+
+/* Only bg-foreground/text-background from components/ui/tooltip.tsx still
+   reference these -- everything else from the shadcn starter theme (sidebar,
+   chart, card, popover, primary/secondary/accent, the light/dark pair, the
+   base-layer body styles) was fully superseded by broadcast.css above and
+   had zero remaining references. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+}
