@@ -352,7 +352,7 @@ def suggest_transfers(current: pd.DataFrame, players: pd.DataFrame,
         print(f"  {row['transfers']:<7}{row['gross']:>8.2f}{row['hit']:>6}"
               f"{row['net']:>8.2f}{row['gain']:>+8.2f}")
 
-    best = max(rows, key=lambda r: r['net'])
+    best = data['best']
     print(f"\n  best: {best['transfers']} transfer(s), "
           f"net {best['net']:.2f} ({best['gain']:+.2f} vs standing pat)")
     if best['transfers']:
