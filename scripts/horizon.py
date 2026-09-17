@@ -29,6 +29,10 @@ Roughly 2.6% of the ranking decays per gameweek. Six weeks out is still worth
 most of one week out, which is what makes planning a squad over a horizon
 worth doing rather than a way of dressing up noise.
 
+Worth knowing that this decay is not a reason to discount later gameweeks
+when choosing a squad to hold: see horizon_weights in scripts/optimise.py,
+where weighting every week equally backtests better than any discount.
+
 Why only the fixture features move
 ----------------------------------
 Of the features the models use, exactly the fx_* family depends on which
