@@ -1528,3 +1528,6 @@
     .proj-panel{flex-direction:column;align-items:stretch;gap:var(--space-3)}
     .proj-figure strong{font-size:28px}
   }
+
+  /* Over budget is a state the user has to fix, not a neutral number. */
+  .rail-stat strong.is-over{color:var(--pink)}
