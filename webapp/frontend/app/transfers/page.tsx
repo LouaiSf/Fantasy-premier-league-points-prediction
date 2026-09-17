@@ -9,6 +9,7 @@ import { clubStyle } from "@/lib/club-colors";
 import { money, num, signed } from "@/lib/format";
 import type { PlayerRecord, TransferResult } from "@/lib/types";
 import { Loading } from "@/components/loading";
+import { ModelInfo } from "@/components/model-info";
 
 const OUT_FILTERS = ["ALL", "GK", "DEF", "MID", "FWD", "FLAG"] as const;
 const IN_FILTERS = ["ALL", "GK", "DEF", "MID", "FWD"] as const;
@@ -186,6 +187,9 @@ export default function TransfersPage() {
             Stage one move clearly, then ask the existing optimiser how many transfers survive
             the hit.
           </p>
+          {predictionAvailable && (
+            <ModelInfo model={snapshot.model} timestamp={snapshot.prediction_timestamp} />
+          )}
         </div>
 
         <div className="studio-bar">

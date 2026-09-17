@@ -222,10 +222,16 @@ def api_platform():
                 if key in prediction:
                     player[key] = prediction[key]
 
+    mtime = s.get('mtime')
+    prediction_timestamp = (
+        datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc).isoformat()
+        if mtime else None
+    )
     snapshot.update({
         'ok': True,
         'prediction_available': prediction_available,
         'prediction_error': s.get('error'),
+        'prediction_timestamp': prediction_timestamp,
         'model': s.get('model') or model_summary(),
     })
     return jsonify(snapshot)
