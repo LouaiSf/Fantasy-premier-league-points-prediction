@@ -37,6 +37,7 @@ except ImportError:
 from webapp.platform_data import (  # noqa: E402
     build_local_snapshot,
     latest_local_season,
+    photo_url,
     player_history,
 )
 
@@ -351,10 +352,9 @@ def enriched_players() -> list:
             record[key] = None if value is None or (isinstance(value, float) and pd.isna(value)) else str(value)
 
         code = row.get('code')
-        record['photo'] = (
-            f'https://resources.premierleague.com/premierleague/photos/players/250x250/p{int(code)}.png'
-            if code is not None and not pd.isna(code) else None
-        )
+        code = None if code is None or pd.isna(code) else int(code)
+        record['photo'] = photo_url(code)
+        record['photo_large'] = photo_url(code, '500x500')
 
         region = row.get('region')
         meta = regions.get(str(int(region))) if region is not None and not pd.isna(region) else None

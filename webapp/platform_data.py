@@ -52,6 +52,7 @@ class PlayerRecord(TypedDict):
     news_since_gw: int | None
     cost_change_event: int
     photo: str | None
+    photo_large: str | None
     predicted_points: float | None
     points_per_million: float | None
 
@@ -66,6 +67,19 @@ class PlatformSnapshot(TypedDict):
 
 
 POSITION_NAMES: Final[dict[int, str]] = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
+
+# The old premierleague/.../p{code}.png folder stopped being updated in 2024, so
+# it shows players in the kit of the club they left and has nothing for anyone
+# who arrived since. This folder is the one the FPL site itself uses, keyed on
+# `code` (the stable player id), not on the per-season `id`.
+PHOTO_URL: Final[str] = "https://resources.premierleague.com/premierleague25/photos/players/{size}/{code}.png"
+
+
+def photo_url(code: int | None, size: str = "110x140") -> str | None:
+    """110x140 covers the most players; 500x500 is sharp enough for a hero
+    shot but is missing for about a dozen players who do have the small one,
+    so the caller keeps both and falls back."""
+    return PHOTO_URL.format(size=size, code=int(code)) if code else None
 
 
 def _integer(value: str | None, default: int = 0) -> int:
@@ -213,11 +227,8 @@ def build_local_snapshot(
                 chance_of_playing_this_round=chance_this,
                 news_since_gw=optional_int("news_since_gw"),
                 cost_change_event=_integer(row.get("cost_change_event")),
-                photo=(
-                    f"https://resources.premierleague.com/premierleague/photos/players/250x250/p{code}.png"
-                    if code
-                    else None
-                ),
+                photo=photo_url(code),
+                photo_large=photo_url(code, "500x500"),
                 predicted_points=None,
                 points_per_million=None,
             )

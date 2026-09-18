@@ -55,6 +55,7 @@ export interface PlayerRecord {
   news_since_gw: number | null;
   cost_change_event: number;
   photo: string | null;
+  photo_large?: string | null;
   country?: string | null;
   flag?: string | null;
   birth_date?: string | null;

@@ -140,7 +140,8 @@ export function PlayerDrawer() {
                   </span>
                   <div className="drawer-portrait">
                     <PlayerPhoto
-                      src={player.photo ?? undefined}
+                      src={player.photo_large ?? player.photo ?? undefined}
+                      fallbackSrc={player.photo ?? undefined}
                       alt={player.name}
                       name={player.name}
                       width={160}

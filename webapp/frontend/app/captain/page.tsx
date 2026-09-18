@@ -93,7 +93,8 @@ export default function CaptainPage() {
             )}
             <div className="cap-shot" aria-hidden="true">
               <PlayerPhoto
-                src={lead.photo ?? undefined}
+                src={lead.photo_large ?? lead.photo ?? undefined}
+                fallbackSrc={lead.photo ?? undefined}
                 alt={lead.name}
                 name={lead.name}
                 width={250}
@@ -293,7 +294,7 @@ export default function CaptainPage() {
               >
                 {lead.photo && (
                   <div className="shot">
-                    <PlayerPhoto src={lead.photo} alt="" />
+                    <PlayerPhoto src={lead.photo_large ?? lead.photo} fallbackSrc={lead.photo} alt="" />
                   </div>
                 )}
                 <div className="battle-pick-copy">
@@ -337,7 +338,7 @@ export default function CaptainPage() {
               >
                 {runnerUp.photo && (
                   <div className="shot">
-                    <PlayerPhoto src={runnerUp.photo} alt="" />
+                    <PlayerPhoto src={runnerUp.photo_large ?? runnerUp.photo} fallbackSrc={runnerUp.photo} alt="" />
                   </div>
                 )}
                 <div className="battle-pick-copy">

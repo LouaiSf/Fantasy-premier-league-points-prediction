@@ -6,13 +6,14 @@ import type { ImgHTMLAttributes } from "react";
 interface PlayerPhotoProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "alt"> {
   alt: string;
   name?: string;
+  // Tried when `src` is missing or has failed, e.g. a sharp hero image that
+  // only exists for some players, backed by the small one that exists for more.
+  fallbackSrc?: string;
 }
 
-// Roughly half the 2026-27 squad has no portrait on the Premier League CDN --
-// a sampled check returned 403 for 12 of 24 codes, and for those players every
-// size is missing, not just the 250x250 this app asks for. So the fallback is
-// not a rare edge case, it is what a lot of the roster renders as, and the
-// failed request behind it is worth making exactly once.
+// About 15% of the 2026-27 squad (mostly new signings) has no portrait on the
+// Premier League CDN yet, so the fallback is a normal state rather than a rare
+// edge case, and the failed request behind it is worth making exactly once.
 //
 // Shared across every instance rather than held per component: the same player
 // appears in the market column, a shortlist and the pitch at once, and each of
@@ -46,17 +47,19 @@ export function PlayerPhoto({
   alt,
   name,
   src,
+  fallbackSrc,
   className,
   onError,
   loading = "lazy",
   decoding = "async",
   ...props
 }: PlayerPhotoProps) {
-  const key = typeof src === "string" ? src : null;
+  const key =
+    [src, fallbackSrc].find((url): url is string => typeof url === "string" && !failedUrls.has(url)) ?? null;
   // Re-render trigger only; the Set above is the actual record.
   const [, setAttempt] = React.useState(0);
 
-  if (!key || failedUrls.has(key)) {
+  if (!key) {
     return <PhotoFallback alt={alt} name={name} className={className} />;
   }
 
