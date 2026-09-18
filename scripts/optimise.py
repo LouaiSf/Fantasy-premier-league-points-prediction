@@ -73,6 +73,16 @@ DECISION_MARGIN = 1.0
 # differences far smaller than the model can resolve. This is the budget for
 # breaking them. The points actually given up are measured and reported, so
 # the cost of a seed is never hidden.
+#
+# Over five managers on a 100.0m budget, distinct starting elevens against the
+# worst any of them gave up:
+#
+#     0.05   4 of 5   -0.23        0.20   5 of 5   -0.58
+#     0.10   4 of 5   -0.52        0.50   5 of 5   -3.60
+#
+# 0.05 already separates almost everyone for a quarter of a point, and 0.50
+# buys the last pair at more than the model can defend. Raise it with
+# --seed-scale if a deployment would rather have the variety.
 TIEBREAK_SCALE = 0.05
 
 # Two squads count as different answers only if this many players differ.
@@ -246,7 +256,8 @@ def seed_jitter(players: pd.DataFrame, seed, scale: float = TIEBREAK_SCALE) -> d
 def solve_squad(players: pd.DataFrame, budget: float, *, squad_size: int = SQUAD_SIZE,
                 locked=None, banned=None, must_transfer_out=None,
                 bench_weight: float = BENCH_WEIGHT, captain: bool = True,
-                apart_from=None, ownership_penalty: float = 0.0, seed=None):
+                apart_from=None, ownership_penalty: float = 0.0, seed=None,
+                seed_scale: float = TIEBREAK_SCALE):
     """Best legal squad, XI, bench order and armband picks -- one program.
 
     Picking fifteen and then picking eleven separately gives a worse answer
@@ -291,8 +302,13 @@ def solve_squad(players: pd.DataFrame, budget: float, *, squad_size: int = SQUAD
         objective -= pulp.lpSum(
             ownership_penalty * float(owned[i]) * in_squad[i] for i in idx)
     if seed is not None:
-        jitter = seed_jitter(players, seed)
+        # On both terms. Nudging only squad membership left the best eleven
+        # to be chosen on points alone, so every manager fielded near enough
+        # the same team and the differences all landed on the bench: two
+        # distinct elevens in five rather than four, at identical cost.
+        jitter = seed_jitter(players, seed, seed_scale)
         objective += pulp.lpSum(jitter[i] * in_squad[i] for i in idx)
+        objective += pulp.lpSum(jitter[i] * in_xi[i] for i in idx)
     problem += objective
 
     for i in idx:
@@ -1255,6 +1271,12 @@ def main() -> int:
                          help='points to dock per percent of ownership per '
                               'player owned, to tilt away from the template. '
                               '0.01 charges a 50%%-owned player half a point')
+    p_squad.add_argument('--seed-scale', type=float, default=TIEBREAK_SCALE,
+                         metavar='J',
+                         help=f'how far a seed may move a pick, in points per '
+                              f'player (default {TIEBREAK_SCALE}). Higher means '
+                              f'more variety between managers and a larger '
+                              f'measured cost')
     p_squad.add_argument('--seed', default=None, metavar='S',
                          help='break ties reproducibly, so two managers on the '
                               'same budget get different squads from the same '
@@ -1304,7 +1326,8 @@ def main() -> int:
         else:
             size = XI_SIZE if args.formation_only_xi else SQUAD_SIZE
             steer = dict(squad_size=size, locked=lock, banned=ban,
-                         ownership_penalty=args.differential, seed=args.seed)
+                         ownership_penalty=args.differential, seed=args.seed,
+                         seed_scale=args.seed_scale)
             if args.alternatives:
                 data = compute_squad_alternatives(
                     players, args.budget, count=args.alternatives,

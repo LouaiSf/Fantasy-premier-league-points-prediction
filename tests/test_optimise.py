@@ -312,3 +312,28 @@ def test_ownership_penalty_buys_a_less_owned_squad() -> None:
     assert squad_ownership(tilted['squad']) < squad_ownership(plain['squad'])
     # The penalty steers the pick; it is not counted as points anyone scores.
     assert expected_total(tilted) <= expected_total(plain)
+
+
+def test_seed_scale_controls_how_far_a_seed_may_move_the_pick() -> None:
+    players = market()
+    timid, _ = solve_squad(players, 80.0, seed="alice", seed_scale=0.0)
+    plain, _ = solve_squad(players, 80.0)
+    bold, _ = solve_squad(players, 80.0, seed="alice", seed_scale=0.5)
+
+    # A zero budget for tie-breaking cannot move anything.
+    assert set(timid['squad']['name']) == set(plain['squad']['name'])
+    # A wider one can, and what it costs stays measurable against the optimum.
+    assert set(bold['squad']['name']) != set(plain['squad']['name'])
+    assert expected_total(plain) >= expected_total(bold)
+
+
+def test_a_seed_moves_the_eleven_not_only_the_bench() -> None:
+    # Nudging squad membership alone left every manager fielding the same XI.
+    players = market()
+    elevens = {
+        frozenset(solve_squad(players, 80.0, seed=who, seed_scale=0.2)[0]
+                  ["xi"]["name"])
+        for who in ('alice', 'bob', 'carol', 'dave')
+    }
+
+    assert len(elevens) > 1
