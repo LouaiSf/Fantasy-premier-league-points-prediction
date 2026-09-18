@@ -48,6 +48,8 @@ class PlayerRecord(TypedDict):
     transfers_in_event: int
     transfers_out_event: int
     chance_of_playing_next_round: int | None
+    chance_of_playing_this_round: int | None
+    news_since_gw: int | None
     cost_change_event: int
     photo: str | None
     predicted_points: float | None
@@ -172,8 +174,15 @@ def build_local_snapshot(
         code = _integer(row.get("code"))
         first_name = row.get("first_name", "").strip()
         second_name = row.get("second_name", "").strip()
-        chance_text = row.get("chance_of_playing_next_round", "")
-        chance = _integer(chance_text) if chance_text not in {"", "None"} else None
+        def optional_int(column: str) -> int | None:
+            text = row.get(column, "")
+            return _integer(text) if text not in {"", "None", None} else None
+
+        # FPL splits the doubt across two rounds: "this" is the gameweek being
+        # played next, "next" the one after it. Both travel, because a note
+        # saying 25% belongs beside the round it describes.
+        chance = optional_int("chance_of_playing_next_round")
+        chance_this = optional_int("chance_of_playing_this_round")
         players.append(
             PlayerRecord(
                 element=_integer(row.get("id")),
@@ -201,6 +210,8 @@ def build_local_snapshot(
                 transfers_in_event=_integer(row.get("transfers_in_event")),
                 transfers_out_event=_integer(row.get("transfers_out_event")),
                 chance_of_playing_next_round=chance,
+                chance_of_playing_this_round=chance_this,
+                news_since_gw=optional_int("news_since_gw"),
                 cost_change_event=_integer(row.get("cost_change_event")),
                 photo=(
                     f"https://resources.premierleague.com/premierleague/photos/players/250x250/p{code}.png"

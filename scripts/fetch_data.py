@@ -221,6 +221,36 @@ def _cost_to_tenths(costs: pd.Series) -> pd.Series:
     return costs
 
 
+
+def news_first_seen(stats: pd.DataFrame) -> dict:
+    """The gameweek each player's current availability note first appeared.
+
+    FPL publishes a news_added timestamp and olbauday carries the column, but
+    it is empty for every row upstream, so there is no date to read. What the
+    feed does keep is a snapshot per gameweek, and 147 players changed note at
+    least once this season. Walking that history back from the latest note
+    until it changes recovers when it broke, to the gameweek.
+
+    That is coarser than a timestamp and cannot distinguish two notes written
+    in the same week, but it separates a fresh injury from one carried since
+    August, which is the distinction a reader actually needs.
+    """
+    history = stats[['id', 'gw', 'news']].copy()
+    history['news'] = history['news'].fillna('').astype(str).str.strip()
+    history = history.sort_values(['id', 'gw'])
+
+    since = {}
+    for player_id, rows in history.groupby('id', sort=False):
+        weeks = list(rows['gw'])
+        notes = list(rows['news'])
+        if not notes or not notes[-1]:
+            continue
+        first = len(notes) - 1
+        while first > 0 and notes[first - 1] == notes[-1]:
+            first -= 1
+        since[player_id] = int(weeks[first])
+    return since
+
 def fetch_season_olbauday(local_season: str, force: bool) -> dict:
     """Download from olbauday/FPL-Core-Insights and write vaastav-format files."""
     print(f"\n{'=' * 72}\n{local_season} (source: olbauday)\n{'=' * 72}")
@@ -292,12 +322,24 @@ def fetch_season_olbauday(local_season: str, force: bool) -> dict:
                                low_memory=False)
 
         # playerstats.csv has one row per player per GW (cumulative snapshot).
-        # Keep only the latest row per player so players_raw.csv has one row.
+        # Keep only the latest row per player so players_raw.csv has one row,
+        # but read the history first: it is the only record of when a note
+        # appeared, and it is thrown away by the collapse.
+        news_since = None
         if 'gw' in stats_df.columns:
+            news_since = news_first_seen(stats_df)
+            # tail(1), not last(). GroupBy.last() takes the last non-null
+            # value per column independently, so a player whose note FPL has
+            # since cleared kept an older gameweek's text: 31 of them carried
+            # an injury that had been lifted, which is worse than carrying
+            # none. Only the news column differed; every other field already
+            # agreed with the final row.
             stats_df = (stats_df
                         .sort_values('gw')
                         .groupby('id', as_index=False)
-                        .last())
+                        .tail(1)
+                        .reset_index(drop=True))
+            stats_df['news_since_gw'] = stats_df['id'].map(news_since)
 
         # olbauday players.csv: player_code, player_id, first_name,
         #   second_name, web_name, team_code, position

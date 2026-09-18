@@ -20,20 +20,68 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "doubt", label: "Doubtful" },
 ];
 
+// FPL states the figure twice: in two structured fields, one per round, and
+// in the note itself. They disagree often enough to matter.
+//
+// The note wins where it gives a number. It is FPL's own editorial line, it
+// is the text the reader is looking at, and showing "0% fit" beside "50%
+// chance of playing" is indefensible whichever number is right. Four players
+// currently read that way: marked doubtful, this-round set to 0, note saying
+// 50 or 75.
+//
+// Failing that, this round before next. Reading next_round alone showed a
+// player who is 25% for Saturday as fully fit.
+const STATED_CHANCE = /(\d+)% chance of playing/;
+
+function chanceFor(player: PlayerRecord): number | null {
+  const stated = player.news?.match(STATED_CHANCE);
+  if (stated) return Number(stated[1]);
+  return player.chance_of_playing_this_round ?? player.chance_of_playing_next_round ?? null;
+}
+
 function hasNote(player: PlayerRecord): boolean {
-  return Boolean(player.news) || player.status !== "a" || (player.chance_of_playing_next_round ?? 100) < 100;
+  return Boolean(player.news) || player.status !== "a" || (chanceFor(player) ?? 100) < 100;
 }
 
 function noteFor(player: PlayerRecord): string {
   if (player.news) return player.news;
-  if ((player.chance_of_playing_next_round ?? 100) < 100) {
-    return `FPL lists a ${player.chance_of_playing_next_round}% chance of playing next round.`;
+  const chance = chanceFor(player);
+  if (chance != null && chance < 100) {
+    return `FPL lists a ${chance}% chance of playing this round.`;
   }
   return `Current availability status: ${player.status}.`;
 }
 
+// What a note is worth reading first is not how low the chance is. A player
+// who has left the league is a certainty, not a risk, and there are 105 of
+// them against 24 real doubts -- sorted on chance alone they took the lead
+// story and the nine behind it. Selectable-but-doubtful leads, then out,
+// then gone.
+function tier(player: PlayerRecord): number {
+  if (player.status === "u" || player.status === "n") return 2;
+  if (player.status === "i" || player.status === "s") return 1;
+  return 0;
+}
+
 function severity(player: PlayerRecord): number {
-  return player.chance_of_playing_next_round ?? (player.status === "a" ? 100 : 50);
+  return chanceFor(player) ?? (player.status === "a" ? 100 : 50);
+}
+
+// Within a tier, the note that matters is the one on a player worth owning.
+function byUrgency(a: PlayerRecord, b: PlayerRecord): number {
+  if (tier(a) !== tier(b)) return tier(a) - tier(b);
+  const points = (b.predicted_points ?? -1) - (a.predicted_points ?? -1);
+  if (points !== 0) return points;
+  return severity(a) - severity(b);
+}
+
+// Gameweek, not a timestamp: FPL publishes news_added and olbauday carries
+// the column, but it is empty for every row upstream. The gameweek a note
+// first appeared is recovered from the per-gameweek history instead.
+function noteAge(player: PlayerRecord, newest: number | null): string | null {
+  if (player.news_since_gw == null) return null;
+  if (newest != null && player.news_since_gw >= newest) return "New this week";
+  return `Since GW${player.news_since_gw}`;
 }
 
 function statusLabel(player: PlayerRecord): string {
@@ -41,7 +89,7 @@ function statusLabel(player: PlayerRecord): string {
   if (player.status === "s") return "Suspended";
   if (player.status === "u") return "Unavailable";
   if (player.status === "n") return "Not in squad";
-  if (player.status === "d" || (player.chance_of_playing_next_round ?? 100) < 100) return "Doubtful";
+  if (player.status === "d" || (chanceFor(player) ?? 100) < 100) return "Doubtful";
   return "Availability note";
 }
 
@@ -55,7 +103,7 @@ function chanceTone(chance: number): "bad" | "mid" | "ok" {
 }
 
 function ChanceBadge({ player }: { player: PlayerRecord }) {
-  const chance = player.chance_of_playing_next_round;
+  const chance = chanceFor(player);
   // Only the partial cases. 100 is not news, and 0 already reads as Injured or
   // Unavailable beside it -- a "0% fit" badge on a player who has left the club
   // is noise, not a risk level.
@@ -88,7 +136,13 @@ export default function NewsPage() {
   const teamCodeByName = new Map(snapshot.teams.map((team) => [team.name, team.code]));
   const clubOptions = snapshot.teams.map((team) => team.name);
   const freshness = snapshot.gameweek ? `Local snapshot · GW${snapshot.gameweek}` : "Local snapshot";
-  const allNotes = snapshot.players.filter(hasNote).sort((a, b) => severity(a) - severity(b));
+  const allNotes = snapshot.players.filter(hasNote).sort(byUrgency);
+  const newestNoteGw = allNotes.reduce<number | null>(
+    (seen, player) => (player.news_since_gw != null && (seen == null || player.news_since_gw > seen)
+      ? player.news_since_gw
+      : seen),
+    null,
+  );
   const normalizedQuery = query.trim().toLowerCase();
   const filtered = allNotes.filter((player) => {
     if (normalizedQuery && !`${player.name} ${player.web_name} ${player.team}`.toLowerCase().includes(normalizedQuery)) {
@@ -104,7 +158,7 @@ export default function NewsPage() {
       case "suspension":
         return player.status === "s";
       case "doubt":
-        return player.status !== "a" || (player.chance_of_playing_next_round ?? 100) < 100;
+        return player.status !== "a" || (chanceFor(player) ?? 100) < 100;
       default:
         return true;
     }
@@ -127,8 +181,9 @@ export default function NewsPage() {
             <h1>Matchday wire</h1>
           </div>
           <p>
-            Every availability note carried in the local FPL player snapshot, ordered by what
-            changes your team first.
+            Every availability note in the local FPL snapshot, ordered by what changes your
+            team first: players still selectable but in doubt, then those ruled out, then
+            those who have left the league.
           </p>
         </div>
 
@@ -239,7 +294,8 @@ export default function NewsPage() {
               <h2>{lead.web_name}</h2>
               <p className="lead-note">{noteFor(lead)}</p>
               <p className="wire-fresh">
-                {freshness} · Official FPL player status, not third-party reporting
+                {noteAge(lead, newestNoteGw) ?? freshness} · Official FPL player status,
+                not third-party reporting
               </p>
               <div className="lead-actions">
                 <button className="btn sm secondary" type="button" onClick={() => openProfile(lead)}>
@@ -309,7 +365,7 @@ export default function NewsPage() {
                       {squadIdSet.has(player.element) && <span className="owned">Owned</span>}
                     </div>
                   </span>
-                  <time>{freshness}</time>
+                  <time>{noteAge(player, newestNoteGw) ?? freshness}</time>
                 </button>
               ))}
               {allRest.length > rest.length && (
@@ -362,7 +418,7 @@ export default function NewsPage() {
                   </div>
                   <h3>{player.web_name}</h3>
                   <p>{noteFor(player)}</p>
-                  <span className="wire-fresh">{freshness}</span>
+                  <span className="wire-fresh">{noteAge(player, newestNoteGw) ?? freshness}</span>
                   {squadIdSet.has(player.element) && <span className="news-card-tag owned">Owned</span>}
                 </div>
               </button>
