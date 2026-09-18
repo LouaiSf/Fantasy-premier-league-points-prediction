@@ -10,6 +10,7 @@ from optimise import (  # noqa: E402
     annotate_marginals,
     choose_transfer_recommendation,
     compute_transfers,
+    load_predictions,
 )
 
 
@@ -148,3 +149,34 @@ def test_guard_withholds_a_hit_costing_move_end_to_end() -> None:
     assert free['best']['transfers'] == 2
     assert free['recommended']['transfers'] == 2
     assert free['recommendation_edge'] == 0.0
+
+
+def test_load_predictions_keeps_two_players_who_share_a_surname(tmp_path) -> None:
+    # A double gameweek is one element twice; two Palacios are two players.
+    # Keying the de-duplication on the name deleted the lower-scoring one from
+    # the market entirely, so a squad holding him could not be resolved.
+    path = tmp_path / 'predictions.csv'
+    pd.DataFrame([
+        {'element': 619, 'name': 'Palacios', 'team': 'Ipswich Town',
+         'position': 'MID', 'value_m': 5.0, 'predicted_points': 1.45,
+         'status': 'a'},
+        {'element': 570, 'name': 'Palacios', 'team': 'Fulham',
+         'position': 'MID', 'value_m': 5.4, 'predicted_points': 1.42,
+         'status': 'a'},
+        # The same element twice, as a double gameweek writes it. Only the
+        # higher-scoring row should survive.
+        {'element': 411, 'name': 'Haaland', 'team': 'Man City',
+         'position': 'FWD', 'value_m': 15.6, 'predicted_points': 8.59,
+         'status': 'a'},
+        {'element': 411, 'name': 'Haaland', 'team': 'Man City',
+         'position': 'FWD', 'value_m': 15.6, 'predicted_points': 7.10,
+         'status': 'a'},
+    ]).to_csv(path, index=False)
+
+    loaded = load_predictions(str(path))
+
+    assert sorted(loaded['element']) == [411, 570, 619]
+    assert set(loaded.loc[loaded['name'] == 'Palacios', 'team']) == {
+        'Ipswich Town', 'Fulham'}
+    haaland = loaded.loc[loaded['element'] == 411, 'predicted_points']
+    assert float(haaland.iloc[0]) == 8.59

@@ -79,8 +79,12 @@ def load_predictions(path: str, drop_unavailable: bool = True) -> pd.DataFrame:
         df = df[~df['status'].isin({'i', 'u', 's', 'n'})]
 
     # One row per player. A double gameweek would otherwise let the optimiser
-    # buy the same player twice.
-    df = df.sort_values('predicted_points', ascending=False).drop_duplicates('name')
+    # buy the same player twice -- but that is the same element twice, so the
+    # key has to be the element. Keying on the name deleted whole players from
+    # the market whenever two of them shared a surname: eleven in the GW5
+    # export, including one of the two Palacios.
+    key = 'element' if 'element' in df.columns else 'name'
+    df = df.sort_values('predicted_points', ascending=False).drop_duplicates(key)
     return df.reset_index(drop=True)
 
 
