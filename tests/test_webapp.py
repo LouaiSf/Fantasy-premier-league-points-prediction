@@ -89,3 +89,27 @@ def test_lineup_endpoint_optimises_a_supplied_team() -> None:
     assert {lineup['captain']['element'], lineup['vice_captain']['element']} <= {
         player['element'] for player in lineup['xi']
     }
+
+
+def test_refresh_pulls_the_live_source_and_forces_it(monkeypatch) -> None:
+    # vaastav archives finished seasons; only olbauday carries one in
+    # progress. And without --force every existing file is skipped, so the
+    # button reported success while refreshing nothing.
+    import webapp.app as webapp_app
+
+    seen = {}
+
+    class Result:
+        stdout = ""
+
+    def fake_run(command, **kwargs):
+        seen["command"] = command
+        return Result()
+
+    monkeypatch.setattr(webapp_app.subprocess, "run", fake_run)
+    response = webapp_app.app.test_client().post("/api/refresh")
+
+    assert response.status_code == 200
+    assert "--force" in seen["command"]
+    assert "olbauday" in seen["command"]
+    assert seen["command"][seen["command"].index("--source") + 1] == "olbauday"

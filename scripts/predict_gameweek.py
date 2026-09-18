@@ -186,6 +186,29 @@ def infer_gameweek_locally(season: str) -> int | None:
     return int(events.min()) if len(events) else None
 
 
+def playing_chance(source, this_round: str = "chance_of_playing_this_round",
+                   next_round: str = "chance_of_playing_next_round"):
+    """FPL's published chance for the round being predicted.
+
+    FPL publishes two: "this round" is the gameweek about to be played, which
+    is the one being predicted, and "next round" the one after it. Reading
+    next_round treated a player who is 25% for Saturday and expected back the
+    week after as fully fit -- 29 of them in the GW5 snapshot, including the
+    only cases where the flag carries information the model cannot infer from
+    minutes already played.
+
+    Falls back to next_round where this one is absent, which is how the feed
+    marks most doubts that have not been graded for the imminent round yet.
+    """
+    if isinstance(source, dict):
+        value = source.get(this_round)
+        return source.get(next_round) if value is None else value
+    here = source.get(this_round)
+    there = source.get(next_round)
+    if here is None:
+        return there
+    return here if there is None else here.combine_first(there)
+
 def target_fixtures(season: str, gameweek: int | None, use_api: bool) -> tuple:
     """Fixtures for the gameweek to predict, as (gw, [(home_id, away_id), ...])."""
     bootstrap = None
@@ -290,7 +313,7 @@ def build_placeholder_rows(season: str, gameweek: int, pairs, bootstrap,
             'position': ELEMENT_TYPE.get(p['element_type']),
             'value': p['now_cost'],
             'status': p.get('status', 'a'),
-            'chance': p.get('chance_of_playing_next_round'),
+            'chance': playing_chance(p),
             'selected_by': p.get('selected_by_percent'),
         } for p in bootstrap['elements']])
     else:
@@ -303,7 +326,7 @@ def build_placeholder_rows(season: str, gameweek: int, pairs, bootstrap,
             'position': raw['element_type'].map(ELEMENT_TYPE),
             'value': raw['now_cost'],
             'status': raw.get('status', 'a'),
-            'chance': raw.get('chance_of_playing_next_round'),
+            'chance': playing_chance(raw),
             'selected_by': raw.get('selected_by_percent'),
         })
 

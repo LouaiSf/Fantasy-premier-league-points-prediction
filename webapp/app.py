@@ -583,8 +583,15 @@ def api_refresh():
         return fail('No local season configured.')
 
     try:
+        # olbauday, and forced. vaastav is the archive of finished seasons and
+        # does not carry one in progress, so the default source refreshed a
+        # live season from a repository that has nothing to say about it. And
+        # without --force every file that already exists is skipped, which for
+        # a season already on disk is every file: the button refreshed nothing
+        # and reported success. A forced olbauday pull takes about 26 seconds.
         res = subprocess.run(
-            [sys.executable, os.path.join(ROOT, 'scripts', 'fetch_data.py'), '--season', season],
+            [sys.executable, os.path.join(ROOT, 'scripts', 'fetch_data.py'),
+             '--season', season, '--source', 'olbauday', '--force'],
             cwd=ROOT,
             capture_output=True,
             text=True,
@@ -594,9 +601,22 @@ def api_refresh():
         new_state = state()
         if new_state.get('error'):
             return jsonify({'ok': False, 'error': new_state['error'], 'output': res.stdout}), 500
+        # A refresh moves the data and leaves the predictions where they
+        # were. Running the model is minutes of work and does not belong in a
+        # request, so say so rather than serving numbers built on last week's
+        # squad prices and availability as though they were current.
+        players_raw = os.path.join(ROOT, 'data', season, 'players_raw.csv')
+        predictions_stale = (
+            os.path.exists(players_raw) and new_state.get('mtime') is not None
+            and os.path.getmtime(players_raw) > new_state['mtime'])
+        message = f'Season {season} data refreshed successfully.'
+        if predictions_stale:
+            message += (' The predictions are now older than the data -- '
+                        'rerun scripts/predict_gameweek.py to match them.')
         return jsonify({
             'ok': True,
-            'message': f'Season {season} data refreshed successfully.',
+            'message': message,
+            'predictions_stale': predictions_stale,
             'season': new_state['season'],
             'gameweek': new_state['gameweek'],
             'players': len(new_state['players']),
