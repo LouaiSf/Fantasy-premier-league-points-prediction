@@ -179,12 +179,9 @@ scripts cannot drift from it.
 | `train.py` | train, evaluate, save models, report feature importance |
 | `baselines.py` | score heuristics on the identical test rows |
 | `ablate.py` | measure what one feature group is worth, holding all else fixed |
-| `predict_gameweek.py` | rank every player for the upcoming gameweek |
+| `predict_gameweek.py` | predict the upcoming gameweek from the live FPL API; rank every player |
 | `validate_selection.py` | score the XI the model picks against a rolling-average XI |
 | `optimise.py` | squad, transfers, chip timing and watchlist |
-| `predict_gameweek.py` | predict the upcoming gameweek from the live FPL API |
-| `optimise.py` | squad, transfers, chips, watchlist |
-| `validate_selection.py` | score the picked XI against a rolling-average XI |
 | `summarise_run.py` | render `model_metrics.json` as a table |
 | `test_notebook_fixes.py` | 25 regression tests over the split, guards and features |
 | `make_colab_bundle.py` | package the 122 files Colab needs (24 MB, not 17,000 files) |
@@ -282,12 +279,6 @@ Earlier exploratory notebooks (`advanced_fpl_models`, `prediction_workflow`,
 `using_api`, `add_game_number`, `fetching_defensive_data`) have been removed:
 each was superseded, and each still carried the original bugs. They remain in
 git history if you need them.
-
-`advanced_fpl_models.ipynb`, `prediction_workflow.ipynb`,
-`fetching_defensive_data.ipynb`, `using_api.ipynb` and `add_game_number.ipynb`
-are earlier explorations. They are **not** part of the pipeline and still carry
-the bugs described in the git history — notably the silent feature-count
-collapse that trained models on price alone.
 
 ## Tests
 

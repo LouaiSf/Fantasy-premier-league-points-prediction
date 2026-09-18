@@ -479,3 +479,23 @@ It found three real defects, all now fixed:
 1. **A crash I had introduced in Task 9.** `/api/squad` answers with a trimmed player shape carrying no `transfers_in_event`, so clicking a pitch marker threw on `toLocaleString`. The drawer now resolves the snapshot's full record by element and falls back to whatever it was handed — which also fills in the minutes, ICT and expected-goals the trimmed shape was missing.
 2. **Watchlist overflowed the viewport** by 57px at 1440 and 61px at 375. Two separate causes: `.sub-head` was a nowrap flex row inside a 432px column, and the section grid used `minmax(420px, 1fr)` — a floor the track cannot go below, so at 375px it stayed 420px wide. Now `minmax(min(420px,100%),1fr)` with `min-width:0` on the items. The inline layout styles moved into broadcast.css in the process, per the plan's own rule.
 3. A test-side false positive: markers use `.pm-pred`, not `.pm-pts`.
+
+### 2026-09-18 — Release cleanup, housekeeping, data backup
+
+**Commit and push:** Staged the 2026-09-18 grand-plan changes that had never been committed (broadcast.css, captain, news, main-nav, calibration files, PROGRESS.md). Rebased on a remote commit ("Separate the transfer optimum from what it is worth acting on") and pushed.
+
+**Branch cleanup:** Deleted 22 stale remote branches from `origin` (abdou, defcon, singleNotebook×3, tomerge, training, and 15 others from the original group project). `main` is now the only branch.
+
+**GitHub description/topics:** `YahiaKerroum` lacks admin access on `LouaiSf`'s repo so `gh repo edit` returns 404. Needs manual action: Settings → About on the repo page. Suggested description and topics in the corresponding PROGRESS entry.
+
+**Hurdle output in optimise.py:** Verified as already complete. `predictions_next_gw.csv` carries `predicted_points = p_plays × predicted_points_if_plays`; `optimise.py` reads `predicted_points`. No code change needed.
+
+**FBref defensive backup:** Extracted the 5 defensive columns + join keys (`season`, `element`, `fixture`) from `all_seasons_data_final.csv` into `data/fbref_defensive.csv` (7.7 MB, 246,978 rows with `has_fbref_defensive=1`). Added `!data/fbref_defensive.csv` exception to `.gitignore`. This is the committed backup of data that cannot be re-scraped without ~380 requests per season.
+
+**LICENSE:** Added MIT licence. First copyright line: "2017-2019 Vaastav Anand" (upstream data); second: "2024-2026 Yahia Kerroum" (this work). Notice note at the bottom explains data/code split.
+
+**README fixes:** Removed the duplicated scripts-table block (predict_gameweek / optimise / validate_selection appeared twice). Removed the contradictory Layout paragraph that described the deleted exploratory notebooks as still present after saying they had been removed.
+
+**model_metrics.json:** Removed empty `"pca": {}` key left from the dropped PCA branch.
+
+**`.gitignore` decision:** `*.prev` and `*.zip` are already gitignored and should stay that way — both are large regenerable artifacts.
