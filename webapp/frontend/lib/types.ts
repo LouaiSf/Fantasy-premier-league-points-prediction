@@ -94,6 +94,7 @@ export interface SquadResult {
   xi: PlayerRecord[];
   bench: PlayerRecord[];
   captain: PlayerRecord | null;
+  vice_captain: PlayerRecord | null;
   xi_points: number;
   formation: string;
 }
@@ -158,6 +159,7 @@ export interface StoredSquad {
   ids: number[];
   formation?: string;
   captainId?: number;
+  viceCaptainId?: number;
 }
 
 export interface WatchlistPlayer {

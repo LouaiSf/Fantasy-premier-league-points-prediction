@@ -35,7 +35,11 @@ export function Pitch() {
     );
   }
 
-  const captainName = "captain" in result ? result.captain?.name : undefined;
+  // Keyed on the element, not the name: two current players can share a
+  // surname (there are two Palmers and two Palacios in the 2026-27 export),
+  // and matching on the name gives both of them the armband.
+  const captainId = "captain" in result ? result.captain?.element : undefined;
+  const viceCaptainId = "vice_captain" in result ? result.vice_captain?.element : undefined;
   const xi = "xi" in result ? result.xi : [];
 
   return (
@@ -60,7 +64,8 @@ export function Pitch() {
                 <PlayerMarker
                   key={player.element}
                   player={player}
-                  isCaptain={player.name === captainName}
+                  isCaptain={player.element === captainId}
+                  isViceCaptain={player.element === viceCaptainId}
                 />
               ))}
             </div>

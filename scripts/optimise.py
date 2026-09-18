@@ -8,9 +8,16 @@ each chip.
 Everything is a single integer program per question, so the answers are
 genuinely optimal under the stated constraints rather than greedy picks.
 
+Optimal is also deterministic: one budget has one answer, and every manager
+running this gets the same fifteen. The optimum is a plateau rather than a
+peak -- seven of the fifteen can change for about half a point, against a
+per-player error near a full one -- so `squad` takes --alternatives to show
+the squads the model cannot tell apart, --differential to tilt away from the
+template, and --seed to break ties per manager. Each reports what it cost.
+
 Subcommands
 -----------
-    squad       the best legal 15 under a budget, with XI, bench and captain
+    squad       the best legal 15 with XI, bench, captain and vice-captain
     transfers   the best N transfers out of a squad you already own
     chips       when to play Triple Captain, Bench Boost, Free Hit, Wildcard
     watchlist   differentials, value picks, and who to avoid
@@ -19,6 +26,8 @@ Usage
 -----
     python scripts/optimise.py squad --budget 100
     python scripts/optimise.py squad --budget 83 --formation-only-xi
+    python scripts/optimise.py squad --alternatives 5
+    python scripts/optimise.py squad --differential 0.02 --seed <user id>
     python scripts/optimise.py transfers --squad my_squad.txt --free 1 --bank 0.5
     python scripts/optimise.py chips --squad my_squad.txt --horizon 8
     python scripts/optimise.py watchlist --max-ownership 10
@@ -31,6 +40,7 @@ surname is usually enough.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import sys
 
@@ -56,6 +66,17 @@ HIT_COST = 4          # points docked per transfer beyond the free ones
 # Do not recommend extra transfers for an edge smaller than the model's
 # measured per-player error. The raw mathematical optimum is still returned.
 DECISION_MARGIN = 1.0
+
+# How far a --seed is allowed to move a pick, in predicted points per player.
+# The optimum is a plateau, not a peak: forcing seven of the fifteen to change
+# costs about half a point, so ties in any sense that matters are decided by
+# differences far smaller than the model can resolve. This is the budget for
+# breaking them. The points actually given up are measured and reported, so
+# the cost of a seed is never hidden.
+TIEBREAK_SCALE = 0.05
+
+# Two squads count as different answers only if this many players differ.
+MIN_ALTERNATIVE_CHANGES = 3
 
 # Bench points only matter if you play Bench Boost, or a starter does not
 # feature. Weighting them low keeps the optimiser from buying an expensive
@@ -193,15 +214,53 @@ def read_squad_file(path: str, players: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # The optimiser
 # ---------------------------------------------------------------------------
+def expected_total(result: dict) -> float:
+    """What the XI is worth with the armband on, in real predicted points.
+
+    Read off the chosen players rather than the LP objective, which also
+    carries the bench weighting, any ownership penalty and any seed jitter.
+    Those steer the pick; they are not points anyone scores.
+    """
+    total = float(result['xi']['predicted_points'].sum())
+    if result['captain'] is not None:
+        total += float(result['captain']['predicted_points'])
+    return total
+
+
+def seed_jitter(players: pd.DataFrame, seed, scale: float = TIEBREAK_SCALE) -> dict:
+    """A tiny per-player nudge, fixed by the seed.
+
+    Deterministic across processes and machines: Python's hash() is salted per
+    run, so the digest is taken explicitly. Keyed on the element where there is
+    one, so the same seed keeps picking the same way when a player is renamed.
+    """
+    key = 'element' if 'element' in players.columns else 'name'
+    jitter = {}
+    for i, ident in players[key].items():
+        digest = hashlib.sha256(f'{seed}:{ident}'.encode('utf-8')).digest()
+        unit = int.from_bytes(digest[:8], 'big') / float(1 << 64)
+        jitter[i] = (unit * 2.0 - 1.0) * scale
+    return jitter
+
+
 def solve_squad(players: pd.DataFrame, budget: float, *, squad_size: int = SQUAD_SIZE,
                 locked=None, banned=None, must_transfer_out=None,
-                bench_weight: float = BENCH_WEIGHT, captain: bool = True):
-    """Best legal squad, the XI inside it, and who to captain -- one program.
+                bench_weight: float = BENCH_WEIGHT, captain: bool = True,
+                apart_from=None, ownership_penalty: float = 0.0, seed=None):
+    """Best legal squad, XI, bench order and armband picks -- one program.
 
     Picking fifteen and then picking eleven separately gives a worse answer
     than deciding both together: the value of a player depends on whether he
     starts, and the value of a cheap bench depends on what it frees up for the
     XI. Both sets of binaries live in the same problem, tied by xi <= squad.
+
+    Three optional terms steer which of several near-equal squads comes back,
+    without changing what any of them is projected to score:
+
+    `apart_from` is a list of (squad indices, minimum changes) that the answer
+    must respect, which is how compute_squad_alternatives() walks the plateau.
+    `ownership_penalty` docks a squad that many points per percent of ownership
+    per player owned. `seed` breaks ties reproducibly per user.
     """
     import pulp
 
@@ -224,6 +283,16 @@ def solve_squad(players: pd.DataFrame, budget: float, *, squad_size: int = SQUAD
         points[i] * (in_squad[i] - in_xi[i]) for i in idx)
     if captain:
         objective += pulp.lpSum(points[i] * is_cap[i] for i in idx)
+    if ownership_penalty and 'selected_by' in players.columns:
+        # Owning a widely-owned player is not worth fewer points, it is worth
+        # less rank. Charging it here lets the same solver trade the two off,
+        # rather than filtering the market and hoping what is left is legal.
+        owned = pd.to_numeric(players['selected_by'], errors='coerce').fillna(0.0)
+        objective -= pulp.lpSum(
+            ownership_penalty * float(owned[i]) * in_squad[i] for i in idx)
+    if seed is not None:
+        jitter = seed_jitter(players, seed)
+        objective += pulp.lpSum(jitter[i] * in_squad[i] for i in idx)
     problem += objective
 
     for i in idx:
@@ -261,6 +330,9 @@ def solve_squad(players: pd.DataFrame, budget: float, *, squad_size: int = SQUAD
     if must_transfer_out is not None:
         keep, count = must_transfer_out
         problem += pulp.lpSum(in_squad[i] for i in keep) == count
+    for previous, min_changes in (apart_from or []):
+        problem += pulp.lpSum(
+            in_squad[i] for i in previous) <= squad_size - min_changes
 
     problem.solve(pulp.PULP_CBC_CMD(msg=0))
     status = pulp.LpStatus[problem.status]
@@ -270,11 +342,34 @@ def solve_squad(players: pd.DataFrame, budget: float, *, squad_size: int = SQUAD
     chosen = [i for i in idx if in_squad[i].value() > 0.5]
     starters = [i for i in idx if in_xi[i].value() > 0.5]
     skipper = [i for i in idx if is_cap[i].value() > 0.5]
+    captain_idx = skipper[0] if skipper else None
+    vice_candidates = [
+        i for i in starters
+        if i != captain_idx and position[i] != 'GK'
+    ]
+    # The vice-captain only scores if the captain does not play. With no
+    # no-show probability in this single-GW solver, the sound deterministic
+    # choice is the strongest projected starting outfielder after the captain.
+    vice_idx = max(vice_candidates, key=lambda i: points[i]) if vice_candidates else None
+    bench_idx = [i for i in chosen if i not in starters]
+    bench_outfield = sorted(
+        (i for i in bench_idx if position[i] != 'GK'),
+        key=lambda i: points[i], reverse=True)
+    bench_goalkeepers = sorted(
+        (i for i in bench_idx if position[i] == 'GK'),
+        key=lambda i: points[i], reverse=True)
     return {
         'squad': players.loc[chosen],
         'xi': players.loc[starters],
-        'bench': players.loc[[i for i in chosen if i not in starters]],
-        'captain': players.loc[skipper[0]] if skipper else None,
+        # FPL displays three ordered outfield substitutes and the reserve
+        # goalkeeper in a separate final slot.
+        'bench': players.loc[bench_outfield + bench_goalkeepers],
+        'captain': players.loc[captain_idx] if captain_idx is not None else None,
+        'vice_captain': players.loc[vice_idx] if vice_idx is not None else None,
+        # What the program maximised: points, plus the bench weighting and any
+        # ownership penalty or seed jitter. Not points anyone scores, but the
+        # only quantity two solutions can be ranked against each other on.
+        'score': float(pulp.value(problem.objective)),
     }, status
 
 
@@ -465,11 +560,167 @@ def show_squad(result: dict, budget: float) -> None:
     print(f"  XI points        {xi_points:>6.2f}")
     if cap is not None:
         print(f"  captain          {cap['name']} (+{cap_bonus:.2f})")
+        vice = result.get('vice_captain')
+        if vice is not None:
+            print(f"  vice-captain     {vice['name']}")
         print(f"  expected total   {xi_points + cap_bonus:>6.2f}")
     if len(bench):
         print(f"  bench            {bench['predicted_points'].sum():>6.2f} "
               f"(only scores on Bench Boost)")
 
+
+def squad_ownership(squad: pd.DataFrame) -> float | None:
+    """Mean ownership of the fifteen, or None if the export has no column."""
+    if 'selected_by' not in squad.columns:
+        return None
+    owned = pd.to_numeric(squad['selected_by'], errors='coerce')
+    return None if owned.isna().all() else round(float(owned.mean()), 1)
+
+
+def compute_squad_alternatives(players: pd.DataFrame, budget: float, *,
+                               count: int = 5,
+                               min_changes: int = MIN_ALTERNATIVE_CHANGES,
+                               margin: float = DECISION_MARGIN,
+                               **solve_kwargs) -> dict:
+    """Every squad the model cannot tell apart from the best one.
+
+    The optimiser is a deterministic integer program, so one budget has one
+    answer and every manager running it gets the same fifteen. That is correct
+    and useless: a template squad matches the field it is trying to beat.
+
+    It is also a plateau rather than a peak. Forcing three of the fifteen to
+    change costs about a quarter of a point, and seven about half, against a
+    per-player error near a full point. So this re-solves under the constraint
+    that each answer differs from all the previous ones, and stops once the
+    next one would fall more than `margin` below the best -- which is to say,
+    once the difference is one the model can actually defend.
+
+    Returns data only, so the CLI and the web layer show the same squads.
+    """
+    found, apart, failures = [], [], []
+    best = None
+    while len(found) < count:
+        result, status = solve_squad(players, budget, apart_from=apart,
+                                     **solve_kwargs)
+        if result is None:
+            failures.append(status)
+            break
+        total = expected_total(result)
+        score = result['score']
+        if best is None:
+            best = score
+        elif best - score > margin:
+            # Past the point where the model can justify the difference.
+            break
+        found.append({
+            'rank': len(found) + 1,
+            'total': round(total, 2),
+            # Measured on the objective, not on the points, so it cannot come
+            # out negative when a penalty or a seed is steering the pick.
+            'behind_best': round(best - score, 2),
+            # Signed, and in real points: what this squad is projected to
+            # score against the first one. Steering can make it positive.
+            'points_vs_best': round(total - found[0]['total'], 2) if found else 0.0,
+            'spend': round(float(result['squad']['value_m'].sum()), 1),
+            'ownership': squad_ownership(result['squad']),
+            'captain': None if result['captain'] is None
+                       else result['captain']['name'],
+            'changes': (None if not found else sorted(
+                set(result['squad']['name']) - set(found[0]['names']))),
+            'names': list(result['squad']['name']),
+            'squad': squad_records(result['squad']),
+            'xi': squad_records(result['xi']),
+        })
+        apart.append((list(result['squad'].index), min_changes))
+
+    return {
+        'budget': round(float(budget), 1),
+        'requested': count,
+        'min_changes': min_changes,
+        'margin': margin,
+        'alternatives': found,
+        'exhausted': len(found) < count,
+        'failures': failures,
+    }
+
+
+def show_squad_alternatives(data: dict) -> None:
+    found = data['alternatives']
+    if not found:
+        raise SystemExit("no legal squad found")
+
+    print()
+    print('=' * 78)
+    print(f"NEAR-OPTIMAL SQUADS   (at least {data['min_changes']} players apart, "
+          f"within {data['margin']:.1f} points)")
+    print('=' * 78)
+    print()
+    print("  The model's error is about a point per player, so these are the")
+    print("  same answer as far as it can tell. Choosing between them is yours.")
+    print()
+
+    owned = found[0]['ownership'] is not None
+    header = f"  {'#':<3}{'expected':>10}{'vs #1':>8}{'spend':>8}"
+    if owned:
+        header += f"{'owned%':>9}"
+    print(header + "  captain / players it brings in")
+    print("  " + "-" * 74)
+    for entry in found:
+        line = (f"  {entry['rank']:<3}{entry['total']:>10.2f}"
+                f"{entry['points_vs_best']:>+8.2f}{entry['spend']:>8.1f}")
+        if owned:
+            line += f"{entry['ownership']:>9.1f}"
+        detail = entry['captain'] or '--'
+        if entry['changes']:
+            detail += f"; in: {', '.join(entry['changes'])}"
+        print(line + f"  {detail}")
+
+    if data['exhausted']:
+        print()
+        print(f"  Only {len(found)} squad(s) stay within "
+              f"{data['margin']:.1f} points while differing by "
+              f"{data['min_changes']} players.")
+        print("  Lower --min-changes for more, or accept a wider margin.")
+
+def report_steering_cost(players: pd.DataFrame, budget: float, result: dict,
+                         steer: dict) -> None:
+    """Price whatever --seed and --differential bought.
+
+    A tilt nobody can price is a tilt nobody can judge. Both of these move
+    the pick off the optimum on purpose, so the points given up are measured
+    against the unsteered answer and printed next to it.
+    """
+    if not steer.get('seed') and not steer.get('ownership_penalty'):
+        return
+    plain_steer = dict(steer)
+    plain_steer['seed'] = None
+    plain_steer['ownership_penalty'] = 0.0
+    plain, _status = solve_squad(players, budget, **plain_steer)
+    if plain is None:
+        return
+
+    steered_total = expected_total(result)
+    plain_total = expected_total(plain)
+    cost = plain_total - steered_total
+    verdict = 'inside' if cost < DECISION_MARGIN else 'outside'
+    print()
+    print('-' * 78)
+    print('STEERING COST')
+    print('-' * 78)
+    print(f"  this squad         {steered_total:>6.2f} expected points")
+    print(f"  unsteered optimum  {plain_total:>6.2f}")
+    print(f"  given up           {cost:>6.2f}  ({verdict} the "
+          f"{DECISION_MARGIN:.1f}-point decision margin)")
+
+    here = squad_ownership(result['squad'])
+    there = squad_ownership(plain['squad'])
+    if here is not None and there is not None:
+        print(f"  mean ownership     {here:>6.1f}% against {there:.1f}% unsteered")
+    changed = sorted(set(result['squad']['name']) - set(plain['squad']['name']))
+    if changed:
+        print(f"  differs by {len(changed)}: {', '.join(changed)}")
+    else:
+        print("  same fifteen as the unsteered optimum")
 
 # ---------------------------------------------------------------------------
 # Transfers
@@ -992,6 +1243,22 @@ def main() -> int:
                               'discount. Below 1.0 favours the near fixtures.')
     p_squad.add_argument('--formation-only-xi', action='store_true',
                          help='pick 11 rather than a 15-man squad')
+    p_squad.add_argument('--alternatives', type=int, default=0, metavar='N',
+                         help='show N squads the model cannot tell apart, '
+                              'instead of the single optimum')
+    p_squad.add_argument('--min-changes', type=int,
+                         default=MIN_ALTERNATIVE_CHANGES, metavar='K',
+                         help=f'how many players must differ before two squads '
+                              f'count as different answers '
+                              f'(default {MIN_ALTERNATIVE_CHANGES})')
+    p_squad.add_argument('--differential', type=float, default=0.0, metavar='P',
+                         help='points to dock per percent of ownership per '
+                              'player owned, to tilt away from the template. '
+                              '0.01 charges a 50%%-owned player half a point')
+    p_squad.add_argument('--seed', default=None, metavar='S',
+                         help='break ties reproducibly, so two managers on the '
+                              'same budget get different squads from the same '
+                              'plateau. The points it costs are reported')
 
     p_tr = sub.add_parser('transfers', help='best transfers from a squad you own')
     p_tr.add_argument('--squad', required=True, help='file of 15 player names')
@@ -1036,11 +1303,19 @@ def main() -> int:
             show_squad_horizon(result, args.budget, weights)
         else:
             size = XI_SIZE if args.formation_only_xi else SQUAD_SIZE
-            result, status = solve_squad(players, args.budget, squad_size=size,
-                                         locked=lock, banned=ban)
-            if result is None:
-                raise SystemExit(f"no legal squad at {args.budget}m ({status})")
-            show_squad(result, args.budget)
+            steer = dict(squad_size=size, locked=lock, banned=ban,
+                         ownership_penalty=args.differential, seed=args.seed)
+            if args.alternatives:
+                data = compute_squad_alternatives(
+                    players, args.budget, count=args.alternatives,
+                    min_changes=args.min_changes, **steer)
+                show_squad_alternatives(data)
+            else:
+                result, status = solve_squad(players, args.budget, **steer)
+                if result is None:
+                    raise SystemExit(f"no legal squad at {args.budget}m ({status})")
+                show_squad(result, args.budget)
+                report_steering_cost(players, args.budget, result, steer)
 
     elif args.command == 'transfers':
         current = read_squad_file(args.squad, players)

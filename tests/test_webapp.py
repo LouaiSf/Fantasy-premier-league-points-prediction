@@ -69,3 +69,23 @@ def test_watchlist_endpoint() -> None:
     assert data["ok"] is True
     assert "value" in data
     assert "differentials" in data
+
+
+def test_lineup_endpoint_optimises_a_supplied_team() -> None:
+    client = app.test_client()
+    squad_res = client.post('/api/squad', json={'budget': 100.0})
+    assert squad_res.status_code == 200
+    squad = squad_res.get_json()
+    elements = [player['element'] for player in squad['xi'] + squad['bench']]
+
+    response = client.post('/api/lineup', json={'elements': elements})
+
+    assert response.status_code == 200
+    lineup = response.get_json()
+    assert len(lineup['xi']) == 11
+    assert len(lineup['bench']) == 4
+    assert lineup['bench'][-1]['position'] == 'GK'
+    assert lineup['captain']['element'] != lineup['vice_captain']['element']
+    assert {lineup['captain']['element'], lineup['vice_captain']['element']} <= {
+        player['element'] for player in lineup['xi']
+    }

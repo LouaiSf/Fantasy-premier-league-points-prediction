@@ -20,6 +20,7 @@ export default function TeamPage() {
     loading,
     error,
     squadPlayers,
+    squadElements,
     teamResult,
     setTeamResult,
     setSquadElements,
@@ -27,6 +28,7 @@ export default function TeamPage() {
     openProfile,
   } = useApp();
   const [picking, setPicking] = React.useState(false);
+  const [liningUp, setLiningUp] = React.useState(false);
 
   if (loading) {
     return (
@@ -77,6 +79,23 @@ export default function TeamPage() {
       toast((err as Error).message);
     } finally {
       setPicking(false);
+    }
+  }
+
+  async function optimiseLineup() {
+    if (squadPlayers.length !== 15) {
+      toast("Save a legal 15-player squad first.");
+      return;
+    }
+    setLiningUp(true);
+    try {
+      const result = await api.lineup({ elements: squadElements });
+      setTeamResult(result);
+      toast("Starting XI, bench order and armband picks updated.");
+    } catch (err) {
+      toast((err as Error).message);
+    } finally {
+      setLiningUp(false);
     }
   }
 
@@ -171,6 +190,14 @@ export default function TeamPage() {
                 <strong>{preview?.formation ?? "--"}</strong>
               </div>
               <div className="rail-stat">
+                <span>Captain</span>
+                <strong>{preview?.captain?.web_name || preview?.captain?.name || "--"}</strong>
+              </div>
+              <div className="rail-stat">
+                <span>Vice-captain</span>
+                <strong>{preview?.vice_captain?.web_name || preview?.vice_captain?.name || "--"}</strong>
+              </div>
+              <div className="rail-stat">
                 <span>Squad availability</span>
                 <strong>
                   {squadPlayers.length - flagged.length}/{squadPlayers.length || 15}
@@ -186,6 +213,15 @@ export default function TeamPage() {
                 className="btn w-full"
                 type="button"
                 style={{ marginTop: 14 }}
+                disabled={!predictionAvailable || squadPlayers.length !== 15 || liningUp}
+                onClick={optimiseLineup}
+              >
+                {liningUp ? "Optimising lineup…" : "Optimise saved lineup"}
+              </button>
+              <button
+                className="btn secondary w-full"
+                type="button"
+                style={{ marginTop: 8 }}
                 disabled={!predictionAvailable || picking}
                 onClick={autoPick}
               >

@@ -9,8 +9,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from optimise import (  # noqa: E402
     annotate_marginals,
     choose_transfer_recommendation,
+    compute_squad_alternatives,
     compute_transfers,
+    expected_total,
     load_predictions,
+    seed_jitter,
+    solve_squad,
+    squad_ownership,
 )
 
 
@@ -180,3 +185,130 @@ def test_load_predictions_keeps_two_players_who_share_a_surname(tmp_path) -> Non
         'Ipswich Town', 'Fulham'}
     haaland = loaded.loc[loaded['element'] == 411, 'predicted_points']
     assert float(haaland.iloc[0]) == 8.59
+
+
+def test_fixed_squad_gets_xi_ordered_bench_and_two_armbands() -> None:
+    squad = current_squad().reset_index(drop=True)
+
+    result, status = solve_squad(squad, float(squad['value_m'].sum()))
+
+    assert status == 'Optimal'
+    assert len(result['xi']) == 11
+    assert len(result['bench']) == 4
+    assert result['bench'].iloc[-1]['position'] == 'GK'
+    outfield_points = list(result['bench'].iloc[:-1]['predicted_points'])
+    assert outfield_points == sorted(outfield_points, reverse=True)
+    assert result['captain']['name'] == 'Useful premium'
+    assert result['vice_captain']['name'] != result['captain']['name']
+    assert result['vice_captain']['position'] != 'GK'
+
+
+def market(owned_top: bool = False) -> pd.DataFrame:
+    """A deep enough market that several legal squads are near-equal.
+
+    Every player has his own club, so the three-per-club rule never binds, and
+    prices are flat so the budget does not either. Points step down by 0.01,
+    which puts a lot of squads within a hundredth of each other.
+    """
+    rows, element = [], 1000
+    for position, depth, top in (('GK', 5, 3.0), ('DEF', 10, 4.0),
+                                 ('MID', 10, 5.0), ('FWD', 6, 4.5)):
+        for i in range(depth):
+            row = player(element, f'{position} {i}', f'T{element}', position,
+                         5.0, top - i * 0.01)
+            if owned_top:
+                # The best players are also the most owned, which is what an
+                # ownership penalty is there to push against.
+                row['selected_by'] = 60.0 - i * 5.0
+            rows.append(row)
+            element += 1
+    return pd.DataFrame(rows)
+
+
+def test_alternatives_are_distinct_and_stay_inside_the_margin() -> None:
+    data = compute_squad_alternatives(market(), 80.0, count=4, min_changes=3)
+    found = data['alternatives']
+
+    assert len(found) == 4
+    assert [entry['rank'] for entry in found] == [1, 2, 3, 4]
+    assert all(entry['behind_best'] <= data['margin'] for entry in found)
+    # Monotonic: each answer is at best as good as the one before it, and
+    # the gap is measured on what the solver maximised, so never negative.
+    assert all(e['behind_best'] >= 0 for e in found)
+    assert found == sorted(found, key=lambda e: e['behind_best'])
+    # The displayed column is the real points difference, signed, and zero
+    # for the squad everything else is compared against.
+    assert found[0]['points_vs_best'] == 0.0
+    assert all(e['points_vs_best'] == round(e['total'] - found[0]['total'], 2)
+               for e in found)
+
+    squads = [set(entry['names']) for entry in found]
+    for i, one in enumerate(squads):
+        assert len(one) == 15
+        for other in squads[i + 1:]:
+            assert len(one - other) >= 3
+
+
+def thin_market() -> pd.DataFrame:
+    """Fifteen good players, and only poor ones to replace them with."""
+    rows, element = [], 2000
+    for position, depth, top in (('GK', 2, 3.0), ('DEF', 5, 4.0),
+                                 ('MID', 5, 5.0), ('FWD', 3, 4.5)):
+        for i in range(depth):
+            rows.append(player(element, f'{position} {i}', f'T{element}',
+                               position, 5.0, top - i * 0.01))
+            element += 1
+    for position in ('GK', 'DEF', 'DEF', 'MID', 'MID', 'FWD'):
+        rows.append(player(element, f'Spare {element}', f'T{element}',
+                           position, 5.0, 0.1))
+        element += 1
+    return pd.DataFrame(rows)
+
+
+def test_alternatives_stop_rather_than_return_a_worse_squad() -> None:
+    # Five changes cannot all hide on the bench, so at least one lands in the
+    # XI and costs real points. A margin this tight must refuse them rather
+    # than pad the list out.
+    data = compute_squad_alternatives(thin_market(), 80.0, count=5,
+                                      min_changes=5, margin=0.001)
+
+    assert len(data['alternatives']) == 1
+    assert data['exhausted'] is True
+
+
+def test_alternatives_admit_the_worse_squad_when_the_margin_allows_it() -> None:
+    data = compute_squad_alternatives(thin_market(), 80.0, count=5,
+                                      min_changes=5, margin=100.0)
+
+    assert len(data['alternatives']) > 1
+    assert data['alternatives'][1]['behind_best'] > 1.0
+
+
+def test_seed_jitter_is_reproducible_and_seed_specific() -> None:
+    players = market()
+
+    assert seed_jitter(players, 'alice') == seed_jitter(players, 'alice')
+    assert seed_jitter(players, 'alice') != seed_jitter(players, 'bob')
+    assert all(abs(v) <= 0.05 for v in seed_jitter(players, 'alice').values())
+
+
+def test_a_seed_moves_the_pick_without_leaving_the_plateau() -> None:
+    players = market()
+    plain, _ = solve_squad(players, 80.0)
+    seeded, _ = solve_squad(players, 80.0, seed='alice')
+    again, _ = solve_squad(players, 80.0, seed='alice')
+
+    assert list(again['squad']['name']) == list(seeded['squad']['name'])
+    assert set(seeded['squad']['name']) != set(plain['squad']['name'])
+    # Whatever it changed, it cannot have cost more than the model can resolve.
+    assert expected_total(plain) - expected_total(seeded) < 1.0
+
+
+def test_ownership_penalty_buys_a_less_owned_squad() -> None:
+    players = market(owned_top=True)
+    plain, _ = solve_squad(players, 80.0)
+    tilted, _ = solve_squad(players, 80.0, ownership_penalty=0.05)
+
+    assert squad_ownership(tilted['squad']) < squad_ownership(plain['squad'])
+    # The penalty steers the pick; it is not counted as points anyone scores.
+    assert expected_total(tilted) <= expected_total(plain)

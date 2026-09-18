@@ -10,6 +10,7 @@ export interface PreviewSquad {
   xi: PlayerRecord[];
   bench: PlayerRecord[];
   captain: PlayerRecord | null;
+  vice_captain: PlayerRecord | null;
   formation: string;
   xiPoints: number;
   spend: number;
@@ -29,14 +30,22 @@ export function previewSquad(players: PlayerRecord[]): PreviewSquad | null {
     if (xi.length >= 11) break;
     if (!xi.includes(player) && player.position !== "GK") xi.push(player);
   }
-  const bench = sorted.filter((player) => !xi.includes(player));
+  const benchPool = sorted.filter((player) => !xi.includes(player));
+  const bench = [
+    ...benchPool.filter((player) => player.position !== "GK"),
+    ...benchPool.filter((player) => player.position === "GK"),
+  ];
+  const armbandOrder = xi
+    .filter((player) => player.position !== "GK")
+    .sort((a, b) => playerScore(b) - playerScore(a));
   const formation = (["DEF", "MID", "FWD"] as const)
     .map((position) => xi.filter((player) => player.position === position).length)
     .join("-");
   return {
     xi,
     bench,
-    captain: xi[0] ?? null,
+    captain: armbandOrder[0] ?? null,
+    vice_captain: armbandOrder[1] ?? null,
     formation,
     xiPoints: xi.reduce((total, player) => total + playerScore(player), 0),
     spend: players.reduce((total, player) => total + Number(player.value_m), 0),

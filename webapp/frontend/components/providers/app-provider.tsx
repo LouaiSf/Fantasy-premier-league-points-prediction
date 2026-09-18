@@ -11,6 +11,7 @@ interface StoredSquadData {
   ids: number[];
   formation?: string;
   captainId?: number;
+  viceCaptainId?: number;
   xiIds?: number[];
   benchIds?: number[];
 }
@@ -121,6 +122,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ids,
         formation: result?.formation,
         captainId: result?.captain?.element,
+        viceCaptainId: result?.vice_captain?.element,
         xiIds: result?.xi.map((p) => p.element),
         benchIds: result?.bench.map((p) => p.element),
       };
@@ -163,7 +165,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (stored.xiIds && stored.benchIds && stored.formation) {
           const xi = stored.xiIds.map((id) => playerById.get(id)).filter((p): p is PlayerRecord => p != null);
           const bench = stored.benchIds.map((id) => playerById.get(id)).filter((p): p is PlayerRecord => p != null);
-          const captain = (stored.captainId && playerById.get(stored.captainId)) || xi[0] || null;
+          const armbandCandidates = xi
+            .filter((player) => player.position !== "GK")
+            .sort((a, b) =>
+              Number(b.predicted_points ?? b.form ?? 0) - Number(a.predicted_points ?? a.form ?? 0),
+            );
+          const captain =
+            (stored.captainId && playerById.get(stored.captainId)) || armbandCandidates[0] || null;
+          const viceCaptain =
+            (stored.viceCaptainId && playerById.get(stored.viceCaptainId)) ||
+            armbandCandidates.find((player) => player.element !== captain?.element) ||
+            null;
           if (xi.length === 11 && bench.length === 4) {
             setTeamResultState({
               ok: true,
@@ -172,6 +184,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               xi,
               bench,
               captain,
+              vice_captain: viceCaptain,
               xi_points: xi.reduce((sum, p) => sum + (p.predicted_points ?? p.form ?? 0), 0),
               formation: stored.formation,
             });

@@ -417,26 +417,70 @@ def api_squad():
         return fail(f'no legal squad at £{budget:.1f}m ({status}). '
                     f'Try raising the budget or removing some locks.')
 
+    return jsonify(lineup_response(result, budget))
+
+
+def lineup_response(result: dict, budget: float) -> dict:
+    """Serialize a solved squad with its complete matchday lineup."""
     # show_squad derives this for the terminal; the browser needs it too.
     shape = result['xi']['position'].value_counts()
     formation = (f"{int(shape.get('DEF', 0))}-{int(shape.get('MID', 0))}"
                  f"-{int(shape.get('FWD', 0))}")
 
-    captain = None
-    if result['captain'] is not None:
-        captain = opt.squad_records(result['squad'][
-            result['squad']['name'] == result['captain']['name']])[0]
+    def selected_player(key: str):
+        selected = result.get(key)
+        if selected is None:
+            return None
+        return opt.squad_records(pd.DataFrame([selected]))[0]
 
-    return jsonify({
+    return {
         'ok': True,
         'budget': budget,
         'spend': round(float(result['squad']['value_m'].sum()), 1),
         'xi': opt.squad_records(result['xi']),
         'bench': opt.squad_records(result['bench']),
-        'captain': captain,
+        'captain': selected_player('captain'),
+        'vice_captain': selected_player('vice_captain'),
         'xi_points': round(float(result['xi']['predicted_points'].sum()), 2),
         'formation': formation,
-    })
+    }
+
+
+@app.route('/api/lineup', methods=['POST'])
+def api_lineup():
+    """Choose XI, bench order, captain and vice from an owned 15."""
+    s = state()
+    if s.get('error'):
+        return unavailable(s['error'])
+
+    body = request.get_json(force=True) or {}
+    elements = [element for element in body.get('elements', []) if element is not None]
+    names = [name for name in body.get('squad', []) if name]
+    if elements:
+        if len(elements) != opt.SQUAD_SIZE or len(set(elements)) != opt.SQUAD_SIZE:
+            return fail(f'a squad is {opt.SQUAD_SIZE} distinct players; you gave {len(set(elements))}')
+        everyone = s['everyone']
+        current = everyone[everyone['element'].isin(elements)].copy()
+        if len(current) != opt.SQUAD_SIZE:
+            found = set(current['element'])
+            missing = [str(element) for element in elements if element not in found]
+            return fail(f"unknown player element(s): {', '.join(missing)}")
+        order = {element: position for position, element in enumerate(elements)}
+        current['_order'] = current['element'].map(order)
+        current = current.sort_values('_order').drop(columns='_order').reset_index(drop=True)
+    else:
+        if len(names) != opt.SQUAD_SIZE:
+            return fail(f'a squad is {opt.SQUAD_SIZE} players; you gave {len(names)}')
+        try:
+            current = squad_from_names(names).reset_index(drop=True)
+        except (ValueError, KeyError) as exc:
+            return fail(str(exc))
+
+    budget = float(current['value_m'].sum())
+    result, status = opt.solve_squad(current, budget)
+    if result is None:
+        return fail(f'the supplied 15 is not a legal FPL squad ({status})')
+    return jsonify(lineup_response(result, budget))
 
 
 @app.route('/api/transfers', methods=['POST'])

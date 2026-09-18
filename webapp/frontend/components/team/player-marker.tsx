@@ -9,10 +9,12 @@ import type { PlayerRecord } from "@/lib/types";
 export function PlayerMarker({
   player,
   isCaptain,
+  isViceCaptain,
   isBenchOption,
 }: {
   player: PlayerRecord;
   isCaptain?: boolean;
+  isViceCaptain?: boolean;
   isBenchOption?: boolean;
 }) {
   const { openProfile, snapshot } = useApp();
@@ -32,6 +34,11 @@ export function PlayerMarker({
       {isCaptain && (
         <div className="pm-badge" aria-label="Captain">
           C
+        </div>
+      )}
+      {!isCaptain && isViceCaptain && (
+        <div className="pm-badge vice" aria-label="Vice-captain">
+          V
         </div>
       )}
       {doubt && (

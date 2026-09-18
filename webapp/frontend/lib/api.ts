@@ -67,6 +67,8 @@ export const api = {
     }>("/api/refresh", {}),
   squad: (body: { budget: number; lock?: string[]; ban?: string[] }) =>
     postJson<SquadResult>("/api/squad", body),
+  lineup: (body: { elements: number[] }) =>
+    postJson<SquadResult>("/api/lineup", body),
   transfers: (body: { squad: string[]; free?: number; bank?: number; max?: number }) =>
     postJson<TransferResult>("/api/transfers", body),
   watchlist: (maxOwnership = 10, top = 12) =>
