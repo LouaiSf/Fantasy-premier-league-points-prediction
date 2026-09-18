@@ -104,6 +104,7 @@ export interface TransferRow {
   hit: number;
   net: number;
   gain: number;
+  marginal: number | null;
   out: string[];
   in: string[];
   squad: PlayerRecord[];
@@ -122,9 +123,13 @@ export interface TransferResult {
   budget: number;
   free: number;
   hit_cost: number;
+  decision_margin: number;
   rows: TransferRow[];
   failures: TransferFailure[];
   best: TransferRow | null;
+  recommended: TransferRow | null;
+  recommendation_edge: number | null;
+  marginal_recommendation: boolean;
 }
 
 export interface ApiError {

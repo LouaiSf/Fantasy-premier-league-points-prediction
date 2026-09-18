@@ -53,6 +53,9 @@ SQUAD_SIZE = 15
 XI_SIZE = 11
 MAX_PER_CLUB = 3
 HIT_COST = 4          # points docked per transfer beyond the free ones
+# Do not recommend extra transfers for an edge smaller than the model's
+# measured per-player error. The raw mathematical optimum is still returned.
+DECISION_MARGIN = 1.0
 
 # Bench points only matter if you play Bench Boost, or a starter does not
 # feature. Weighting them low keeps the optimiser from buying an expensive
@@ -467,25 +470,95 @@ def show_squad(result: dict, budget: float) -> None:
 # ---------------------------------------------------------------------------
 # Transfers
 # ---------------------------------------------------------------------------
+def choose_transfer_recommendation(rows: list, margin: float = DECISION_MARGIN):
+    """Return (raw optimum, conservative recommendation).
+
+    The solver can distinguish 58.16 from 58.09, but the prediction model
+    cannot do so reliably. Keep the mathematical optimum for transparency,
+    then step down to the fewest transfers whose net score is within `margin`
+    of it.
+
+    The step down only applies where it actually saves a points hit. A move
+    covered by a free transfer costs nothing, so a small edge is still worth
+    taking rather than withholding; a recommendation that thin is flagged
+    instead, via `marginal_recommendation` in compute_transfers().
+    """
+    if not rows:
+        return None, None
+    best = max(rows, key=lambda row: (row['net'], -row['transfers']))
+    defensible = [
+        row for row in rows
+        if row['transfers'] < best['transfers']
+        and row['hit'] < best['hit']
+        and best['net'] - row['net'] < margin
+    ]
+    if not defensible:
+        return best, best
+    return best, min(defensible, key=lambda row: row['transfers'])
+
+
+def annotate_marginals(rows: list) -> None:
+    """Attach each count's net gain over the count directly below it.
+
+    Counts can be missing -- an unavailable player forces a minimum number of
+    moves -- so this indexes by transfer count rather than list position, and
+    leaves `marginal` at None when the preceding count has no row.
+    """
+    nets = {row['transfers']: row['net'] for row in rows}
+    for row in rows:
+        previous = nets.get(row['transfers'] - 1)
+        row['marginal'] = (
+            None if previous is None else round(row['net'] - previous, 2))
+
+
 def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
                       free: int, bank: float, max_transfers: int) -> dict:
-    """Best move for each transfer count, net of the points hit.
+    """Jointly optimise every transfer count, net of the points hit.
 
-    More transfers always buy at least as many raw points, so comparing them
-    only means something after the -4 per extra transfer is charged. Every
-    count is returned so a marginal second or third transfer is visible rather
-    than assumed.
+    Each count is one integer program over the complete squad. This is
+    intentionally not a greedy sequence: the solver may downgrade a useful
+    player and spend the released money on a larger upgrade elsewhere. More
+    transfers always buy at least as many raw points, so comparing them only
+    means something after the -4 per extra transfer is charged. Every count is
+    returned so a marginal second or third transfer is visible rather than
+    assumed.
 
     Returns data only. suggest_transfers() prints it; the web layer renders the
     same structure, so the two can never drift.
     """
     budget = current['value_m'].sum() + bank
-    keep_idx = [i for i in current.index]
 
-    baseline = None
+    # The available market has a fresh RangeIndex, while the current squad can
+    # include unavailable players and therefore have different row numbers.
+    # Transfer constraints must use stable identity, never DataFrame indices.
+    identity = ('element' if 'element' in players.columns and
+                'element' in current.columns else 'name')
+    current_ids = set(current[identity])
+    keep_idx = list(players.index[players[identity].isin(current_ids)])
+    available_current_ids = set(players.loc[keep_idx, identity])
+    forced_out = len(current_ids - available_current_ids)
+
+    # Score standing pat independently. Count zero may be infeasible when an
+    # owned player is unavailable, but gains still need the actual current
+    # squad as their reference rather than the first feasible transfer plan.
+    baseline_result, _ = solve_squad(
+        current.reset_index(drop=True), float(current['value_m'].sum()))
+    if baseline_result is None:
+        raise ValueError('current squad is not a legal FPL squad')
+    baseline_xi = float(baseline_result['xi']['predicted_points'].sum())
+    baseline_cap = baseline_result['captain']
+    baseline = baseline_xi + (
+        float(baseline_cap['predicted_points']) if baseline_cap is not None else 0.0)
+
     rows = []
     failures = []
     for count in range(0, max_transfers + 1):
+        if count < forced_out:
+            failures.append({
+                'transfers': count,
+                'status': f'at least {forced_out} unavailable player(s) must be transferred out',
+            })
+            continue
         result, status = solve_squad(
             players, budget,
             must_transfer_out=(keep_idx, SQUAD_SIZE - count))
@@ -497,11 +570,10 @@ def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
         cap = result['captain']['predicted_points'] if result['captain'] is not None else 0
         gross = xi_points + cap
         hit = max(0, count - free) * HIT_COST
-        if baseline is None:
-            baseline = gross
 
-        out = current[~current['name'].isin(result['squad']['name'])]
-        into = result['squad'][~result['squad']['name'].isin(current['name'])]
+        result_ids = set(result['squad'][identity])
+        out = current[~current[identity].isin(result_ids)]
+        into = result['squad'][~result['squad'][identity].isin(current_ids)]
         rows.append({
             'transfers': count,
             'gross': round(float(gross), 2),
@@ -514,16 +586,28 @@ def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
             'xi': squad_records(result['xi']),
         })
 
-    best = max(rows, key=lambda r: r['net']) if rows else None
+    annotate_marginals(rows)
+
+    best, recommended = choose_transfer_recommendation(rows)
     return {
         'squad_value': round(float(current['value_m'].sum()), 1),
         'bank': round(float(bank), 1),
         'budget': round(float(budget), 1),
         'free': int(free),
         'hit_cost': HIT_COST,
+        'decision_margin': DECISION_MARGIN,
         'rows': rows,
         'failures': failures,
         'best': best,
+        'recommended': recommended,
+        'recommendation_edge': (
+            None if best is None or recommended is None
+            else round(best['net'] - recommended['net'], 2)),
+        # The recommended move is worth making but sits inside the model's
+        # error, so rolling it instead is defensible. Advisory, not a veto.
+        'marginal_recommendation': bool(
+            recommended is not None and recommended['transfers']
+            and recommended['gain'] < DECISION_MARGIN),
     }
 
 
@@ -556,7 +640,10 @@ def squad_records(frame: pd.DataFrame) -> list:
 
 def suggest_transfers(current: pd.DataFrame, players: pd.DataFrame,
                       free: int, bank: float, max_transfers: int) -> None:
-    data = compute_transfers(current, players, free, bank, max_transfers)
+    try:
+        data = compute_transfers(current, players, free, bank, max_transfers)
+    except ValueError as exc:
+        raise SystemExit(str(exc))
 
     print(f"\n  squad value {data['squad_value']:.1f}m + bank {data['bank']:.1f}m "
           f"= {data['budget']:.1f}m to spend")
@@ -570,21 +657,29 @@ def suggest_transfers(current: pd.DataFrame, players: pd.DataFrame,
     if not data['rows']:
         raise SystemExit("no legal squad found at any transfer count")
 
-    print(f"  {'moves':<7}{'gross':>8}{'hit':>6}{'net':>8}{'vs 0':>8}")
-    print("  " + "-" * 40)
+    print(f"  {'moves':<7}{'gross':>8}{'hit':>6}{'net':>8}{'vs 0':>8}{'marginal':>11}")
+    print("  " + "-" * 51)
     for row in data['rows']:
+        marginal = '--' if row['marginal'] is None else f"{row['marginal']:+.2f}"
         print(f"  {row['transfers']:<7}{row['gross']:>8.2f}{row['hit']:>6}"
-              f"{row['net']:>8.2f}{row['gain']:>+8.2f}")
+              f"{row['net']:>8.2f}{row['gain']:>+8.2f}{marginal:>11}")
 
     best = data['best']
-    print(f"\n  best: {best['transfers']} transfer(s), "
+    recommended = data['recommended']
+    print(f"\n  raw optimum: {best['transfers']} transfer(s), "
           f"net {best['net']:.2f} ({best['gain']:+.2f} vs standing pat)")
-    if best['transfers']:
-        print(f"    OUT  {best['out']}")
-        print(f"    IN   {best['in']}")
-    if best['gain'] < 1.0 and best['transfers']:
-        print("\n  A gain under a point is inside this model's error "
-              "(test MAE ~1.0/player).")
+    print(f"  recommendation: {recommended['transfers']} transfer(s), "
+          f"net {recommended['net']:.2f}")
+    if recommended['transfers']:
+        print(f"    OUT  {recommended['out']}")
+        print(f"    IN   {recommended['in']}")
+    if recommended['transfers'] != best['transfers']:
+        print(f"\n  The extra {best['transfers'] - recommended['transfers']} move(s) cost a hit "
+              f"and add only {data['recommendation_edge']:.2f} net points, inside the "
+              f"model's {data['decision_margin']:.1f}-point decision margin.")
+    if data['marginal_recommendation']:
+        print(f"\n  This gain is itself under {data['decision_margin']:.1f} points, "
+              "inside the model's error (test MAE ~1.0/player).")
         print("  Rolling the transfer is defensible.")
 
 

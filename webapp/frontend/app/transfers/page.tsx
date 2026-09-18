@@ -96,6 +96,7 @@ export default function TransfersPage() {
   const [inId, setInId] = React.useState<number | null>(null);
   const [free, setFree] = React.useState(1);
   const [bank, setBank] = React.useState(0);
+  const [maxTransfers, setMaxTransfers] = React.useState(3);
   const [analysis, setAnalysis] = React.useState<TransferResult | null>(null);
   const [analysisError, setAnalysisError] = React.useState<string | null>(null);
   const [analysing, setAnalysing] = React.useState(false);
@@ -178,7 +179,7 @@ export default function TransfersPage() {
     setAnalysing(true);
     setAnalysisError(null);
     try {
-      const result = await api.transfers({ squad: squadNames, free, bank, max: 3 });
+      const result = await api.transfers({ squad: squadNames, free, bank, max: maxTransfers });
       setAnalysis(result);
     } catch (err) {
       setAnalysisError((err as Error).message);
@@ -187,8 +188,23 @@ export default function TransfersPage() {
     }
   }
 
-  const verdict = analysis?.best
-    ? analysis.best.transfers === 0
+  const recommendation = analysis?.recommended ?? analysis?.best ?? null;
+  const footnote = !analysis
+    ? null
+    : !recommendation
+      ? "No legal squad was found within the budget for any transfer count."
+      : [
+          analysis.best && analysis.best.transfers !== recommendation.transfers
+            ? `${recommendation.transfers} transfer${recommendation.transfers === 1 ? "" : "s"} recommended. The ${analysis.best.transfers}-transfer raw optimum costs a hit and adds only ${num(analysis.recommendation_edge)} points, inside the ${num(analysis.decision_margin)}-point model margin.`
+            : `Net projected gain of ${num(recommendation.gain)} points after transfer costs, budget £${analysis.budget}m.`,
+          analysis.marginal_recommendation
+            ? "That gain is itself inside the model's error, so rolling the transfer instead is defensible."
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" ");
+  const verdict = recommendation
+    ? recommendation.transfers === 0
       ? "hold"
       : "go"
     : null;
@@ -204,8 +220,8 @@ export default function TransfersPage() {
             <h1>Transfer studio</h1>
           </div>
           <p>
-            Stage one move clearly, then ask the existing optimiser how many transfers survive
-            the hit.
+            Stage one move, then jointly optimise the whole squad to find how many transfers
+            are worth making after hits.
           </p>
           {predictionAvailable && (
             <ModelInfo model={snapshot.model} timestamp={snapshot.prediction_timestamp} />
@@ -251,6 +267,28 @@ export default function TransfersPage() {
                 type="button"
                 aria-label="Increase bank by £0.1m"
                 onClick={() => setBank((value) => Math.round((value + 0.1) * 10) / 10)}
+              >
+                +
+              </button>
+            </div>
+          </div>
+          <div className="studio-field">
+            <span className="kicker">Max transfers</span>
+            <div className="stepper">
+              <button
+                type="button"
+                aria-label="Decrease maximum transfers"
+                disabled={maxTransfers <= 0}
+                onClick={() => setMaxTransfers((value) => Math.max(0, value - 1))}
+              >
+                −
+              </button>
+              <output className="data">{maxTransfers}</output>
+              <button
+                type="button"
+                aria-label="Increase maximum transfers"
+                disabled={maxTransfers >= 5}
+                onClick={() => setMaxTransfers((value) => Math.min(5, value + 1))}
               >
                 +
               </button>
@@ -436,7 +474,7 @@ export default function TransfersPage() {
             {analysing && (
               <div className="analysis-status" role="status">
                 <span className="spinner" aria-hidden="true" />
-                Running the optimiser across every transfer count…
+                Jointly optimising every transfer count from 0 to {maxTransfers}…
               </div>
             )}
             {!analysing && analysisError && (
@@ -446,8 +484,8 @@ export default function TransfersPage() {
             )}
             {!analysing && !analysisError && analysis && (
               <div className="analysis-status" role="status">
-                {analysis.best
-                  ? `Analysis complete: ${analysis.best.transfers} transfer${analysis.best.transfers === 1 ? "" : "s"} lead the model.`
+                {recommendation
+                  ? `Analysis complete: ${recommendation.transfers} transfer${recommendation.transfers === 1 ? "" : "s"} recommended.`
                   : "Analysis complete: no legal squad was found for any transfer count."}
               </div>
             )}
@@ -511,10 +549,10 @@ export default function TransfersPage() {
             <div className="impact-head">
               <h3>Transfer impact</h3>
               <span className={`verdict-pill${verdict === "hold" ? " hold" : ""}`}>
-                {analysis.best
-                  ? analysis.best.transfers === 0
+                {recommendation
+                  ? recommendation.transfers === 0
                     ? "Hold this week"
-                    : `${analysis.best.transfers} transfer${analysis.best.transfers === 1 ? "" : "s"} lead the model`
+                    : `${recommendation.transfers} transfer${recommendation.transfers === 1 ? "" : "s"} recommended`
                   : "No legal squad found"}
               </span>
             </div>
@@ -525,6 +563,7 @@ export default function TransfersPage() {
                   <span className={`big ${row.gain >= 0 ? "pos" : "neg"}`}>{signed(row.gain)}</span>
                   <p>
                     {num(row.gross)} gross, {row.hit ? `−${row.hit}` : "0"} hit
+                    {row.marginal != null ? ` · ${signed(row.marginal)} marginal` : ""}
                     {row.out.length ? ` · ${row.out.join(", ")} → ${row.in.join(", ")}` : ""}
                   </p>
                 </div>
@@ -538,11 +577,7 @@ export default function TransfersPage() {
               ))}
             </div>
             <div className="impact-foot">
-              <p>
-                {analysis.best
-                  ? `Net projected gain of ${num(analysis.best.gain)} points after transfer costs, budget £${analysis.budget}m.`
-                  : "No legal squad was found within the budget for any transfer count."}
-              </p>
+              <p>{footnote}</p>
               <button className="btn secondary" type="button" onClick={() => toast("Hold recorded for this session.")}>
                 Hold this week
               </button>

@@ -463,8 +463,15 @@ def api_transfers():
         return fail('free, bank and max must be numbers')
     if not 0 <= max_transfers <= 5:
         return fail('max transfers must be between 0 and 5')
+    if not 0 <= free <= 5:
+        return fail('free transfers must be between 0 and 5')
+    if not 0 <= bank <= 100:
+        return fail('bank must be between 0.0m and 100.0m')
 
-    data = opt.compute_transfers(current, s['players'], free, bank, max_transfers)
+    try:
+        data = opt.compute_transfers(current, s['players'], free, bank, max_transfers)
+    except ValueError as exc:
+        return fail(str(exc))
     data['ok'] = True
     return jsonify(data)
 
