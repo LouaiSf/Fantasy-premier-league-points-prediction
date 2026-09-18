@@ -92,7 +92,7 @@ export default function FixturesPage() {
       <div className="shell">
         <div className="section-head">
           <div>
-            <p className="eyebrow" style={{ color: "var(--lime)" }}>
+            <p className="eyebrow lime">
               {gameweeks.length}-week horizon // GW{startGw}–{gameweeks[gameweeks.length - 1] ?? startGw}
             </p>
             <h1>Fixture matrix</h1>

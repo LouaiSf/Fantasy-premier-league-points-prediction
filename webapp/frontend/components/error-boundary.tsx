@@ -39,34 +39,21 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         return this.props.fallback;
       }
       return (
-        <section className="page" style={{ display: "grid", placeItems: "center", minHeight: "60vh" }}>
-          <div
-            style={{
-              maxWidth: 540,
-              padding: "var(--space-8)",
-              background: "rgba(255,255,255,.04)",
-              border: "1px solid rgba(255,255,255,.12)",
-              textAlign: "center",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: "var(--space-4)",
-            }}
-          >
-            <p className="eyebrow" style={{ color: "var(--pink)" }}>
+        <section className="page page--centered">
+          <div className="error-card">
+            <p className="eyebrow alert">
               Runtime Notice
             </p>
-            <h2 style={{ margin: 0, font: "800 24px/1.2 var(--display)" }}>
+            <h2>
               Something went wrong
             </h2>
-            <p style={{ color: "var(--muted-mid)", fontSize: 14, margin: 0 }}>
+            <p>
               {this.state.error?.message || "An unexpected error occurred while rendering this surface."}
             </p>
             <button
               type="button"
               className="btn"
               onClick={this.handleReload}
-              style={{ marginTop: "var(--space-2)" }}
             >
               Reload Surface
             </button>

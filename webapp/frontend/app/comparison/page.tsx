@@ -146,7 +146,7 @@ function ComparisonPageInner() {
       <div className="shell">
         <div className="section-head">
           <div>
-            <p className="eyebrow" style={{ color: "var(--cyan)" }}>
+            <p className="eyebrow cyan">
               Head to head
             </p>
             <h1>Select the duel</h1>

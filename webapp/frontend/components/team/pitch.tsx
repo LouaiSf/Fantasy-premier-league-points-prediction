@@ -24,7 +24,7 @@ export function Pitch() {
           <div className="spot top" />
           <div className="spot bottom" />
         </div>
-        <div className="formation" style={{ display: "grid", placeItems: "center" }}>
+        <div className="formation formation--empty">
           <div className="pitch-empty">
             <span className="eyebrow">Squad required</span>
             <h2>Build your 15</h2>

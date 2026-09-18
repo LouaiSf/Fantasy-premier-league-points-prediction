@@ -11,17 +11,7 @@ export function Toast() {
         type="button"
         onClick={dismissToast}
         aria-label="Dismiss message"
-        style={{
-          background: "transparent",
-          border: "none",
-          color: "inherit",
-          cursor: "pointer",
-          fontSize: 16,
-          fontWeight: 700,
-          lineHeight: 1,
-          padding: "2px 4px",
-          marginLeft: "auto",
-        }}
+        className="toast-dismiss"
       >
         ×
       </button>

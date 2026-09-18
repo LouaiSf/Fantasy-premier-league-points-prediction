@@ -213,7 +213,7 @@ export default function NewsPage() {
               </button>
             </div>
           </div>
-          <p className="kicker" style={{ color: "var(--muted-ink)" }}>
+          <p className="kicker muted">
             {filtered.length} note{filtered.length === 1 ? "" : "s"} in this filter
           </p>
         </div>
@@ -237,8 +237,8 @@ export default function NewsPage() {
                 <span className="club">{lead.team}</span>
               </div>
               <h2>{lead.web_name}</h2>
-              <p style={{ maxWidth: "40ch", color: "#f0e4f2", fontSize: 15 }}>{noteFor(lead)}</p>
-              <p className="wire-fresh" style={{ color: "rgba(255,255,255,.7)" }}>
+              <p className="lead-note">{noteFor(lead)}</p>
+              <p className="wire-fresh">
                 {freshness} · Official FPL player status, not third-party reporting
               </p>
               <div className="lead-actions">
@@ -273,7 +273,7 @@ export default function NewsPage() {
         )}
 
         {view === "desk" && rest.length > 0 && (
-          <div className="wire-layout" style={{ gridTemplateColumns: "1fr" }}>
+          <div className="wire-layout wire-layout--single">
             <div className="wire-col">
               <h3 className="col-title">
                 League wire<small>
@@ -287,7 +287,7 @@ export default function NewsPage() {
                   className="wire-item"
                   data-pri={player.status !== "a" ? "high" : "med"}
                   onClick={() => openProfile(player)}
-                  style={{ "--i": idx, width: "100%", background: "transparent", font: "inherit", textAlign: "left", cursor: "pointer" } as React.CSSProperties}
+                  style={{ "--i": idx } as React.CSSProperties}
                 >
                   <span className="wire-shot" style={clubStyle(player.team)}>
                     <PlayerPhoto src={player.photo ?? undefined} alt={player.name} name={player.name} loading="lazy" />

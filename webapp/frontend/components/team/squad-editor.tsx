@@ -55,21 +55,10 @@ export function SquadEditor() {
     <DialogPrimitive.Root open={open} onOpenChange={handleOpenChange}>
       <DialogPrimitive.Trigger className="btn secondary">Edit squad</DialogPrimitive.Trigger>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Backdrop className="scrim is-open" style={{ zIndex: 140 }} />
+        <DialogPrimitive.Backdrop className="scrim is-open squad-scrim" />
         <DialogPrimitive.Popup
-          className="picker"
+          className="picker picker-dialog"
           aria-label="Squad editor"
-          style={{
-            position: "fixed",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: "min(640px, 94vw)",
-            maxHeight: "84vh",
-            display: "flex",
-            flexDirection: "column",
-            zIndex: 150,
-          }}
         >
           <div className="picker-head">
             <h3>Choose 15 players</h3>
@@ -85,7 +74,7 @@ export function SquadEditor() {
             </label>
             <DialogPrimitive.Close className="btn sm secondary">Close</DialogPrimitive.Close>
           </div>
-          <div className="teamsheet" style={{ flex: 1 }}>
+          <div className="teamsheet">
             {POSITIONS.map((position) => {
               const rows = filtered.filter((player) => player.position === position);
               if (!rows.length) return null;
@@ -131,7 +120,7 @@ export function SquadEditor() {
             })}
             {!filtered.length && <p className="picker-empty">No players match that search.</p>}
           </div>
-          <div className="dialog-actions" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", borderTop: "1px solid rgba(255,255,255,.14)" }}>
+          <div className="dialog-actions">
             <span style={{ fontSize: 12, color: problem ? "var(--pink)" : "var(--lime)" }}>
               {problem || "Legal 15-player squad ready to save."}
             </span>

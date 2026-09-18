@@ -60,7 +60,7 @@ export default function WatchlistPage() {
   if (!snapshot.prediction_available) {
     return (
       <section className="page">
-        <div className="shell" style={{ paddingBlock: "var(--space-12)" }}>
+        <div className="shell shell--padded">
           <EmptyState
             title="Predictions Unavailable"
             message={`The Watchlist requires model projections to calculate value ratios, differentials, and overpriced assets.${snapshot.prediction_error ? ` (${snapshot.prediction_error})` : ""} Run the prediction pipeline or click Refresh.`}
@@ -118,7 +118,7 @@ export default function WatchlistPage() {
         </div>
 
         <div className="watch-info">
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginBottom: "2px" }}>
+          <div className="watch-name-row">
             <span className="watch-name">{player.name}</span>
             <span className="watch-pos-badge">{player.position}</span>
           </div>
@@ -128,7 +128,7 @@ export default function WatchlistPage() {
               <span>vs {player.opponent_team} ({player.was_home ? "H" : "A"})</span>
             )}
             {player.selected_by != null && (
-              <span style={{ marginLeft: "auto", fontFamily: "var(--data)", fontSize: "11px" }}>
+              <span className="watch-ownership">
                 {num(player.selected_by, 1)}% owned
               </span>
             )}
@@ -136,11 +136,11 @@ export default function WatchlistPage() {
         </div>
 
         <div className="watch-pts-wrap">
-          <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-1)" }}>
+          <div className="watch-pts-row">
             <span className="watch-pts">{num(player.predicted_points, 1)}</span>
-            <span style={{ fontSize: "10px", color: "var(--muted-mid)", textTransform: "uppercase" }}>pts</span>
+            <span className="watch-pts-unit">pts</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+          <div className="watch-price-row">
             <span className="watch-price">{money(player.value_m)}</span>
             <span className={`watch-tag ${tagClass}`}>{tagLabel}</span>
           </div>
@@ -165,7 +165,7 @@ export default function WatchlistPage() {
   return (
     <section className="page watchlist-page" aria-label="Watchlist">
       <div className="shell">
-        <header className="section-head" style={{ marginTop: "var(--space-6)" }}>
+        <header className="section-head section-head--mt">
           <div>
             <span className="badge cyan">
               Tactical Market Wire
@@ -176,24 +176,17 @@ export default function WatchlistPage() {
             </p>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", flexWrap: "wrap" }}>
+          <div className="section-head-actions">
             <label
               htmlFor="diff-threshold"
-              className="kicker"
-              style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}
+              className="kicker kicker-row"
             >
               Diff Max:
               <select
                 id="diff-threshold"
                 value={maxOwnership}
                 onChange={(e) => setMaxOwnership(Number(e.target.value))}
-                style={{
-                  background: "rgba(255,255,255,0.08)",
-                  border: "1px solid rgba(255,255,255,0.16)",
-                  color: "inherit",
-                  padding: "4px 8px",
-                  fontSize: "12px",
-                }}
+                className="ctrl-select"
               >
                 <option value={5}>≤ 5% owned</option>
                 <option value={10}>≤ 10% owned</option>
@@ -203,21 +196,14 @@ export default function WatchlistPage() {
 
             <label
               htmlFor="top-count"
-              className="kicker"
-              style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}
+              className="kicker kicker-row"
             >
               Count:
               <select
                 id="top-count"
                 value={topCount}
                 onChange={(e) => setTopCount(Number(e.target.value))}
-                style={{
-                  background: "rgba(255,255,255,0.08)",
-                  border: "1px solid rgba(255,255,255,0.16)",
-                  color: "inherit",
-                  padding: "4px 8px",
-                  fontSize: "12px",
-                }}
+                className="ctrl-select"
               >
                 <option value={8}>8 per list</option>
                 <option value={12}>12 per list</option>
@@ -225,7 +211,7 @@ export default function WatchlistPage() {
               </select>
             </label>
 
-            <div className="search" style={{ minWidth: "180px" }}>
+            <div className="search">
               <input
                 type="search"
                 placeholder="Search player, club, position…"
@@ -237,7 +223,7 @@ export default function WatchlistPage() {
         </header>
 
         {/* Tab switcher */}
-        <div className="filter-row" style={{ marginBlock: "var(--space-6)" }}>
+        <div className="filter-row">
           {tabs.map((tab) => (
             <button
               key={tab.key}
@@ -260,16 +246,16 @@ export default function WatchlistPage() {
         <div className={`watch-sections${activeSection === "all" ? "" : " is-single"}`}>
           {/* 1. Best Value */}
           {(activeSection === "all" || activeSection === "value") && (
-            <div className="watch-section">
+            <div className="watch-section" data-section="value">
               <div className="sub-head">
-                <h3 style={{ color: "var(--lime)" }}>Best Value (Pts / £m)</h3>
+                <h3>Best Value (Pts / £m)</h3>
                 <span className="rule" />
                 <small>Top PPM Efficiency</small>
               </div>
-              <p style={{ fontSize: "var(--type-small)", color: "var(--muted-light)", margin: 0 }}>
+              <p className="watch-section-desc">
                 Budget stretchers who yield the highest projected output per million spent.
               </p>
-              <div className="watch-grid" style={{ marginTop: "var(--space-2)" }}>
+              <div className="watch-grid">
                 {valList.map((player) =>
                   renderPlayerCard(player, "value", `${num(player.points_per_million, 2)} PPM`),
                 )}
@@ -282,16 +268,16 @@ export default function WatchlistPage() {
 
           {/* 2. Differentials */}
           {(activeSection === "all" || activeSection === "differentials") && (
-            <div className="watch-section">
+            <div className="watch-section" data-section="differentials">
               <div className="sub-head">
-                <h3 style={{ color: "var(--cyan)" }}>Differentials (≤{maxOwnership}%)</h3>
+                <h3>Differentials (≤{maxOwnership}%)</h3>
                 <span className="rule" />
                 <small>Mini-League Edge</small>
               </div>
-              <p style={{ fontSize: "var(--type-small)", color: "var(--muted-light)", margin: 0 }}>
+              <p className="watch-section-desc">
                 Low-ownership assets capable of propelling your rank without templates.
               </p>
-              <div className="watch-grid" style={{ marginTop: "var(--space-2)" }}>
+              <div className="watch-grid">
                 {diffList.map((player) =>
                   renderPlayerCard(player, "diff", `${num(player.selected_by, 1)}% own`),
                 )}
@@ -304,16 +290,16 @@ export default function WatchlistPage() {
 
           {/* 3. Overpriced / Traps */}
           {(activeSection === "all" || activeSection === "overpriced") && (
-            <div className="watch-section">
+            <div className="watch-section" data-section="overpriced">
               <div className="sub-head">
-                <h3 style={{ color: "var(--pink)" }}>Overpriced Traps (≥£8.0m)</h3>
+                <h3>Overpriced Traps (≥£8.0m)</h3>
                 <span className="rule" />
                 <small>Lowest PPM Premium</small>
               </div>
-              <p style={{ fontSize: "var(--type-small)", color: "var(--muted-light)", margin: 0 }}>
+              <p className="watch-section-desc">
                 Expensive assets whose current fixture/projection profile does not justify premium allocation.
               </p>
-              <div className="watch-grid" style={{ marginTop: "var(--space-2)" }}>
+              <div className="watch-grid">
                 {overList.map((player) =>
                   renderPlayerCard(player, "trap", `${num(player.points_per_million, 2)} PPM`),
                 )}
@@ -326,16 +312,16 @@ export default function WatchlistPage() {
 
           {/* 4. No History */}
           {(activeSection === "all" || activeSection === "no_history") && (
-            <div className="watch-section">
+            <div className="watch-section" data-section="new">
               <div className="sub-head">
-                <h3 style={{ color: "var(--gold)" }}>Promoted &amp; New Signings</h3>
+                <h3>Promoted &amp; New Signings</h3>
                 <span className="rule" />
                 <small>Baseline Projection</small>
               </div>
-              <p style={{ fontSize: "var(--type-small)", color: "var(--muted-light)", margin: 0 }}>
+              <p className="watch-section-desc">
                 Talent without previous Premier League game logs. Forecasted using baseline position priors.
               </p>
-              <div className="watch-grid" style={{ marginTop: "var(--space-2)" }}>
+              <div className="watch-grid">
                 {noHistList.map((player) =>
                   renderPlayerCard(player, "new", "New to PL"),
                 )}

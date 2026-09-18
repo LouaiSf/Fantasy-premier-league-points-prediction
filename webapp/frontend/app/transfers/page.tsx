@@ -43,7 +43,7 @@ function DeskRow({
       onClick={onClick}
       style={clubStyle(player.team)}
     >
-      <span className="shot" style={{ position: "relative" }}>
+      <span className="shot">
         <PlayerPhoto
           src={player.photo ?? undefined}
           alt={player.name}
@@ -302,7 +302,7 @@ export default function TransfersPage() {
         </div>
 
         <div className="studio-grid">
-          <section className="desk out" style={{ "--desk-c": "var(--pink)" } as React.CSSProperties}>
+          <section className="desk out">
             <div className="desk-head">
               <h2>Player out</h2>
               <span className="count">{outRows.length} squad players</span>
@@ -491,7 +491,7 @@ export default function TransfersPage() {
             )}
           </section>
 
-          <section className="desk in" style={{ "--desk-c": "var(--lime)" } as React.CSSProperties}>
+          <section className="desk in">
             <div className="desk-head">
               <h2>Player in</h2>
               <span className="count">{outgoing ? `${inRows.length} ${outgoing.position}` : "Market"}</span>

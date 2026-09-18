@@ -649,7 +649,7 @@
   .picker-filters .group{display:flex;align-items:center;gap:6px}
   .picker-filters .group>span{font:700 9px var(--data);letter-spacing:.14em;text-transform:uppercase;color:var(--muted-mid)}
   /* the team sheet: a printed squad list grouped by position, not a grid of identical tiles */
-  .teamsheet{max-height:420px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;
+  .teamsheet{flex:1;max-height:420px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;
     scrollbar-color:rgba(255,255,255,.28) transparent}
   .ts-head{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:12px;padding:9px 20px 9px 16px;
     background:rgba(26,0,34,.94);backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,.16)}
@@ -1498,7 +1498,7 @@
   .chip-note-banner{display:flex;align-items:flex-start;gap:var(--space-3);padding:var(--space-4) var(--space-5);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);clip-path:var(--blade);margin-bottom:var(--space-16)}
 
   /* ── Watchlist ──────────────────────────────────────────────────────────── */
-  .watch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:var(--space-2)}
+  .watch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:var(--space-2);margin-top:var(--space-2)}
   .watch-card{background:rgba(255,255,255,.04);clip-path:var(--blade);padding:var(--space-3) var(--space-4);display:flex;align-items:center;gap:var(--space-3);transition:transform var(--motion-fast) var(--ease-out),background var(--motion-fast);cursor:pointer;width:100%;border:0;color:var(--white);text-align:left}
   .watch-card:hover{transform:translateX(4px);background:rgba(255,255,255,.09)}
   .watch-info{flex:1;min-width:0}
@@ -1670,3 +1670,95 @@
      min-content width from the cards and overflow its own track. */
   .watch-sections > *{min-width:0}
   .watch-section{display:flex;flex-direction:column;gap:var(--space-3);min-width:0}
+
+  /* ── Inline-style replacements ────────────────────────────────────────── */
+
+  /* Shell padding variants for empty-state and full-page surfaces */
+  .shell--padded{padding-block:var(--space-12)}
+  .shell--lg{padding-block:var(--space-16)}
+
+  /* Eyebrow colour variants */
+  .eyebrow.lime{color:var(--lime)}
+  .eyebrow.cyan{color:var(--cyan)}
+  .eyebrow.muted{color:var(--muted-mid)}
+
+  /* Section-head optional top margin */
+  .section-head--mt{margin-top:var(--space-6)}
+
+  /* Header action slot: holds filter controls beside the heading text */
+  .section-head-actions{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap}
+
+  /* Kicker + control pairs used in header action rows */
+  .kicker-row{display:flex;align-items:center;gap:var(--space-2)}
+  .ctrl-select{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);color:inherit;padding:4px 8px;font-size:12px}
+
+  /* Watchlist player card inner layout */
+  .watch-name-row{display:flex;align-items:center;gap:var(--space-2);margin-bottom:2px}
+  .watch-ownership{margin-left:auto;font-family:var(--data);font-size:11px}
+  .watch-pts-row{display:flex;align-items:baseline;gap:var(--space-1)}
+  .watch-pts-unit{font-size:10px;color:var(--muted-mid);text-transform:uppercase}
+  .watch-price-row{display:flex;align-items:center;gap:var(--space-2)}
+  .watch-section-desc{font-size:var(--type-small);color:var(--muted-light);margin:0}
+  .watchlist-page .filter-row{margin-block:var(--space-6)}
+
+  /* Per-section heading colour driven by data-section attribute */
+  .watch-section[data-section="value"] .sub-head h3{color:var(--lime)}
+  .watch-section[data-section="differentials"] .sub-head h3{color:var(--cyan)}
+  .watch-section[data-section="overpriced"] .sub-head h3{color:var(--pink)}
+  .watch-section[data-section="new"] .sub-head h3{color:var(--gold)}
+
+  /* Chip heatmap wrappers */
+  .chip-heatmap-section{margin-bottom:var(--space-12)}
+  .chip-heatmap-scroll{overflow-x:auto}
+  .chip-advisor-heatmap .col-gw{width:80px}
+  /* Architecture note banner content — static typography moved out of JSX */
+  .chip-note-banner-icon{font-family:var(--display);font-weight:900;font-size:1.1rem;line-height:1;flex-shrink:0}
+  .chip-note-banner-body{font-size:12px;color:var(--muted-light);line-height:1.5}
+  .chip-note-banner-title{color:var(--white);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:4px}
+
+  /* Error boundary centred page */
+  .page--centered{display:grid;place-items:center;min-height:60vh}
+  .error-card{max-width:540px;padding:var(--space-8);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);text-align:center;display:flex;flex-direction:column;align-items:center;gap:var(--space-4)}
+  .error-card h2{margin:0;font:800 24px/1.2 var(--display)}
+  .error-card p{color:var(--muted-mid);font-size:14px;margin:0}
+  .error-card .btn{margin-top:var(--space-2)}
+
+  /* Pitch empty-state formation — centres the pitch-empty card */
+  .formation--empty{display:grid;place-items:center}
+
+  /* Squad-editor dialog panel positioning and layout */
+  .picker-dialog{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(640px,94vw);max-height:84vh;display:flex;flex-direction:column;z-index:150}
+  /* Scrim for squad-editor sits above the global scrim (z 120) */
+  .scrim.squad-scrim{z-index:140}
+  /* Footer action bar at the bottom of the dialog */
+  .dialog-actions{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-top:1px solid rgba(255,255,255,.14)}
+
+  /* Toast dismiss button — unstyled, inherits colour from the toast */
+  .toast-dismiss{background:transparent;border:none;color:inherit;cursor:pointer;font-size:16px;font-weight:700;line-height:1;padding:2px 4px;margin-left:auto}
+
+  /* Wire item button reset — static, dynamic --i CSS var added inline */
+  .wire-item{width:100%;background:transparent;font:inherit;text-align:left;cursor:pointer}
+
+  /* News lead note paragraph */
+  .lead-note{max-width:40ch;color:#f0e4f2;font-size:15px}
+  /* Freshness label inside the lead story sits on a dark club-colour background */
+  .lead-copy .wire-fresh{color:rgba(255,255,255,.7)}
+  /* Force single-column layout for the news desk view */
+  .wire-layout--single{grid-template-columns:1fr}
+
+  /* Crest fallback initials badge — static parts; width/height/background stay inline */
+  .crest-fallback{display:inline-grid;place-items:center;border-radius:50%;color:#fff;font:700 9px/1 var(--display,sans-serif);letter-spacing:.02em;flex-shrink:0;user-select:none}
+
+  /* Full-width button inside a rail block */
+  .btn.w-full{width:100%}
+
+  /* Squad-alerts list inside the availability rail block */
+  .squad-alerts-list{display:grid;gap:8px}
+  .squad-alerts-row{margin:0;font-size:12px}
+
+  /* Watchlist search box minimum width */
+  .watchlist-page .search{min-width:180px}
+  /* Kicker colour variant: darker ink, used on light-on-paper or subdued contexts */
+  .kicker.muted{color:var(--muted-ink)}
+  /* Heatmap signal column font size */
+  .chip-advisor-heatmap .trend{font-size:12px}

@@ -40,20 +40,7 @@ export function ClubCrest({
     return (
       <span
         className={`crest-fallback ${className || ""}`.trim()}
-        style={{
-          display: "inline-grid",
-          placeItems: "center",
-          width: w,
-          height: h,
-          borderRadius: "50%",
-          background: `linear-gradient(135deg, ${c1}, ${c2})`,
-          color: "#ffffff",
-          font: "700 9px/1 var(--display, sans-serif)",
-          letterSpacing: "0.02em",
-          flexShrink: 0,
-          userSelect: "none",
-          ...style,
-        }}
+        style={{ width: w, height: h, background: `linear-gradient(135deg, ${c1}, ${c2})`, ...style }}
         aria-label={alt || team || "Club crest"}
         role="img"
       >

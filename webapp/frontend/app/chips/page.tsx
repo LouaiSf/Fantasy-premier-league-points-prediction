@@ -102,7 +102,7 @@ export default function ChipsPage() {
   if (!snapshot.prediction_available) {
     return (
       <section className="page">
-        <div className="shell" style={{ paddingBlock: "var(--space-12)" }}>
+        <div className="shell shell--padded">
           <EmptyState
             title="Predictions Unavailable"
             message={`The Chip Advisor requires model projections to evaluate optimal play windows.${snapshot.prediction_error ? ` (${snapshot.prediction_error})` : ""} Run the prediction pipeline or click Refresh in the header.`}
@@ -123,7 +123,7 @@ export default function ChipsPage() {
   return (
     <section className="page chips-page" aria-label="Chip advisor">
       <div className="shell">
-        <header className="section-head" style={{ marginTop: "var(--space-6)" }}>
+        <header className="section-head section-head--mt">
           <div>
             <span className="badge lime">
               Tactical Strategy Engine
@@ -134,25 +134,18 @@ export default function ChipsPage() {
             </p>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", flexWrap: "wrap" }}>
+          <div className="section-head-actions">
             <div className="filter-row">
               <label
                 htmlFor="chips-horizon"
-                className="kicker"
-                style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}
+                className="kicker kicker-row"
               >
                 Horizon:
                 <select
                   id="chips-horizon"
                   value={effectiveHorizon}
                   onChange={(e) => setHorizon(Number(e.target.value))}
-                  style={{
-                    background: "rgba(255,255,255,0.08)",
-                    border: "1px solid rgba(255,255,255,0.16)",
-                    color: "inherit",
-                    padding: "4px 8px",
-                    fontSize: "12px",
-                  }}
+                  className="ctrl-select"
                 >
                   {[4, 6, 8, 10, 12, 16].filter((h) => h <= maxPossibleHorizon).map((h) => (
                     <option key={h} value={h}>{h} Gameweeks</option>
@@ -249,7 +242,7 @@ export default function ChipsPage() {
         </div>
 
         {/* Schedule & Congestion Matrix */}
-        <div style={{ marginBottom: "var(--space-12)" }}>
+        <div className="chip-heatmap-section">
           <div className="sub-head">
             <h3>Gameweek Fixture &amp; FDR Heatmap</h3>
             <span className="rule" />
@@ -259,11 +252,11 @@ export default function ChipsPage() {
             </small>
           </div>
 
-          <div style={{ overflowX: "auto" }}>
+          <div className="chip-heatmap-scroll">
             <table className="chip-advisor-heatmap">
               <thead>
                 <tr>
-                  <th style={{ width: "80px" }}>GW</th>
+                  <th className="col-gw">GW</th>
                   <th>Fixtures</th>
                   {data?.has_squad && <th>Squad Active</th>}
                   <th>DGW Teams</th>
@@ -300,14 +293,14 @@ export default function ChipsPage() {
                       key={row.gw}
                       className={isDgw ? "is-dgw" : isBgw ? "is-bgw" : undefined}
                     >
-                      <td style={{ fontWeight: 800, fontFamily: "var(--data)" }}>
+                      <td style={{ fontWeight: 800 }}>
                         GW{row.gw}
                       </td>
-                      <td style={{ fontFamily: "var(--data)" }}>
+                      <td>
                         {row.matches} matches
                       </td>
                       {hasSquad && (
-                        <td style={{ fontFamily: "var(--data)" }}>
+                        <td>
                           <span style={{ color: (row.squad_blanks ?? 0) > 0 ? "var(--pink)" : "var(--lime)", fontWeight: 700 }}>
                             {row.squad_playing ?? 15}/15
                           </span>
@@ -318,10 +311,10 @@ export default function ChipsPage() {
                           )}
                         </td>
                       )}
-                      <td style={{ fontFamily: "var(--data)", color: row.dgw_teams > 0 ? "var(--lime)" : "var(--muted-mid)", fontWeight: row.dgw_teams > 0 ? 700 : 400 }}>
+                      <td style={{ color: row.dgw_teams > 0 ? "var(--lime)" : "var(--muted-mid)", fontWeight: row.dgw_teams > 0 ? 700 : 400 }}>
                         {row.dgw_teams > 0 ? `+${row.dgw_teams}` : "0"}
                       </td>
-                      <td style={{ fontFamily: "var(--data)", color: row.blank_teams > 0 ? "var(--pink)" : "var(--muted-mid)", fontWeight: row.blank_teams > 0 ? 700 : 400 }}>
+                      <td style={{ color: row.blank_teams > 0 ? "var(--pink)" : "var(--muted-mid)", fontWeight: row.blank_teams > 0 ? 700 : 400 }}>
                         {row.blank_teams > 0 ? row.blank_teams : "0"}
                       </td>
                       <td>
@@ -331,13 +324,13 @@ export default function ChipsPage() {
                             data-fdr={Math.round(avgFdr)}
                             style={{ minWidth: "12px", height: "12px" }}
                           />
-                          <span style={{ fontFamily: "var(--data)", fontWeight: 700 }}>
+                          <span style={{ fontWeight: 700 }}>
                             {num(avgFdr, 1)}
                           </span>
                         </div>
                       </td>
                       <td>
-                        <span className={signalClass} style={{ fontSize: "12px" }}>
+                        <span className={signalClass}>
                           {signal}
                         </span>
                       </td>
@@ -351,11 +344,11 @@ export default function ChipsPage() {
 
         {/* Architecture note */}
         <div className="chip-note-banner">
-          <span style={{ fontFamily: "var(--display)", fontWeight: 900, fontSize: "1.1rem", lineHeight: 1, flexShrink: 0 }}>
+          <span className="chip-note-banner-icon">
             i
           </span>
-          <div style={{ fontSize: "12px", color: "var(--muted-light)", lineHeight: 1.5 }}>
-            <strong style={{ color: "var(--white)", textTransform: "uppercase", letterSpacing: ".04em", display: "block", marginBottom: "4px" }}>
+          <div className="chip-note-banner-body">
+            <strong className="chip-note-banner-title">
               Model Architecture Note
             </strong>
             Per-player predictions are derived from player form, expected metrics, and team baseline performance. Signal across

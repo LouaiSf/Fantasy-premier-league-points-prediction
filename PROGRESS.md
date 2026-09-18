@@ -499,3 +499,21 @@ It found three real defects, all now fixed:
 **model_metrics.json:** Removed empty `"pca": {}` key left from the dropped PCA branch.
 
 **`.gitignore` decision:** `*.prev` and `*.zip` are already gitignored and should stay that way — both are large regenerable artifacts.
+
+### 2026-09-18 — Task 19: Inline style cleanup (complete)
+
+Removed all static inline `style={{ }}` blocks from the frontend, replacing each with a named CSS class in `broadcast.css`. Files changed:
+
+- **broadcast.css:** Added ~55 new utility classes and appended 3 more this pass (`.watchlist-page .search`, `.kicker.muted`, `.chip-advisor-heatmap .trend`). Also fixed two existing rules (`.watch-grid` `margin-top`, `.teamsheet` `flex`).
+- **app/transfers/page.tsx:** Removed 3 redundant inline styles (`.shot` position, `.desk.out`/`.desk.in` CSS custom properties already in CSS).
+- **app/watchlist/page.tsx:** Replaced all 26 inline styles with classes (`shell--padded`, `section-head--mt`, `section-head-actions`, `kicker kicker-row`, `ctrl-select`, `watch-name-row`, `watch-ownership`, `watch-pts-row`, `watch-pts-unit`, `watch-price-row`, `watch-section-desc`, `data-section` attributes on watch sections).
+- **app/chips/page.tsx:** Replaced ~18 inline styles (`shell--padded`, `section-head--mt`, `section-head-actions`, `kicker kicker-row`, `ctrl-select`, `chip-heatmap-section`, `chip-heatmap-scroll`, `col-gw`, removed inherited `fontFamily` from table cells, `chip-note-banner-icon/body/title`).
+- **app/comparison/page.tsx:** `.eyebrow.cyan` replaces inline colour.
+- **app/fixtures/page.tsx:** `.eyebrow.lime` replaces inline colour.
+- **app/news/page.tsx:** `.kicker.muted`, `.lead-note`, `.wire-fresh` colour, `.wire-layout--single`, stripped static props from `.wire-item` button (kept dynamic `--i`).
+- **app/team/page.tsx:** `shell--lg`, `.eyebrow.muted` ×3, `btn w-full`, `squad-alerts-list`, `squad-alerts-row`.
+- **components/error-boundary.tsx:** `page--centered`, `error-card`, `eyebrow.alert`.
+- **components/chrome/toast.tsx:** `toast-dismiss`.
+- **components/team/pitch.tsx:** `formation--empty`.
+- **components/team/squad-editor.tsx:** `picker-dialog`, `scrim.squad-scrim`, `dialog-actions`, removed `teamsheet` flex (in CSS).
+- **components/club-crest.tsx:** Stripped 9 static props from crest-fallback; kept only `width`, `height`, `background` inline.

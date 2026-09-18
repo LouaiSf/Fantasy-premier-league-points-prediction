@@ -41,7 +41,7 @@ export default function TeamPage() {
   if (error || !snapshot) {
     return (
       <section className="page">
-        <div className="shell" style={{ paddingBlock: "var(--space-16)" }}>
+        <div className="shell shell--lg">
           <div className="pitch-empty">
             <h2>Platform data unavailable</h2>
             <p>{error}</p>
@@ -158,7 +158,7 @@ export default function TeamPage() {
 
           <aside className="rail" aria-label="Matchday controls">
             <section className="rail-block">
-              <p className="eyebrow" style={{ color: "var(--muted-mid)" }}>
+              <p className="eyebrow muted">
                 Predicted output
               </p>
               <h2>Matchday read</h2>
@@ -183,9 +183,9 @@ export default function TeamPage() {
                 </strong>
               </div>
               <button
-                className="btn"
+                className="btn w-full"
                 type="button"
-                style={{ width: "100%", marginTop: 14 }}
+                style={{ marginTop: 14 }}
                 disabled={!predictionAvailable || picking}
                 onClick={autoPick}
               >
@@ -199,7 +199,7 @@ export default function TeamPage() {
             </section>
 
             <section className="rail-block">
-              <p className="eyebrow" style={{ color: "var(--muted-mid)" }}>
+              <p className="eyebrow muted">
                 Dugout dock
               </p>
               <h2>Bench order</h2>
@@ -227,14 +227,14 @@ export default function TeamPage() {
             </section>
 
             <section className="rail-block">
-              <p className="eyebrow" style={{ color: "var(--muted-mid)" }}>
+              <p className="eyebrow muted">
                 Availability desk
               </p>
               <h2>Squad alerts</h2>
               {flagged.length ? (
-                <div style={{ display: "grid", gap: 8 }}>
+                <div className="squad-alerts-list">
                   {flagged.map((player) => (
-                    <p key={player.element} style={{ margin: 0, fontSize: 12 }}>
+                    <p key={player.element} className="squad-alerts-row">
                       <strong>{player.web_name}</strong>
                       <br />
                       {player.news || `${player.chance_of_playing_next_round ?? 0}% chance of playing`}
