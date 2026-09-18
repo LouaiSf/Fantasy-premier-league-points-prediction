@@ -94,7 +94,10 @@
   .nav-tab:hover{color:var(--white)}
   .nav-tab[aria-selected="true"]{color:var(--white)}
   .nav-ink{position:absolute;bottom:0;left:0;width:0;height:4px;background:var(--lime);
-    clip-path:polygon(0 0,100% 0,92% 100%,8% 100%);transition:left var(--motion-panel) var(--ease-out),width var(--motion-panel) var(--ease-out)}
+    clip-path:polygon(0 0,100% 0,92% 100%,8% 100%)}
+  /* Transition enabled after first measurement so the ink jumps to its initial
+     position instantly (no slide from 0) but then animates on every tab switch. */
+  .nav-ink.is-ready{transition:left var(--motion-panel) var(--ease-out),width var(--motion-panel) var(--ease-out)}
   .tab-count{margin-left:6px;padding:2px 5px;background:var(--pink);color:var(--white);font:700 9px var(--data)}
   .nav-actions{display:flex;align-items:center;justify-self:end;gap:var(--space-2)}
   .refresh-icon{display:inline-block;transition:transform .8s linear}
@@ -808,11 +811,14 @@
   .cap-strip .item p{margin:0;font:700 9px var(--data);letter-spacing:.13em;text-transform:uppercase;color:var(--muted-light);max-width:13ch}
 
   .runway{display:grid;gap:4px}
+  @keyframes candIn{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}
   .cand{position:relative;display:grid;grid-template-columns:56px 64px minmax(0,1.1fr) minmax(0,.9fr) minmax(0,1.3fr) auto;
     gap:var(--space-4);align-items:center;width:100%;padding:12px var(--space-5) 12px var(--space-3);border:0;
     background:var(--white);color:var(--ink);text-align:left;cursor:pointer;overflow:hidden;
     box-shadow:inset 4px 0 0 var(--c1,#888);
-    transition:transform var(--motion-ui) var(--ease-out),box-shadow var(--motion-ui),background var(--motion-ui)}
+    transition:transform var(--motion-ui) var(--ease-out),box-shadow var(--motion-ui),background var(--motion-ui);
+    animation:candIn var(--motion-ui) var(--ease-out) both;
+    animation-delay:calc(var(--i,0) * 48ms)}
   .cand:hover{transform:translateX(5px);background:#fbf8fb}
   .cand.is-lead{background:linear-gradient(100deg,var(--c1,#444),var(--c2,#111));color:var(--white);box-shadow:inset 4px 0 0 var(--lime)}
   .cand.is-lead .cand-rank{color:transparent;-webkit-text-stroke:2px rgba(255,255,255,.6)}
@@ -861,7 +867,9 @@
   .vuln-split b{display:block;font:800 20px var(--data)}
   .vuln-split span{font:700 9px var(--data);letter-spacing:.11em;text-transform:uppercase;color:var(--muted-ink)}
 
-  .battle{display:grid;grid-template-columns:1fr 1.35fr 1fr;background:var(--white);border:1px solid #ddd4de}
+  @keyframes battleIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+  .battle{display:grid;grid-template-columns:1fr 1.35fr 1fr;background:var(--white);border:1px solid #ddd4de;
+    animation:battleIn var(--motion-panel) var(--ease-out) both;animation-delay:120ms}
   .battle-pick{position:relative;min-height:300px;padding:var(--space-5);border:0;cursor:pointer;overflow:hidden;text-align:left;
     background:linear-gradient(142deg,var(--c1,#444),var(--c2,#111));color:var(--white)}
   .battle-pick .shot{position:absolute;right:-10%;bottom:0;width:76%;height:88%;z-index:1}
@@ -879,7 +887,12 @@
   .duel-row strong:last-of-type{text-align:right}
   .duel-label{text-align:center;font-size:11px;color:var(--muted-ink)}
   .duel-track{grid-column:1/-1;display:flex;height:9px;background:#e0d8e1}
-  .duel-track i{display:block;height:100%}
+  @keyframes duelbarsGrow{from{width:0}to{width:var(--w,0%)}}
+  .duel-track i{display:block;height:100%;min-width:3px;
+    animation:duelbarsGrow var(--motion-panel) var(--ease-out) both}
+  .duel-track .duel-a{background:var(--pl-purple)}
+  .duel-track .duel-b{background:var(--pink);animation-delay:60ms}
+  .duel-track .is-leader{filter:brightness(1.22);box-shadow:inset 0 0 0 1px rgba(255,255,255,.5)}
 
   .upside-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(198px,1fr));gap:1px;background:#ddd4de}
   .upside-card{position:relative;padding:var(--space-5);background:var(--white);display:grid;gap:8px;align-content:start;
@@ -921,6 +934,11 @@
   .lead-badges{display:flex;flex-wrap:wrap;gap:6px}
   .lead-badges span{padding:6px 10px;font:800 10px var(--data);letter-spacing:.12em;text-transform:uppercase}
   .lead-badges .sev{background:var(--pink)}
+  .lead-badges .sev[data-status="i"]{background:var(--pink)}
+  .lead-badges .sev[data-status="s"]{background:var(--orange)}
+  .lead-badges .sev[data-status="d"]{background:var(--yellow);color:var(--ink)}
+  .lead-badges .sev[data-status="u"]{background:var(--muted-mid);color:var(--ink)}
+  .lead-badges .sev[data-status="n"]{background:var(--muted-mid);color:var(--ink)}
   .lead-badges .live{background:var(--yellow);color:var(--ink)}
   .lead-badges .club{background:rgba(0,0,0,.4)}
   .lead-copy h2{margin:0;max-width:15ch;font:900 clamp(1.9rem,3.6vw,3.4rem)/.9 var(--display);text-transform:uppercase;letter-spacing:-.045em}
@@ -958,9 +976,11 @@
   .live-item time{font:700 10px var(--data);letter-spacing:.1em;color:var(--muted-ink)}
   .live-item b{display:block;margin:4px 0 3px;font-size:13.5px;line-height:1.25}
   .live-item p{margin:0;font-size:12px;color:var(--muted-ink)}
+  @keyframes wireIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
   .wire-item{display:grid;grid-template-columns:46px minmax(0,1fr) auto;gap:var(--space-4);align-items:start;
     padding:var(--space-4) 0 var(--space-4) var(--space-4);border-top:1px solid #e2dbe3;
-    border-left:3px solid transparent;transition:background var(--motion-fast),border-color var(--motion-fast)}
+    border-left:3px solid transparent;transition:background var(--motion-fast),border-color var(--motion-fast);
+    animation:wireIn var(--motion-ui) var(--ease-out) both;animation-delay:calc(var(--i,0)*35ms)}
   .wire-item:hover{background:#faf7fb;border-left-color:var(--pl-purple)}
   .wire-item[data-pri="high"]{border-left-color:var(--pink)}
   .wire-item[data-pri="med"]{border-left-color:var(--orange)}
@@ -1367,6 +1387,10 @@
       radial-gradient(ellipse 60% 90% at 88% 30%,rgba(255,212,90,.28),transparent 62%),
       var(--gradient-spotlight)}
   .cap-hero::before{background:repeating-linear-gradient(128deg,transparent 0 46px,rgba(26,0,34,.16) 46px 64px,transparent 64px 104px)}
+  /* Graduated dark veil so the copy area is always legible regardless of the
+     club gradient — text at the left, photo at the right, safe margin in between. */
+  .cap-hero::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+    background:linear-gradient(90deg,rgba(26,0,34,.74) 0%,rgba(26,0,34,.30) 36%,transparent 64%)}
   .armband-ring{position:absolute;left:49%;top:59%;z-index:3;width:20%;height:8%;
     transform:rotate(-10deg);border:2px solid rgba(255,255,255,.7);border-radius:.25rem;pointer-events:none;
     background:repeating-linear-gradient(90deg,rgba(33,0,37,.26) 0 8%,transparent 8% 16%),linear-gradient(90deg,#a8781e,var(--gold) 46%,#fff0a5 52%,#b88a24);
@@ -1378,7 +1402,8 @@
   .cap-armband{position:absolute;left:12px;bottom:14px;z-index:3;display:flex;align-items:center;gap:6px;
     padding:5px 10px 5px 8px;background:var(--gold);color:var(--ink);font:800 10px var(--data);
     letter-spacing:.1em;text-transform:uppercase;clip-path:polygon(0 0,100% 0,calc(100% - 8px) 100%,0 100%)}
-  .cap-shot{background:transparent}
+  @keyframes heroFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+  .cap-shot{background:transparent;animation:heroFloat 5s ease-in-out infinite}
   .cap-crest{position:absolute;left:4%;top:8%;z-index:4;width:50px;height:50px;object-fit:contain;
     filter:drop-shadow(0 3px 6px rgba(0,0,0,.4))}
   .cand.is-selected{box-shadow:inset 4px 0 0 var(--lime),0 0 0 2px rgba(0,255,135,.4)}
@@ -1560,6 +1585,20 @@
   .chance-badge.is-mid{background:rgba(255,138,0,.18);color:var(--orange)}
   .chance-badge.is-ok{background:rgba(255,212,90,.18);color:var(--yellow)}
   .wire-more{width:100%;margin-top:var(--space-3)}
+  /* Per-status colour tokens on tagline badges in the wire list and card grid.
+     Injured stays with the default var(--paper-2) pink intent; specific colours
+     map each FPL status code to its intuitive risk level. */
+  .wire-item .tagline .tagline-status{font:700 9px var(--data);letter-spacing:.08em;text-transform:uppercase}
+  .wire-item .tagline .tagline-status[data-status="i"]{background:rgba(233,0,82,.14);color:var(--pink-on-paper)}
+  .wire-item .tagline .tagline-status[data-status="s"]{background:rgba(255,94,0,.14);color:#a33a00}
+  .wire-item .tagline .tagline-status[data-status="d"]{background:rgba(235,255,0,.14);color:#6b7500}
+  .wire-item .tagline .tagline-status[data-status="u"]{background:rgba(157,136,163,.14);color:var(--muted-ink)}
+  .wire-item .tagline .tagline-status[data-status="n"]{background:rgba(157,136,163,.14);color:var(--muted-ink)}
+  .news-card-meta .news-status[data-status="i"]{color:var(--pink)}
+  .news-card-meta .news-status[data-status="s"]{color:var(--orange)}
+  .news-card-meta .news-status[data-status="d"]{color:#b07800}
+  .news-card-meta .news-status[data-status="u"]{color:var(--muted-ink)}
+  .news-card-meta .news-status[data-status="n"]{color:var(--muted-ink)}
 
   /* ── Accessibility ───────────────────────────────────────────────────────── */
 

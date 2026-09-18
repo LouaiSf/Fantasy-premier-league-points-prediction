@@ -232,7 +232,7 @@ export default function NewsPage() {
             />
             <div className="lead-copy">
               <div className="lead-badges">
-                <span className="sev">{statusLabel(lead)}</span>
+                <span className="sev" data-status={lead.status}>{statusLabel(lead)}</span>
                 <ChanceBadge player={lead} />
                 <span className="club">{lead.team}</span>
               </div>
@@ -280,14 +280,14 @@ export default function NewsPage() {
                   {rest.length} of {allRest.length} stories
                 </small>
               </h3>
-              {rest.map((player) => (
+              {rest.map((player, idx) => (
                 <button
                   key={player.element}
                   type="button"
                   className="wire-item"
                   data-pri={player.status !== "a" ? "high" : "med"}
                   onClick={() => openProfile(player)}
-                  style={{ width: "100%", background: "transparent", font: "inherit", textAlign: "left", cursor: "pointer" }}
+                  style={{ "--i": idx, width: "100%", background: "transparent", font: "inherit", textAlign: "left", cursor: "pointer" } as React.CSSProperties}
                 >
                   <span className="wire-shot" style={clubStyle(player.team)}>
                     <PlayerPhoto src={player.photo ?? undefined} alt={player.name} name={player.name} loading="lazy" />
@@ -302,7 +302,7 @@ export default function NewsPage() {
                     <h4>{player.web_name}</h4>
                     <p>{noteFor(player)}</p>
                     <div className="tagline">
-                      <span>{statusLabel(player)}</span>
+                      <span className="tagline-status" data-status={player.status}>{statusLabel(player)}</span>
                       <ChanceBadge player={player} />
                       <span>{player.team}</span>
                       <span>{player.position}</span>
@@ -356,7 +356,7 @@ export default function NewsPage() {
                 </div>
                 <div className="news-card-copy">
                   <div className="news-card-meta">
-                    <span>{statusLabel(player)}</span>
+                    <span className="news-status" data-status={player.status}>{statusLabel(player)}</span>
                     <span>{player.team}</span>
                     <span>{player.position}</span>
                   </div>

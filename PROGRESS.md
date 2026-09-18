@@ -460,6 +460,17 @@ Found a real problem behind 11.2. Raising the market cap from 120 to 200 did not
 
 2.3: since the fallback is what a lot of the roster actually renders as, it now draws a silhouette behind the initials rather than initials alone. Failed URLs are recorded in a module-level set shared by every instance, not per-component state — the same player appears in the market column, a shortlist and the pitch at once, and each used to re-request a URL already known to be missing. Verified on a full scroll of the Transfer Studio: 13 fallbacks rendered, 78 distinct CDN URLs requested, **0 requested more than once**.
 
+### 2026-09-18 — Tasks 5.2/5.3/8.3/13.1 + platform motion
+**5.2 — Captain hero readability:** Added `cap-hero::after` dark gradient overlay (`rgba(26,0,34,.74)→transparent`) behind the text column so copy stays legible against any club colour. Cap-crest and armband-ring CSS were already present; verified sizes correct.
+
+**5.3 — Captaincy battle duel track:** Replaced inline `background:"var(--pl-purple)"` / `background:"var(--pink)"` with `.duel-a` / `.duel-b` CSS classes. Added `is-leader` highlight (brightness + inner glow) on the winning bar. Added `min-width:3px` so genuine zeros render as a sliver. Added `@keyframes duelbarsGrow` (width 0→var(--w)) so both bars animate in on mount, B bar offset by 60ms for a sequential feel.
+
+**8.3 — Nav ink underline on page load:** Removed `transition` from `.nav-ink` default; added it only on `.nav-ink.is-ready`. `main-nav.tsx` adds `is-ready` after the first `requestAnimationFrame` in `useLayoutEffect`, so the ink jumps to the active tab on mount without animating, then slides correctly on every subsequent tab switch.
+
+**13.1 — News status badge colours:** `lead-badges .sev` now takes `data-status` and maps `i`→pink, `s`→orange, `d`→yellow/dark-text, `u`/`n`→muted-mid. Wire-item tagline status spans get `.tagline-status[data-status]` (tinted backgrounds, matching foreground colours). News-card meta spans get `.news-status[data-status]` text colour variants.
+
+**Platform motion:** Added `@keyframes candIn` with `animation-delay:calc(var(--i)*48ms)` so candidate rows stagger in. `@keyframes battleIn` slides the battle section up on appearance (120ms delay). `@keyframes heroFloat` gives the captain hero photo a continuous 5s float. `@keyframes wireIn` staggers news wire items in by index. All suppressed by the existing `prefers-reduced-motion` block.
+
 ### 2026-09-18 — Task 18: End-to-end smoke tests
 Automated the plan's manual script (Playwright, all 8 pages, three viewports): 21 checks, all passing, 0 console or page errors. Root redirects to /team, 20 crests, season 2026-27, auto-pick fills the pitch with 11 markers carrying projections and a captain badge, every page renders, no emoji, no plain-text loading states, no horizontal overflow at 1440/768/375.
 

@@ -206,7 +206,7 @@ export default function CaptainPage() {
                 role="button"
                 tabIndex={0}
                 className={`cand${index === 0 ? " is-lead" : ""}${isSelected ? " is-selected" : ""}`}
-                style={clubStyle(player.team)}
+                style={{ ...clubStyle(player.team), "--i": index } as React.CSSProperties}
                 aria-pressed={isSelected}
                 onClick={() => setSelectedElement(player.element)}
                 onKeyDown={(event) => {
@@ -316,8 +316,14 @@ export default function CaptainPage() {
                       <span className="duel-label">{label}</span>
                       <strong>{num(b, digits as number)}</strong>
                       <div className="duel-track">
-                        <i style={{ width: `${(Number(a) / total) * 100}%`, background: "var(--pl-purple)" }} />
-                        <i style={{ width: `${(Number(b) / total) * 100}%`, background: "var(--pink)" }} />
+                        <i
+                          className={`duel-a${Number(a) >= Number(b) ? " is-leader" : ""}`}
+                          style={{ "--w": `${(Number(a) / total) * 100}%` } as React.CSSProperties}
+                        />
+                        <i
+                          className={`duel-b${Number(b) > Number(a) ? " is-leader" : ""}`}
+                          style={{ "--w": `${(Number(b) / total) * 100}%` } as React.CSSProperties}
+                        />
                       </div>
                     </div>
                   );

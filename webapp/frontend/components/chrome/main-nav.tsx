@@ -57,14 +57,23 @@ export function MainNav() {
 
   React.useLayoutEffect(() => {
     positionInk();
+    // Enable the CSS transition after the first frame so the ink jumps to its
+    // initial position without animating from 0 (which looks like a bug).
+    // On subsequent route changes is-ready is already set, so the slide fires.
+    const frame = requestAnimationFrame(() => {
+      inkRef.current?.classList.add("is-ready");
+    });
     const scroller = scrollRef.current;
     const active = tabsRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
-    if (!scroller || !active || scroller.scrollWidth <= scroller.clientWidth) return;
+    if (!scroller || !active || scroller.scrollWidth <= scroller.clientWidth) {
+      return () => cancelAnimationFrame(frame);
+    }
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     scroller.scrollTo({
       left: active.offsetLeft - (scroller.clientWidth - active.offsetWidth) / 2,
       behavior: reducedMotion ? "auto" : "smooth",
     });
+    return () => cancelAnimationFrame(frame);
   }, [positionInk, pathname]);
 
   // Google Fonts swap in after first paint and reflow the tab widths, so a
