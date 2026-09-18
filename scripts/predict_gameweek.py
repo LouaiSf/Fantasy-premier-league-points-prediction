@@ -143,6 +143,22 @@ def load_models() -> dict:
             })
             print(f"       + two-stage  {len(avail_features):>3} features "
                   f"(P(plays) x E[points | plays])")
+
+            # Cross-position calibration, if scripts/calibrate.py has run.
+            # Each position's conditional model shrinks toward its own mean by
+            # a different amount, which is invisible to a per-position score
+            # and decisive the moment the optimiser compares a keeper with a
+            # forward. Optional in the same way the two-stage half is: absent
+            # file means factor 1.0 and the old numbers.
+            cal_path = os.path.join(pos_dir, 'calibration.json')
+            if os.path.exists(cal_path):
+                calibration = json.load(open(cal_path, encoding='utf-8'))
+                if calibration.get('applied'):
+                    intercept = float(calibration['intercept'])
+                    slope = float(calibration['slope'])
+                    models[position]['calibration'] = (intercept, slope)
+                    print(f"       + calibrated  {intercept:+.3f} "
+                          f"{slope:+.3f} x E[points | plays]")
     return models
 
 
@@ -437,6 +453,16 @@ def predict(featured: pd.DataFrame, models: dict) -> pd.DataFrame:
                                             np.minimum(block['p_plays'], chance),
                                             block['p_plays'])
             block['predicted_points_if_plays'] = spec['conditional'].predict(Za)
+
+            # Monotone in the conditional term, so the ordering within this
+            # position is untouched and only its level and spread relative to
+            # the other three move. Applied here rather than to the product so
+            # that P(plays) still scales a fringe player back down.
+            if 'calibration' in spec:
+                intercept, slope = spec['calibration']
+                block['predicted_points_if_plays'] = (
+                    intercept + slope * block['predicted_points_if_plays'])
+
             block['predicted_points_single_stage'] = block['predicted_points']
             block['predicted_points'] = (block['p_plays']
                                          * block['predicted_points_if_plays'])

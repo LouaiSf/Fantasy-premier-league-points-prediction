@@ -1,0 +1,38 @@
+{
+  "intercept": 0.0,
+  "slope": 1.0,
+  "applied": false,
+  "raw_intercept": 0.22219891417674434,
+  "raw_slope": 0.8617199031514747,
+  "n": 7142,
+  "top_bias_before": 0.17918632632956566,
+  "top_bias_after": 0.17918632632956566,
+  "fitted_on": [
+    "2024-25",
+    "2025-26"
+  ],
+  "nailed_threshold": 0.8,
+  "top_n": 5,
+  "validation": [
+    {
+      "fit_on": "2024-25",
+      "scored_on": "2025-26",
+      "intercept": -0.13851125957497132,
+      "slope": 0.9525928822259516,
+      "bias_before": 0.3972235521641334,
+      "bias_after": 0.0563447635659271,
+      "mean_abs_before": 0.5462931601837195,
+      "mean_abs_after": 0.3778975459051077
+    },
+    {
+      "fit_on": "2025-26",
+      "scored_on": "2024-25",
+      "intercept": 0.757197465026954,
+      "slope": 0.7212995607262163,
+      "bias_before": -0.03885089950500298,
+      "bias_after": -0.9327272916968381,
+      "mean_abs_before": 0.24332408490624968,
+      "mean_abs_after": 1.165135591097712
+    }
+  ]
+}
