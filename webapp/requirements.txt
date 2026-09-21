@@ -1,0 +1,10 @@
+# What the deployed API (webapp/app.py) needs, and nothing else. The root
+# requirements.txt also carries the training stack (xgboost, lightgbm,
+# soccerdata, ...), which the server never imports: it serves the committed
+# predictions_next_gw.csv and runs the optimiser over it.
+flask>=3.0
+flask-cors>=4.0
+pandas>=2.0
+numpy>=1.24
+pulp>=2.7
+gunicorn>=22.0

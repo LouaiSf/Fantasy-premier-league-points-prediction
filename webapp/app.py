@@ -48,7 +48,11 @@ app = Flask(__name__)
 # The Next.js frontend (webapp/frontend) runs on its own dev port and calls
 # this API cross-origin; the Jinja/vanilla-JS pages it is replacing served
 # same-origin and needed none of this.
-CORS(app, resources={r'/api/*': {'origins': '*'}})
+#
+# In production set ALLOWED_ORIGINS to the frontend's URL(s), comma separated,
+# so only the site itself can call the API from a browser.
+_origins = [o.strip() for o in os.environ.get('ALLOWED_ORIGINS', '*').split(',') if o.strip()]
+CORS(app, resources={r'/api/*': {'origins': _origins or '*'}})
 
 # Loaded once. The CSV is small (a few hundred rows) and rereading it per
 # request would just add latency.
@@ -648,5 +652,6 @@ if __name__ == '__main__':
         for pos, info in (s.get('model') or {}).items():
             print(f'    {pos:<4} {info["model"]:<12} {info["features"]:>3} features'
                   f'   test R2 {info["test_r2"]}')
-    print('\n  http://127.0.0.1:5000\n')
-    app.run(debug=False, port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    print(f'\n  http://127.0.0.1:{port}\n')
+    app.run(debug=False, port=port)

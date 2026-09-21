@@ -1,6 +1,8 @@
 # Large generated data files
 *.csv
 !data/fbref_defensive.csv
+# The deployed API serves this file; commit it after each predict_gameweek.py run.
+!predictions_next_gw.csv
 data/standardized_data.csv
 data/standardized_predictive_data.csv
 data/predictive_features_data.csv
