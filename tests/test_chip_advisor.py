@@ -39,6 +39,13 @@ def market():
     return pd.DataFrame(rows)
 
 
+def horizon_points(players, gameweeks):
+    return pd.DataFrame(
+        {gameweek: players['predicted_points'].to_numpy() for gameweek in gameweeks},
+        index=players.index,
+    )
+
+
 def write_season(tmp_path, double=False, blank=False):
     data = tmp_path / 'data' / 'test-season'
     data.mkdir(parents=True)
@@ -96,8 +103,10 @@ def test_dgw_scores_actual_captain_and_bench(monkeypatch, tmp_path):
     players = market()
     squad = players.iloc[:15].copy()
 
+    points = horizon_points(players, [1, 2, 3])
+    points[2] *= 2
     data = compute_chips(squad, 'test-season', 1, 3, players,
-                         inventory=synced_inventory())
+                         inventory=synced_inventory(), future_points=points)
     by_chip = {rec['chip']: rec for rec in data['recommendations']}
 
     assert data['rows'][1]['dgw_teams'] == 4
@@ -123,7 +132,8 @@ def test_blank_gameweek_gives_free_hit_a_squad_comparison(monkeypatch, tmp_path)
     squad = players.iloc[:15].copy()
 
     data = compute_chips(squad, 'test-season', 2, 3, players,
-                         inventory=synced_inventory())
+                         inventory=synced_inventory(),
+                         future_points=horizon_points(players, [2, 3, 4]))
     free_hit = next(rec for rec in data['recommendations'] if rec['chip'] == 'free_hit')
 
     assert data['rows'][1]['blank_teams'] == 2
@@ -140,7 +150,8 @@ def test_non_prefix_squad_keeps_projection_identity(monkeypatch, tmp_path):
     squad = players.iloc[[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15]]
 
     data = compute_chips(squad, 'test-season', 1, 1, players,
-                         inventory=synced_inventory())
+                         inventory=synced_inventory(),
+                         future_points=horizon_points(players, [1]))
     triple_captain = next(rec for rec in data['recommendations']
                           if rec['chip'] == 'triple_captain')
 
@@ -155,13 +166,14 @@ def test_free_hit_includes_new_captain_delta(monkeypatch, tmp_path):
     squad = players.iloc[:15]
 
     data = compute_chips(squad, 'test-season', 1, 2, players,
-                         inventory=synced_inventory())
+                         inventory=synced_inventory(),
+                         future_points=horizon_points(players, [1, 2]))
     free_hit = next(rec for rec in data['recommendations']
                     if rec['chip'] == 'free_hit')
     breakdown = free_hit['score_breakdown']
 
     assert breakdown['captain_delta'] > 0
-    assert round(breakdown['captain_delta'], 2) == 9.2
+    assert round(breakdown['captain_delta'], 2) == 10.0
     assert free_hit['expected_gain'] == round(
         breakdown['xi_gain'] + breakdown['captain_delta']
         + breakdown['avoided_transfer_hits'], 2)
@@ -179,9 +191,11 @@ def test_injured_bench_reduces_bench_boost_value(monkeypatch, tmp_path):
     injured.loc[injured.index[14], 'p_plays'] = 0.0
 
     healthy_result = compute_chips(healthy.iloc[:15], 'test-season', 1, 1, healthy,
-                                   inventory=synced_inventory())
+                                   inventory=synced_inventory(),
+                                   future_points=horizon_points(healthy, [1]))
     injured_result = compute_chips(injured.iloc[:15], 'test-season', 1, 1, injured,
-                                   inventory=synced_inventory())
+                                   inventory=synced_inventory(),
+                                   future_points=horizon_points(injured, [1]))
     healthy_bb = next(rec for rec in healthy_result['recommendations'] if rec['chip'] == 'bench_boost')
     injured_bb = next(rec for rec in injured_result['recommendations'] if rec['chip'] == 'bench_boost')
 
@@ -235,7 +249,8 @@ def test_wildcard_uses_cumulative_multi_gameweek_gain(monkeypatch, tmp_path):
     squad = players.iloc[:15].copy()
 
     data = compute_chips(squad, 'test-season', 2, 8, players,
-                         inventory=synced_inventory())
+                         inventory=synced_inventory(),
+                         future_points=horizon_points(players, range(2, 10)))
     wildcard = next(rec for rec in data['recommendations'] if rec['chip'] == 'wildcard')
 
     assert wildcard['score_breakdown']['horizon_weeks'] == 8

@@ -89,7 +89,7 @@ python scripts/rebuild_merged_gw.py     # audit merged_gw.csv against its parts
 python scripts/build_dataset.py --write # -> all_seasons_data_final.csv
 python scripts/build_features.py        # -> all_seasons_data_featured.csv
 python scripts/train.py                 # -> saved_models/, model_metrics.json
-python scripts/predict_gameweek.py      # -> predictions_next_gw.csv
+python scripts/predict_gameweek.py --season 2026-27 --horizon 12 --out predictions_next_gw.csv
 python scripts/optimise.py squad --budget 100        # best legal 15 + XI + captain
 python scripts/optimise.py transfers --squad example_squad.txt --free 1
 python scripts/optimise.py chips --squad example_squad.txt --horizon 8
@@ -130,12 +130,12 @@ Showing every count matters: a second transfer nearly always buys raw points
 and nearly never survives the hit. It also says when a gain is inside the
 model's error (~1.0 MAE per player) and the transfer is worth rolling.
 
-**`chips`** ranks gameweeks for Triple Captain, Bench Boost, Free Hit and
-Wildcard over a horizon, using fixture counts, FDR, and how much of *your*
-squad plays. It is explicit that the model's per-player number does not vary
-by gameweek — opponent features were measured and dropped — so the
-gameweek-to-gameweek signal is fixtures, not the model. When no double or
-blank gameweek is scheduled it says so rather than inventing a recommendation.
+**`chips`** compares Triple Captain, Bench Boost, Free Hit and Wildcard using
+the player-by-gameweek matrix in the prediction export. Generate enough weeks
+for the horizon you want to inspect. A single-gameweek export can still show
+fixture-signal context, but it cannot produce point-labelled gain estimates
+for later weeks. When no double or blank gameweek is scheduled it says so
+rather than inventing a recommendation.
 
 **`watchlist`** surfaces value picks, differentials by ownership, players
 priced above what they return, and anyone whose number comes from no prior

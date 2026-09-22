@@ -13,6 +13,7 @@ from optimise import (  # noqa: E402
     compute_transfers,
     expected_total,
     load_predictions,
+    load_horizon,
     seed_jitter,
     solve_squad,
     squad_ownership,
@@ -224,6 +225,51 @@ def test_load_predictions_keeps_two_players_who_share_a_surname(tmp_path) -> Non
         'Ipswich Town', 'Fulham'}
     haaland = loaded.loc[loaded['element'] == 411, 'predicted_points']
     assert float(haaland.iloc[0]) == 8.59
+
+
+def test_load_predictions_uses_earliest_gw_and_sums_double_fixtures(tmp_path) -> None:
+    path = tmp_path / 'horizon.csv'
+    pd.DataFrame([
+        {'element': 1, 'name': 'One', 'team': 'A', 'position': 'MID',
+         'value_m': 5.0, 'GW': 5, 'predicted_points': 2.0},
+        {'element': 1, 'name': 'One', 'team': 'A', 'position': 'MID',
+         'value_m': 5.0, 'GW': 5, 'predicted_points': 2.5},
+        {'element': 1, 'name': 'One', 'team': 'A', 'position': 'MID',
+         'value_m': 5.0, 'GW': 6, 'predicted_points': 10.0},
+        {'element': 2, 'name': 'Two', 'team': 'B', 'position': 'MID',
+         'value_m': 5.0, 'GW': 5, 'predicted_points': 3.0},
+        {'element': 2, 'name': 'Two', 'team': 'B', 'position': 'MID',
+         'value_m': 5.0, 'GW': 6, 'predicted_points': 4.0},
+    ]).to_csv(path, index=False)
+
+    current = load_predictions(str(path))
+    horizon_players, points, gameweeks = load_horizon(str(path))
+
+    assert set(current['GW']) == {5}
+    assert current.set_index('element')['predicted_points'].to_dict() == {1: 4.5, 2: 3.0}
+    assert gameweeks == [5, 6]
+    assert points.set_axis(horizon_players['element']).loc[1].to_dict() == {5: 4.5, 6: 10.0}
+
+
+def test_single_gameweek_matrix_cannot_become_future_player_gain(monkeypatch, tmp_path):
+    from test_chip_advisor import market, synced_inventory, write_season
+    from optimise import compute_chips
+
+    write_season(tmp_path, double=True)
+    monkeypatch.chdir(tmp_path)
+    players = market()
+    squad = players.iloc[:15].copy()
+    only_current = pd.DataFrame(5.0, index=players.index, columns=[1])
+
+    data = compute_chips(
+        squad, 'test-season', 1, 4, players,
+        inventory=synced_inventory(), future_points=only_current,
+    )
+
+    assert data['projection_mode'] == 'fixture_signal'
+    assert all(rec['expected_gain'] is None for rec in data['recommendations'])
+    assert all(rec['status'] != 'play' for rec in data['recommendations'])
+    assert all('captain_evidence' not in rec for rec in data['recommendations'])
 
 
 def test_fixed_squad_gets_xi_ordered_bench_and_two_armbands() -> None:

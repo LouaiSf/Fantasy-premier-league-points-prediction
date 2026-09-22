@@ -43,12 +43,51 @@ def test_reload_predictions_rejects_a_different_league_roster(
     monkeypatch.setattr(app_module.opt, "infer_next_gameweek", lambda _season: 1)
     app_module._state.clear()
 
-    # When predictions are loaded through the real application boundary.
     result = app_module.reload_predictions()
 
-    # Then the optimizer is disabled instead of joining season-scoped player ids.
     assert "does not match local season 2026-27" in result["error"]
     assert result["players"].empty
+    app_module._state.clear()
+
+
+def test_reload_predictions_keeps_current_table_and_stable_horizon_matrix(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    season = tmp_path / "data" / "2026-27"
+    season.mkdir(parents=True)
+    pd.DataFrame([{"id": 1, "name": "Club"}]).to_csv(season / "teams.csv", index=False)
+    prediction_path = tmp_path / "predictions.csv"
+    pd.DataFrame([
+        {"element": 11, "name": "One", "team": "Club", "position": "MID", "value_m": 5.0, "GW": 1, "predicted_points": 2.0},
+        {"element": 11, "name": "One", "team": "Club", "position": "MID", "value_m": 5.0, "GW": 2, "predicted_points": 8.0},
+        {"element": 12, "name": "Two", "team": "Club", "position": "MID", "value_m": 5.0, "GW": 1, "predicted_points": 3.0},
+        {"element": 12, "name": "Two", "team": "Club", "position": "MID", "value_m": 5.0, "GW": 2, "predicted_points": 4.0},
+    ]).to_csv(prediction_path, index=False)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(app_module.opt, "PREDICTIONS", str(prediction_path))
+    monkeypatch.setattr(app_module.opt, "infer_next_gameweek", lambda _season: 1)
+    app_module._state.clear()
+
+    state = app_module.reload_predictions()
+
+    assert state["players"].set_index("element")["predicted_points"].to_dict() == {11: 2.0, 12: 3.0}
+    assert state["future_gameweeks"] == [1, 2]
+    by_element = state["future_points"].set_axis(state["players"]["element"])
+    assert by_element.loc[11].to_dict() == {1: 2.0, 2: 8.0}
+    assert by_element.loc[12].to_dict() == {1: 3.0, 2: 4.0}
+
+    received = {}
+
+    def capture_chip_inputs(*_args, **kwargs):
+        received.update(kwargs)
+        return {"recommendations": []}
+
+    monkeypatch.setattr(app_module.opt, "compute_chips", capture_chip_inputs)
+    response = app.test_client().post("/api/chips", json={"horizon": 2})
+    assert response.status_code == 200
+    assert received["future_points"].to_numpy().tolist() == [[3.0, 4.0], [2.0, 8.0]]
+    assert response.get_json()["projection_gameweeks"] == [1, 2]
     app_module._state.clear()
 
 

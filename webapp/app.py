@@ -97,10 +97,24 @@ def reload_predictions() -> dict:
             f"the site has nothing to show without it."
         )
         _state['players'] = pd.DataFrame()
+        _state['everyone'] = pd.DataFrame()
+        _state['future_points'] = None
+        _state['future_gameweeks'] = []
         return _state
 
     players = opt.load_predictions(path, drop_unavailable=True)
     everyone = opt.load_predictions(path, drop_unavailable=False)
+    future_points = None
+    future_gameweeks = []
+    try:
+        horizon_players, horizon_points, future_gameweeks = opt.load_horizon(
+            path, drop_unavailable=True)
+        identity = 'element' if 'element' in players.columns and 'element' in horizon_players.columns else 'name'
+        horizon_points.index = horizon_players[identity].to_list()
+        future_points = horizon_points.reindex(players[identity].to_list())
+        future_points.index = players.index
+    except SystemExit:
+        future_gameweeks = []
 
     season = sorted(
         d for d in os.listdir('data')
@@ -122,6 +136,8 @@ def reload_predictions() -> dict:
                 ),
                 'players': pd.DataFrame(),
                 'everyone': pd.DataFrame(),
+                'future_points': None,
+                'future_gameweeks': [],
                 'season': season,
                 'gameweek': opt.infer_next_gameweek(season),
                 'mtime': os.path.getmtime(path),
@@ -133,6 +149,8 @@ def reload_predictions() -> dict:
         'error': None,
         'players': players,
         'everyone': everyone,
+        'future_points': future_points,
+        'future_gameweeks': future_gameweeks,
         'season': season,
         'gameweek': opt.infer_next_gameweek(season),
         'mtime': os.path.getmtime(path),
@@ -612,7 +630,9 @@ def api_chips():
         inventory=inventory,
         scheduled_gameweeks=[int(gameweek) for gameweek in scheduled],
         last_free_hit_gameweek=last_free_hit,
+        future_points=s.get('future_points'),
     )
+    data['projection_gameweeks'] = s.get('future_gameweeks', [])
     data['ok'] = True
     return jsonify(data)
 
