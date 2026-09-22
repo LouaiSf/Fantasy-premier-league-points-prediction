@@ -1,7 +1,7 @@
 # FPL Manager Planner and Chip Advisor Progress
 
 Last updated: 2026-09-22
-Plan status: implementation in progress; Phases 1, 2, 3, and 4 complete
+Plan status: implementation in progress; Phases 1, 2, 3, 4, and 5 complete
 
 ## Repository baseline
 
@@ -55,12 +55,12 @@ Always re-run `git status --short` because the user may add more work between se
 - [x] Phase 2: manager search, preview, and local import
 - [x] Phase 3: combined transfer/lineup plan on My Team
 - [x] Phase 4: real horizon matrix in Chip Advisor
-- [ ] Phase 5: auditable chip decision evidence
+- [x] Phase 5: auditable chip decision evidence
 - [ ] Phase 6: full automated and browser verification
 
 ## Next exact action
 
-Continue Phase 5: replace anonymous chip score bags and opaque thresholds with typed, auditable chip-specific evidence and a named decision policy. Preserve unrelated data refreshes and generated files.
+Continue Phase 6: run the full requested backend/frontend gates, start Flask and the Next production build, exercise the requested public manager/team/planner/chip flows in a real browser at 375/768/1280 px, and record any provider-limited scenario accurately.
 
 ## 2026-09-22 — Phase 1: public-manager adapter and API
 
@@ -131,3 +131,16 @@ Commit SHA and message: `dc3aa48464d96677b4f0b84bc46c2fbb23e05625 Use horizon pr
 Push result: `origin/main` advanced from `6226ffe6` to `dc3aa484` successfully.
 Known issues/blockers: PuLP emits existing deprecation warnings. A single-gameweek prediction export cannot produce future player point gains and intentionally yields fixture-signal context. Text manager search still needs a real provider contract.
 Next exact action: Begin Phase 5: replace anonymous chip score bags and opaque thresholds with typed, auditable chip-specific evidence and a named decision policy.
+
+## 2026-09-22 — Phase 5: auditable chip decision evidence
+
+Branch: `main`
+Starting SHA: `b81160ad`
+Files changed: `README.md`, `scripts/optimise.py`, new `scripts/chip_policy.py`, `tests/test_chip_advisor.py`, `tests/test_optimise.py`, `tests/test_webapp.py`, `webapp/app.py`, `webapp/frontend/app/broadcast.css`, `webapp/frontend/app/chips/page.tsx`, `webapp/frontend/components/chips/chip-opportunity-matrix.tsx`, `webapp/frontend/lib/types.ts`
+Behavior completed: Replaced the generic score bag with chip-specific discriminated evidence and the named policy derived from `DECISION_MARGIN`; ranked up to three candidate gameweeks per chip with raw evidence; future candidates remain watch; fixture indices are carried separately from projected points; Free Hit compares optimized and current XI-plus-captain totals with no avoided-hit bonus; API and CLI both load stable-ID horizon projections; cards explain formulas, player totals, runner-up gap, source, coverage, inventory, and uncertainty.
+Automated evidence: `python -m pytest tests/test_chip_advisor.py tests/test_optimise.py tests/test_webapp.py -q` — 49 passed; `python -m py_compile scripts/optimise.py scripts/chip_policy.py` passed; `npm run lint` passed with three existing image warnings; `npm run build` passed; `git diff --check` passed.
+Manual browser evidence: Deferred to Phase 6 real-browser verification at 375, 768, and 1280 px.
+Commit SHA and message: `aa05ea0f8fd8ab7df5151c4a07c5c522baedc02b Make chip recommendations explainable and conservative`
+Push result: `origin/main` advanced from `b81160ad` to `aa05ea0f` successfully.
+Known issues/blockers: The text manager-search provider contract is still absent, so text searches return typed `search_not_configured`; numeric manager lookup is implemented. Existing PuLP deprecation and three frontend image lint warnings remain.
+Next exact action: Begin Phase 6: run the full requested backend/frontend gates, start Flask and the Next production build, exercise the requested public manager/team/planner/chip flows in a real browser at 375/768/1280 px, and record any provider-limited scenario accurately.
