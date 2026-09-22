@@ -1,7 +1,7 @@
 # FPL Manager Planner and Chip Advisor Progress
 
 Last updated: 2026-09-22
-Plan status: ready; implementation not started
+Plan status: implementation in progress; Phases 1 and 2 complete
 
 ## Repository baseline
 
@@ -52,13 +52,15 @@ Always re-run `git status --short` because the user may add more work between se
 ## Implementation phases
 
 - [x] Phase 1: public-manager adapter and API
-- [ ] Phase 2: manager search, preview, and local import
+- [x] Phase 2: manager search, preview, and local import
 - [ ] Phase 3: combined transfer/lineup plan on My Team
 - [ ] Phase 4: real horizon matrix in Chip Advisor
 - [ ] Phase 5: auditable chip decision evidence
 - [ ] Phase 6: full automated and browser verification
 
 ## Next exact action
+
+Continue Phase 3: finish the combined element-ID transfer and lineup planner, write failing boundary tests for remaining cases, verify the existing partial backend work, and complete the My Team and Transfer Studio integrations. Preserve unrelated data refreshes and generated files.
 
 ## 2026-09-22 — Phase 1: public-manager adapter and API
 
@@ -67,12 +69,25 @@ Files changed: `webapp/fpl_client.py`, `webapp/manager_routes.py`, `webapp/app.p
 Behavior completed: Numeric public entry lookup, typed read-only lineup fetch, backward fallback to the latest public picks event, FPL tenths-to-millions price normalization, bounded successful-response TTL cache, stable route error codes, local element safety reporting, and explicit `search_not_configured` for undocumented text search.
 Automated evidence: `python -m pytest tests/test_fpl_client.py tests/test_webapp.py -q` — 15 passed; `git diff --check` passed. Repository-owned CSV changes and generated/untracked handoff files remain unstaged.
 Manual browser evidence: Not run in this backend-only phase.
-Commit SHA and message: `ddfae853 Add public FPL manager lookup and lineup API`
+Commit SHA and message: `d2260e72 Add public FPL manager lookup and lineup API`
 Push result: `origin/main` advanced from `80be3f97` to `d2260e72` successfully.
 Known issues/blockers: The repository contains no text manager-search provider contract or configured provider schema. Text search is intentionally not guessed and returns `503 search_not_configured`.
-Next exact action: Stage only the Phase 1 implementation, tests, and ledger; inspect the staged diff; commit and push `Add public FPL manager lookup and lineup API`. Then begin Phase 2 with failing frontend/API contract tests for preview and deliberate import.
+Next exact action: Begin Phase 2 with manager search, preview, and deliberate local import.
 
-After confirming the plan commit exists locally and on `origin/main`, begin Phase 1 by locating the real text manager-search API contract in repository configuration/documentation. Then create failing HTTP-boundary tests for numeric entry lookup, lineup event fallback, and the `search_not_configured` text-query behavior before implementing `webapp/fpl_client.py` and `webapp/manager_routes.py`.
+The original Phase 1 start instructions above are historical; Phase 1 is complete and its pushed implementation SHA is `d2260e72`.
+
+## 2026-09-22 — Phase 2: manager search, preview, and local import
+
+Branch: `main`
+Starting SHA: `29e2e6fd`
+Files changed: `webapp/frontend/lib/types.ts`, `webapp/frontend/lib/api.ts`, `webapp/frontend/components/providers/app-provider.tsx`, `webapp/frontend/components/team/manager-search.tsx`, `webapp/frontend/components/team/manager-lineup-preview.tsx`, `webapp/frontend/app/team/page.tsx`, `webapp/frontend/app/broadcast.css`
+Behavior completed: Typed manager API client; debounced text and immediate numeric submit; stale-response protection; manager result selection and exact public lineup preview; unresolved local player warning and disabled import; atomic element-ID import preserving observed XI, bench order, armbands, bank, source entry/team/manager/GW, and season; local edits and optimizer updates clear imported metadata.
+Automated evidence: `python -m pytest tests/test_fpl_client.py tests/test_webapp.py -q` — 16 passed; `npm run lint` — passed with three existing `<img>` warnings; `npm run build` — passed; `git diff --check --cached` — passed before commit.
+Manual browser evidence: Deferred to Phase 6 real-browser verification at 375, 768, and 1280 px.
+Commit SHA and message: `35710f37 Add manager lineup search and local import`
+Push result: `origin/main` advanced from `29e2e6fd` to `35710f37` successfully.
+Known issues/blockers: No documented/configured text manager-search provider contract exists; typed `503 search_not_configured` behavior from Phase 1 remains deliberate. Numeric ID lookup works. Phase 3 implementation was already partially present in the worktree and remains unstaged.
+Next exact action: Continue Phase 3 as described above.
 
 ## Session entry format
 
