@@ -41,7 +41,7 @@ export default function TeamPage() {
   const [transferPlanLoading, setTransferPlanLoading] = React.useState(false);
 
   const plannerBankValue = plannerBank ?? (
-    storedSquad?.source === "manager" && storedSquad.bank != null
+    storedSquad?.source !== "manual" && storedSquad?.bank != null
       ? Math.max(0, storedSquad.bank)
       : 0
   );
@@ -110,7 +110,7 @@ export default function TeamPage() {
   // FPL gives every manager 100.0m. Prices move during a season, so a squad
   // saved last week can be worth more than the budget that bought it -- show
   // that as a negative rather than clamping it to zero and hiding the problem.
-  const bank = storedSquad?.source === "manager" && storedSquad.bank != null
+  const bank = storedSquad?.source !== "manual" && storedSquad?.bank != null
     ? storedSquad.bank
     : preview
       ? BUDGET - preview.spend

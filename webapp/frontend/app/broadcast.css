@@ -1182,6 +1182,7 @@
     .nav-tabs{padding-inline:calc(50vw - 72px)}
     .nav-scroll{width:100%;justify-content:flex-start} .nav-tab{min-height:52px;padding-inline:13px}
     .hero-strip{grid-template-columns:repeat(2,1fr)}
+    .hero-strip .cell:last-child{grid-column:1/-1;border-top:1px solid #ded5df}
     .pitch{min-height:680px}
     .formation{inset:34px 8px 24px}
     .pm{width:82px} .pm-bust{width:52px;height:52px} .pm-name{font-size:9px;padding-inline:4px}

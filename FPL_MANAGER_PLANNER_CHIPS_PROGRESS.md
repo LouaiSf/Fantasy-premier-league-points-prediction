@@ -1,7 +1,7 @@
 # FPL Manager Planner and Chip Advisor Progress
 
 Last updated: 2026-09-22
-Plan status: implementation in progress; Phases 1, 2, 3, 4, and 5 complete
+Plan status: all implementation phases complete; Phase 6 verification passed
 
 ## Repository baseline
 
@@ -56,11 +56,11 @@ Always re-run `git status --short` because the user may add more work between se
 - [x] Phase 3: combined transfer/lineup plan on My Team
 - [x] Phase 4: real horizon matrix in Chip Advisor
 - [x] Phase 5: auditable chip decision evidence
-- [ ] Phase 6: full automated and browser verification
+- [x] Phase 6: full automated and browser verification
 
 ## Next exact action
 
-Continue Phase 6: run the full requested backend/frontend gates, start Flask and the Next production build, exercise the requested public manager/team/planner/chip flows in a real browser at 375/768/1280 px, and record any provider-limited scenario accurately.
+Complete the Phase 6 commit and push, then no further plan action remains.
 
 ## 2026-09-22 — Phase 1: public-manager adapter and API
 
@@ -144,3 +144,17 @@ Commit SHA and message: `aa05ea0f8fd8ab7df5151c4a07c5c522baedc02b Make chip reco
 Push result: `origin/main` advanced from `b81160ad` to `aa05ea0f` successfully.
 Known issues/blockers: The text manager-search provider contract is still absent, so text searches return typed `search_not_configured`; numeric manager lookup is implemented. Existing PuLP deprecation and three frontend image lint warnings remain.
 Next exact action: Begin Phase 6: run the full requested backend/frontend gates, start Flask and the Next production build, exercise the requested public manager/team/planner/chip flows in a real browser at 375/768/1280 px, and record any provider-limited scenario accurately.
+
+## 2026-09-22 — Phase 6: end-to-end verification and documentation
+
+Branch: `main`
+Starting SHA: `4228c46c9100d3636019d379da19e56c85764d41`
+Files changed: `webapp/frontend/app/broadcast.css`, `webapp/frontend/app/team/page.tsx`, this ledger
+Behavior completed: Fixed the tablet summary strip so the fifth metric spans the row; restored imported/optimizer bank values in My Team and the transfer planner after reload. Imported-preview boundaries, combined planner choices, persistence, and conservative fixture-signal Chip Advisor behavior passed browser verification.
+Automated evidence: `python -m pytest tests/test_fpl_client.py tests/test_webapp.py tests/test_optimise.py tests/test_chip_advisor.py -q` — 55 passed (13,587 existing PuLP deprecation warnings); `npm run lint` — passed with three existing `<img>` warnings; `NEXT_PUBLIC_API_BASE=http://127.0.0.1:5010 npm run build` — passed with TypeScript and 12 static routes; `git diff --check` — passed.
+Manual browser evidence: Production Next build on port 3010 with isolated Flask API on 5010. Numeric entry 1 returned identity/rank/points and GW5 lineup, bank, XI, bench and armbands; preview left My Team unchanged; explicit import populated and persisted the lineup. The unresolved-element guard disabled import. Invalid ID, timeout (mocked 504), and text `search_not_configured` states rendered; external API failure preserved saved team state. The text-provider duplicate-name selection scenario could not run because no provider contract is configured, as the plan requires. Planner 0/1/2 free-transfer cases produced hold/single/joint plans; applying a plan persisted the squad. After reload, the saved optimizer bank displayed £0.3m in My Team and restored £0.3m in the planner input. Chip Advisor labeled the GW6–13 gap as fixture-signal (not points), returned watch/hold states without projected gains or captain claims. Keyboard Tab reached the visible “Skip to content” focus target. Responsive screenshots for Team, Transfer Studio, and Chip Advisor are saved under `output/playwright/` at 375/768/1280 px; DOM widths matched the viewport at 375 and 1280, and visual review found no page-level horizontal overflow at any target width. Lighthouse was unavailable (`npx --no-install lighthouse --version` confirmed it is not installed locally; the plan only requires it if available).
+Visual gate: Two independent reviewers approved the responsive surfaces; final artifact `.omo/evidence/fpl-manager-planner-chips-phase6-gate-review.md` records APPROVE/no blockers. Updated Team captures include `output/playwright/team-375.png`, `team-768.png`, and `team-1280.png`.
+Commit SHA and message: pending — `Complete manager planner and chip advisor verification`
+Push result: pending.
+Known issues/blockers: No configured text manager-search provider contract; text search intentionally returns typed `search_not_configured`. Current local predictions cover GW5 only, so future Chip Advisor output remains a clearly labeled fixture opportunity index rather than a points projection. Existing PuLP deprecation warnings and three frontend `<img>` lint warnings remain. Lighthouse was not installed locally. User-owned CSV edits and untracked continuation/generated files remain untouched and unstaged.
+Next exact action: Commit the explicit Phase 6 paths and push `main`; then record the resulting SHA and upstream status.
