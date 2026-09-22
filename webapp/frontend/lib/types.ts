@@ -24,8 +24,11 @@ export interface PlayerRecord {
   name: string;
   web_name: string;
   first_name: string;
+  second_name: string;
   team: string;
   team_short: string;
+  team_id: number;
+  team_code: number;
   position: "GK" | "DEF" | "MID" | "FWD";
   value_m: number;
   status: string;
@@ -199,11 +202,32 @@ export interface ChipRow {
   avg_fdr: number;
   squad_playing?: number;
   squad_blanks?: number;
+  opportunity: Partial<Record<ChipId, number | null>>;
+}
+
+export const CHIP_IDS = ["triple_captain", "bench_boost", "free_hit", "wildcard"] as const;
+export type ChipId = (typeof CHIP_IDS)[number];
+export type ChipState = "unused" | "used" | "expired";
+export type ChipStatus = "play" | "watch" | "hold" | "unavailable";
+
+export interface ChipInventory {
+  first_half: Record<ChipId, ChipState>;
+  second_half: Record<ChipId, ChipState>;
 }
 
 export interface ChipRecommendation {
-  chip: string;
+  chip: ChipId;
+  label: string;
+  status: ChipStatus;
+  candidate_gameweeks: number[];
   gw: number | null;
+  candidate_gw: number | null;
+  expected_gain: number | null;
+  score_breakdown: Record<string, number | null>;
+  reasons: string[];
+  warnings: string[];
+  inventory_set: "first_half" | "second_half";
+  expires_after_gameweek: number;
   reason: string;
   confidence: "high" | "low" | "medium";
   note?: string;
@@ -220,5 +244,9 @@ export interface ChipsResult {
   rows: ChipRow[];
   recommendations: ChipRecommendation[];
   unmapped_teams?: string[];
+  current_gameweek: number;
+  projection_mode: "fixture_adjusted_baseline";
+  inventory_status: "synced" | "not_synced";
+  scheduled_gameweeks: number[];
 }
 

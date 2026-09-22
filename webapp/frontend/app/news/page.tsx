@@ -193,7 +193,7 @@ export default function NewsPage() {
             <div
               className="ticker-track"
               aria-hidden="true"
-              style={{ "--ticker-duration": `${Math.max(72, filtered.length * 0.72)}s` } as React.CSSProperties}
+              style={{ "--ticker-duration": `${Math.max(60, filtered.length * 4)}s` } as React.CSSProperties}
             >
               {[...filtered, ...filtered].map((player, index) => (
                 <span key={`${player.element}-${index}`}>

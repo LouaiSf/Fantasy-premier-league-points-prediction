@@ -9,6 +9,7 @@ interface PlayerPhotoProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "al
   // Tried when `src` is missing or has failed, e.g. a sharp hero image that
   // only exists for some players, backed by the small one that exists for more.
   fallbackSrc?: string;
+  variant?: "hero" | "card" | "avatar" | "pitch";
 }
 
 // About 15% of the 2026-27 squad (mostly new signings) has no portrait on the
@@ -48,6 +49,7 @@ export function PlayerPhoto({
   name,
   src,
   fallbackSrc,
+  variant = "card",
   className,
   onError,
   loading = "lazy",
@@ -60,14 +62,14 @@ export function PlayerPhoto({
   const [, setAttempt] = React.useState(0);
 
   if (!key) {
-    return <PhotoFallback alt={alt} name={name} className={className} />;
+    return <PhotoFallback alt={alt} name={name} className={`photo-fb--${variant} ${className || ""}`.trim()} />;
   }
 
   return (
     <img
       alt={alt}
       src={key}
-      className={className}
+      className={`player-photo player-photo--${variant} ${className || ""}`.trim()}
       loading={loading}
       decoding={decoding}
       onError={(event) => {

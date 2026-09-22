@@ -78,6 +78,22 @@ function parseLegacyNames(): string[] {
   }
 }
 
+function normalizeSquadResult(result: SquadResult, snapshot: PlatformSnapshot | null): SquadResult {
+  if (!snapshot) return result;
+  const byElement = new Map(snapshot.players.map((player) => [player.element, player]));
+  const merge = (player: PlayerRecord): PlayerRecord => ({
+    ...player,
+    ...(byElement.get(player.element) ?? {}),
+  });
+  return {
+    ...result,
+    xi: result.xi.map(merge),
+    bench: result.bench.map(merge),
+    captain: result.captain ? merge(result.captain) : null,
+    vice_captain: result.vice_captain ? merge(result.vice_captain) : null,
+  };
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [snapshot, setSnapshot] = React.useState<PlatformSnapshot | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -229,11 +245,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const setTeamResult = React.useCallback(
     (result: SquadResult | null) => {
-      setTeamResultState(result);
-      if (result) {
-        const ids = result.xi.map((p) => p.element).concat(result.bench.map((p) => p.element));
+      const normalized = result ? normalizeSquadResult(result, snapshot) : null;
+      setTeamResultState(normalized);
+      if (normalized) {
+        const ids = normalized.xi.map((p) => p.element).concat(normalized.bench.map((p) => p.element));
         setSquadElementsState(ids);
-        saveSquadData(ids, snapshot, result);
+        saveSquadData(ids, snapshot, normalized);
       }
     },
     [saveSquadData, snapshot],

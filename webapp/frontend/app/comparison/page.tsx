@@ -344,7 +344,12 @@ function ComparisonPageInner() {
                           {player.element === seatA && <span className="ts-seat">Seat A</span>}
                           {player.element === seatB && <span className="ts-seat">Seat B</span>}
                           <span className="shot">
-                            {player.photo && <PlayerPhoto src={player.photo} alt="" loading="lazy" />}
+                            <PlayerPhoto
+                              src={player.photo ?? undefined}
+                              alt={player.name}
+                              name={player.name}
+                              loading="lazy"
+                            />
                           </span>
                           <span className="ts-name">
                             <b>{player.web_name || player.name}</b>

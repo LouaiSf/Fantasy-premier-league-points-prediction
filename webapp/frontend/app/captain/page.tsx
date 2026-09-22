@@ -102,10 +102,9 @@ export default function CaptainPage() {
                 loading="eager"
                 fetchPriority="high"
               />
-              <span className="armband-ring" aria-hidden="true" />
             </div>
             <span className="cap-armband">
-              <span aria-hidden="true">C</span> Armband pick
+              <span className="cap-marker-mark" aria-hidden="true">C</span> Captain pick
             </span>
           </>
         )}
@@ -292,11 +291,14 @@ export default function CaptainPage() {
                 style={clubStyle(lead.team)}
                 onClick={() => openProfile(lead)}
               >
-                {lead.photo && (
-                  <div className="shot">
-                    <PlayerPhoto src={lead.photo_large ?? lead.photo} fallbackSrc={lead.photo} alt="" />
-                  </div>
-                )}
+                <div className="shot">
+                  <PlayerPhoto
+                    src={lead.photo_large ?? lead.photo ?? undefined}
+                    fallbackSrc={lead.photo ?? undefined}
+                    alt={lead.name}
+                    name={lead.name}
+                  />
+                </div>
                 <div className="battle-pick-copy">
                   <span className="eyebrow">Rank 1</span>
                   <h4>{lead.web_name}</h4>
@@ -336,11 +338,14 @@ export default function CaptainPage() {
                 style={clubStyle(runnerUp.team)}
                 onClick={() => openProfile(runnerUp)}
               >
-                {runnerUp.photo && (
-                  <div className="shot">
-                    <PlayerPhoto src={runnerUp.photo_large ?? runnerUp.photo} fallbackSrc={runnerUp.photo} alt="" />
-                  </div>
-                )}
+                <div className="shot">
+                  <PlayerPhoto
+                    src={runnerUp.photo_large ?? runnerUp.photo ?? undefined}
+                    fallbackSrc={runnerUp.photo ?? undefined}
+                    alt={runnerUp.name}
+                    name={runnerUp.name}
+                  />
+                </div>
                 <div className="battle-pick-copy">
                   <span className="eyebrow">Rank 2</span>
                   <h4>{runnerUp.web_name}</h4>

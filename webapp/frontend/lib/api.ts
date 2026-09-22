@@ -1,5 +1,6 @@
 import type {
   ApiError,
+  ChipInventory,
   ChipsResult,
   PlatformSnapshot,
   PlayerHistoryRecord,
@@ -75,7 +76,13 @@ export const api = {
     requestJson<WatchlistResult>(
       `/api/watchlist?max_ownership=${maxOwnership}&top=${top}`,
     ),
-  chips: (body: { squad?: string[]; horizon?: number }) =>
+  chips: (body: {
+    squad?: string[];
+    horizon?: number;
+    chip_inventory?: ChipInventory;
+    scheduled_gameweeks?: number[];
+    last_free_hit_gameweek?: number | null;
+  }) =>
     postJson<ChipsResult>("/api/chips", body),
 };
 

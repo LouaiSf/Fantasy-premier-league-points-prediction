@@ -91,6 +91,25 @@ def test_lineup_endpoint_optimises_a_supplied_team() -> None:
     }
 
 
+def test_auto_pick_serializes_identity_and_portrait_contract() -> None:
+    client = app.test_client()
+
+    response = client.post('/api/squad', json={'budget': 100.0})
+
+    assert response.status_code == 200
+    squad = response.get_json()
+    for player in squad['xi'] + squad['bench']:
+        assert player['element'] is not None
+        assert player['web_name']
+        assert player['first_name']
+        assert player['second_name']
+        assert 'photo' in player
+        assert 'photo_large' in player
+        assert 'team_id' in player
+    assert squad['captain']['photo'] is not None
+    assert squad['vice_captain']['photo'] is not None
+
+
 def test_refresh_pulls_the_live_source_and_forces_it(monkeypatch) -> None:
     # vaastav archives finished seasons; only olbauday carries one in
     # progress. And without --force every existing file is skipped, so the

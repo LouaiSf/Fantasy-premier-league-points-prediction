@@ -55,6 +55,17 @@ export function MainNav() {
     ink.style.left = `${active.offsetLeft}px`;
   }, []);
 
+  const centerActiveTab = React.useCallback(() => {
+    const scroller = scrollRef.current;
+    const active = tabsRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!scroller || !active || scroller.scrollWidth <= scroller.clientWidth) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    scroller.scrollTo({
+      left: active.offsetLeft - (scroller.clientWidth - active.offsetWidth) / 2,
+      behavior: reducedMotion ? "auto" : "smooth",
+    });
+  }, []);
+
   React.useLayoutEffect(() => {
     positionInk();
     // Enable the CSS transition after the first frame so the ink jumps to its
@@ -63,18 +74,9 @@ export function MainNav() {
     const frame = requestAnimationFrame(() => {
       inkRef.current?.classList.add("is-ready");
     });
-    const scroller = scrollRef.current;
-    const active = tabsRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
-    if (!scroller || !active || scroller.scrollWidth <= scroller.clientWidth) {
-      return () => cancelAnimationFrame(frame);
-    }
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    scroller.scrollTo({
-      left: active.offsetLeft - (scroller.clientWidth - active.offsetWidth) / 2,
-      behavior: reducedMotion ? "auto" : "smooth",
-    });
+    centerActiveTab();
     return () => cancelAnimationFrame(frame);
-  }, [positionInk, pathname]);
+  }, [centerActiveTab, positionInk, pathname]);
 
   // Google Fonts swap in after first paint and reflow the tab widths, so a
   // single on-mount measurement goes stale; a ResizeObserver catches that
@@ -82,11 +84,14 @@ export function MainNav() {
   React.useEffect(() => {
     const container = tabsRef.current;
     if (!container || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => positionInk());
+    const observer = new ResizeObserver(() => {
+      positionInk();
+      centerActiveTab();
+    });
     observer.observe(container);
     container.querySelectorAll("a").forEach((tab) => observer.observe(tab));
     return () => observer.disconnect();
-  }, [positionInk]);
+  }, [centerActiveTab, positionInk]);
 
   return (
     <header className="main-nav">

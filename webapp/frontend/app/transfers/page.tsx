@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useApp } from "@/components/providers/app-provider";
 import { api } from "@/lib/api";
 import { PlayerPhoto } from "@/components/player-photo";
@@ -106,6 +107,27 @@ export default function TransfersPage() {
       <section className="page">
         <div className="shell">
           <Loading label="Loading season data…" />
+        </div>
+      </section>
+    );
+  }
+
+  if (squadPlayers.length !== 15) {
+    return (
+      <section className="page studio" aria-label="Transfer studio onboarding">
+        <div className="shell shell--padded transfer-onboarding">
+          <span className="eyebrow alert">Decision room</span>
+          <h1>Build your squad first</h1>
+          <p>
+            Transfer Studio compares legal 15-player squads. You currently have {squadPlayers.length}/15 players saved,
+            so there is no outgoing team to analyse yet.
+          </p>
+          <Link className="btn" href="/team">Go to My Team</Link>
+          <div className="transfer-unlocks" aria-label="What a complete squad unlocks">
+            <span>Legal squad check</span>
+            <span>Transfer hits</span>
+            <span>Whole-market comparison</span>
+          </div>
         </div>
       </section>
     );
@@ -330,19 +352,15 @@ export default function TransfersPage() {
               </label>
             </div>
             <div className="desk-list">
-              {squadPlayers.length === 0 ? (
-                <p className="picker-empty">Build your squad in My Team before staging a transfer.</p>
-              ) : (
-                outRows.map((player) => (
-                  <DeskRow
-                    key={player.element}
-                    player={player}
-                    selected={player.element === outId}
-                    teamCode={teamCodeByName.get(player.team)}
-                    onClick={() => pickOut(player)}
-                  />
-                ))
-              )}
+              {outRows.map((player) => (
+                <DeskRow
+                  key={player.element}
+                  player={player}
+                  selected={player.element === outId}
+                  teamCode={teamCodeByName.get(player.team)}
+                  onClick={() => pickOut(player)}
+                />
+              ))}
             </div>
           </section>
 

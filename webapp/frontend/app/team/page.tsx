@@ -251,11 +251,14 @@ export default function TeamPage() {
                         <span>{player.position}</span>
                         <strong>{player.web_name || player.name}</strong>
                         <em>{num(player.predicted_points ?? player.form)}</em>
-                        {player.photo && (
-                          <div className="shot">
-                            <PlayerPhoto src={player.photo} alt="" loading="lazy" />
-                          </div>
-                        )}
+                        <div className="shot">
+                          <PlayerPhoto
+                            src={player.photo ?? undefined}
+                            alt={player.name}
+                            name={player.name}
+                            loading="lazy"
+                          />
+                        </div>
                       </button>
                     ))
                   : <p className="empty-copy">No bench until a squad is saved.</p>}

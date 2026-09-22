@@ -1007,129 +1007,284 @@ def best_legal_xi_points(squad: pd.DataFrame) -> float | None:
     return float(result['xi']['predicted_points'].sum())
 
 
+CHIP_IDS = ('triple_captain', 'bench_boost', 'free_hit', 'wildcard')
+CHIP_LABELS = {
+    'triple_captain': 'Triple Captain',
+    'bench_boost': 'Bench Boost',
+    'free_hit': 'Free Hit',
+    'wildcard': 'Wildcard',
+}
+CHIP_THRESHOLDS = {
+    'triple_captain': 2.0,
+    'bench_boost': 4.0,
+    'free_hit': 5.0,
+    'wildcard': 8.0,
+}
+
+
+def _availability_factor(players: pd.DataFrame) -> pd.Series:
+    factor = pd.Series(1.0, index=players.index)
+    if 'status' in players.columns:
+        factor = factor.where(~players['status'].isin({'i', 'u', 's', 'n'}), 0.0)
+    for column in ('p_plays', 'chance', 'chance_of_playing_next_round'):
+        if column in players.columns:
+            values = pd.to_numeric(players[column], errors='coerce')
+            if column.startswith('chance'):
+                values = values / 100.0
+            factor = values.fillna(factor).clip(lower=0.0, upper=1.0)
+            break
+    return factor
+
+
+def _fixture_adjusted_players(players: pd.DataFrame, calendar: pd.DataFrame,
+                              gameweek: int, name_to_id: dict) -> pd.DataFrame:
+    adjusted = players.copy()
+    base = pd.to_numeric(adjusted['predicted_points'], errors='coerce').fillna(0.0).clip(lower=0.0)
+    schedule = calendar[calendar['event'] == gameweek].copy()
+    if schedule.empty:
+        adjusted['predicted_points'] = 0.0
+        return adjusted
+    schedule['fixture_factor'] = schedule['fixtures'] * (1.0 + (3.0 - schedule['difficulty']) * 0.08)
+    team_factor = schedule.set_index('team')['fixture_factor'].clip(lower=0.35)
+    team_ids = adjusted['team'].map(name_to_id)
+    adjusted['predicted_points'] = (base * team_ids.map(team_factor).fillna(0.0)
+                                    * _availability_factor(adjusted))
+    return adjusted
+
+
+def _legal_xi_value(squad: pd.DataFrame, budget: float) -> float | None:
+    result, _status = solve_squad(
+        squad, budget=budget, squad_size=len(squad), captain=False)
+    if result is None:
+        return None
+    return float(result['xi']['predicted_points'].sum())
+
+
+def _candidate_window(first_gw: int, horizon: int, chip: str,
+                      inventory: dict, scheduled: list,
+                      last_free_hit: int | None) -> tuple[list, str, str]:
+    gameweeks = list(range(first_gw, first_gw + horizon))
+    half = 'first_half' if first_gw <= 19 else 'second_half'
+    expires = '19' if half == 'first_half' else '38'
+    state = inventory.get(half, {}).get(chip, 'unknown')
+    if state in {'used', 'expired'}:
+        return [], half, expires
+    eligible = [gw for gw in gameweeks if (gw <= 19 if half == 'first_half' else gw >= 20)]
+    eligible = [gw for gw in eligible if gw not in scheduled]
+    if chip == 'free_hit':
+        eligible = [gw for gw in eligible if gw > 1]
+        if last_free_hit is not None:
+            eligible = [gw for gw in eligible if gw != last_free_hit + 1]
+    return eligible, half, expires
+
+
+def _recommendation(chip: str, scores: dict, candidate_gameweeks: list,
+                    inventory: dict, scheduled: list, has_squad: bool,
+                    half: str, expires: str) -> dict:
+    threshold = CHIP_THRESHOLDS[chip]
+    label = CHIP_LABELS[chip]
+    state = inventory.get(half, {}).get(chip, 'unknown')
+    warnings = []
+    if inventory.get('_synced') is not True:
+        warnings.append('Chip history is not synced; confirm this chip is still available.')
+    if state in {'used', 'expired'}:
+        return {
+            'chip': chip, 'label': label, 'status': 'unavailable',
+            'candidate_gameweeks': [], 'gw': None, 'candidate_gw': None,
+            'confidence': 'high',
+            'expected_gain': None, 'score_breakdown': {},
+            'reasons': [f'{label} is marked {state}.'], 'warnings': warnings,
+            'inventory_set': half, 'expires_after_gameweek': int(expires),
+            'reason': f'{label} is marked {state}.', 'note': None,
+        }
+    if not candidate_gameweeks:
+        if scheduled:
+            warnings.append('Every eligible week in this window already has a chip scheduled.')
+        else:
+            warnings.append(f'No eligible {label} gameweek remains in this window.')
+        reason = f'No eligible {label} window in the current horizon.'
+        return {
+            'chip': chip, 'label': label, 'status': 'hold',
+            'candidate_gameweeks': [], 'gw': None, 'candidate_gw': None,
+            'confidence': 'low',
+            'expected_gain': None, 'score_breakdown': {}, 'reasons': [reason],
+            'warnings': warnings, 'inventory_set': half,
+            'expires_after_gameweek': int(expires), 'reason': reason, 'note': None,
+        }
+    best_gw = max(
+        candidate_gameweeks,
+        key=lambda gw: scores.get(gw) if scores.get(gw) is not None else float('-inf'),
+    )
+    gain = scores.get(best_gw) if has_squad else None
+    has_gain = gain is not None
+    if not has_gain:
+        status = 'watch'
+        confidence = 'low'
+    elif gain >= threshold and has_squad:
+        status = 'play'
+        confidence = 'medium'
+    elif gain >= threshold * 0.5:
+        status = 'watch'
+        confidence = 'low'
+    else:
+        status = 'hold'
+        confidence = 'low'
+    if not has_squad and status == 'play':
+        status = 'watch'
+        confidence = 'low'
+    if has_gain:
+        reason = f'Best fixture-adjusted gain is {gain:.1f} points in GW{best_gw}.'
+    else:
+        reason = f'GW{best_gw} is the strongest fixture signal; squad projections are needed to quantify gain.'
+    if status == 'hold':
+        reason = f'Hold: no meaningful {label} gain clears the {threshold:.1f}-point threshold.'
+    note = 'Fixture-adjusted baseline only; future per-player projections are not available.'
+    return {
+        'chip': chip, 'label': label, 'status': status,
+        'candidate_gameweeks': candidate_gameweeks,
+        'gw': best_gw if status in {'play', 'watch'} else None,
+        'candidate_gw': best_gw,
+        'confidence': confidence, 'expected_gain': None if gain is None else round(gain, 2),
+        'score_breakdown': {'opportunity_score': None if gain is None else round(gain, 2),
+                            'threshold': threshold},
+        'reasons': [reason], 'warnings': warnings, 'inventory_set': half,
+        'expires_after_gameweek': int(expires), 'reason': reason, 'note': note,
+    }
+
+
 def compute_chips(squad, season: str, first_gw: int, horizon: int,
-                  players: pd.DataFrame) -> dict:
-    """Fixture-driven chip timing over a window of gameweeks.
-
-    Returns data only, so the CLI and the web layer render the same numbers.
-
-    One honest caveat travels with this: the model's per-player prediction does
-    not vary by gameweek. Its features are current form, and the opponent
-    features were measured and dropped for adding nothing. So the variation
-    below comes from fixture count and difficulty, not from the model -- this
-    is a fixture ticker with a form weighting, not a per-gameweek projection.
-    """
+                  players: pd.DataFrame, inventory: dict | None = None,
+                  scheduled_gameweeks: list | None = None,
+                  last_free_hit_gameweek: int | None = None) -> dict:
     teams = pd.read_csv(os.path.join('data', season, 'teams.csv'))
     name_to_id = dict(zip(teams['name'], teams['id']))
-
     calendar = fixture_calendar(season, first_gw, horizon)
-    counts = calendar.pivot_table(index='event', columns='team',
-                                  values='fixtures', fill_value=0)
-
-    doubles = {int(gw): [int(t) for t in row.index if row[t] >= 2]
-               for gw, row in counts.iterrows()}
-    blanks = {int(gw): [int(t) for t in row.index if row[t] == 0]
-              for gw, row in counts.iterrows()}
+    gameweeks = list(range(first_gw, first_gw + horizon))
+    counts = calendar.pivot_table(index='event', columns='team', values='fixtures', fill_value=0)
+    counts = counts.reindex(index=gameweeks, columns=teams['id'].tolist(), fill_value=0)
+    counts = counts.fillna(0)
+    doubles = {gw: [int(team) for team in counts.loc[gw].index if counts.loc[gw, team] >= 2]
+               for gw in gameweeks}
+    blanks = {gw: [int(team) for team in counts.loc[gw].index if counts.loc[gw, team] == 0]
+              for gw in gameweeks}
     any_dgw = any(doubles.values())
-    any_bgw = any(v for v in blanks.values())
+    any_bgw = any(blanks.values())
 
     squad_teams = None
     unmapped = []
-    if squad is not None and len(squad):
+    has_squad = squad is not None and len(squad) == SQUAD_SIZE
+    if has_squad:
         squad_teams = squad['team'].map(name_to_id)
         if squad_teams.isna().any():
             unmapped = sorted(squad.loc[squad_teams.isna(), 'team'].unique())
-            squad_teams = squad_teams.dropna()
 
     rows = []
-    for gw in sorted(counts.index):
+    for gw in gameweeks:
         gw_counts = counts.loc[gw]
-        gw_diff = calendar[calendar['event'] == gw].set_index('team')['difficulty']
-        # gw_counts is fixtures per team, so each match is counted twice.
+        gw_fixtures = calendar[calendar['event'] == gw]
+        gw_diff = gw_fixtures.set_index('team')['difficulty']
         entry = {
-            'gw': int(gw),
-            'matches': int(gw_counts.sum() // 2),
-            'dgw_teams': len(doubles[int(gw)]),
-            'blank_teams': len(blanks[int(gw)]),
+            'gw': int(gw), 'matches': int(gw_counts.sum() // 2),
+            'dgw_teams': len(doubles[gw]), 'blank_teams': len(blanks[gw]),
         }
-        if squad_teams is not None and len(squad_teams):
+        if squad_teams is not None:
             played = squad_teams.map(gw_counts).fillna(0)
             entry['squad_playing'] = int((played > 0).sum())
             entry['squad_blanks'] = int((played == 0).sum())
-            entry['avg_fdr'] = round(float(squad_teams.map(gw_diff).mean()), 2)
+            squad_diffs = squad_teams.map(gw_diff).dropna()
+            entry['avg_fdr'] = round(float(squad_diffs.mean()) if len(squad_diffs) else 3.0, 2)
         else:
-            entry['avg_fdr'] = round(float(gw_diff.mean()), 2)
+            entry['avg_fdr'] = round(float(gw_diff.mean()) if len(gw_diff) else 3.0, 2)
         rows.append(entry)
 
+    supplied_inventory = inventory if isinstance(inventory, dict) else {}
+    normalized_inventory = {'first_half': {}, 'second_half': {}, '_synced': bool(inventory)}
+    for half in ('first_half', 'second_half'):
+        source = supplied_inventory.get(half, {})
+        for chip in CHIP_IDS:
+            value = source.get(chip, 'unknown') if isinstance(source, dict) else 'unknown'
+            if value is True:
+                value = 'used'
+            elif value is False:
+                value = 'unused'
+            normalized_inventory[half][chip] = value if value in {'unused', 'used', 'expired'} else 'unknown'
+
+    scheduled = sorted({int(gw) for gw in (scheduled_gameweeks or [])})
+    candidate_windows = {}
+    for chip in CHIP_IDS:
+        candidate_windows[chip] = _candidate_window(
+            first_gw, horizon, chip, normalized_inventory, scheduled,
+            last_free_hit_gameweek)
+
+    scores = {chip: {} for chip in CHIP_IDS}
+    breakdowns = {chip: {} for chip in CHIP_IDS}
+    for gw in gameweeks:
+        adjusted_market = _fixture_adjusted_players(players, calendar, gw, name_to_id)
+        market_result, _status = solve_squad(
+            adjusted_market, float(adjusted_market['value_m'].sum()), captain=True)
+        market_xi = (float(market_result['xi']['predicted_points'].sum())
+                     if market_result is not None else None)
+        current_result = None
+        current_xi = None
+        current_budget = None
+        if has_squad:
+            adjusted_squad = _fixture_adjusted_players(squad, calendar, gw, name_to_id)
+            current_budget = float(squad['value_m'].sum())
+            current_result, _status = solve_squad(
+                adjusted_squad, current_budget + 0.01, squad_size=len(squad), captain=True)
+            current_xi = (float(current_result['xi']['predicted_points'].sum())
+                          if current_result is not None else None)
+
+        if current_result is not None:
+            captain = current_result.get('captain')
+            tc_gain = None if captain is None else float(captain['predicted_points'])
+            bench_gain = float(current_result['bench']['predicted_points'].sum())
+            free_hit_gain = None if market_xi is None or current_xi is None else market_xi - current_xi
+            scores['triple_captain'][gw] = tc_gain
+            scores['bench_boost'][gw] = bench_gain
+            scores['free_hit'][gw] = free_hit_gain
+            breakdowns['triple_captain'][gw] = {'captain_points': tc_gain}
+            breakdowns['bench_boost'][gw] = {'bench_points': bench_gain}
+            breakdowns['free_hit'][gw] = {'current_xi': current_xi, 'optimized_xi': market_xi}
+            if current_budget is not None:
+                optimized, _status = solve_squad(adjusted_market, current_budget, captain=False)
+                optimized_xi = None if optimized is None else float(optimized['xi']['predicted_points'].sum())
+                scores['wildcard'][gw] = None if optimized_xi is None or current_xi is None else optimized_xi - current_xi
+                breakdowns['wildcard'][gw] = {'current_xi': current_xi, 'optimized_xi': optimized_xi}
+        else:
+            signal = rows[gw - first_gw]['dgw_teams'] * 1.5 + rows[gw - first_gw]['blank_teams'] * 1.25
+            signal += max(0.0, 3.0 - rows[gw - first_gw]['avg_fdr'])
+            for chip in CHIP_IDS:
+                scores[chip][gw] = signal
+                breakdowns[chip][gw] = {'fixture_signal': round(signal, 2)}
+
     recommendations = []
-    if any_dgw:
-        best = max(rows, key=lambda r: r['dgw_teams'])
-        recommendations.append({
-            'chip': 'Bench Boost / Triple Captain', 'gw': best['gw'],
-            'reason': f"{best['dgw_teams']} teams play twice",
-            'confidence': 'high',
-        })
-    else:
-        if squad_teams is not None and len(squad_teams):
-            best = sorted(rows, key=lambda r: (-r['squad_playing'], r['avg_fdr']))[0]
-            recommendations.append({
-                'chip': 'Bench Boost', 'gw': best['gw'],
-                'reason': (f"{best['squad_playing']}/{len(squad)} of your squad play, "
-                           f"avg FDR {best['avg_fdr']}"),
-                'confidence': 'low',
-            })
-        easiest = min(rows, key=lambda r: r['avg_fdr'])
-        recommendations.append({
-            'chip': 'Triple Captain', 'gw': easiest['gw'],
-            'reason': f"easiest fixtures, avg FDR {easiest['avg_fdr']}",
-            'confidence': 'low',
-            'note': 'no double gameweek scheduled -- a fixture call, not a projection',
-        })
+    for chip in CHIP_IDS:
+        eligible, half, expires = candidate_windows[chip]
+        recommendation = _recommendation(
+            chip, scores[chip], eligible, normalized_inventory, scheduled,
+            has_squad, half, expires)
+        recommendation['score_breakdown'] = {
+            **recommendation['score_breakdown'],
+            **breakdowns[chip].get(recommendation.get('candidate_gw'), {}),
+        }
+        recommendations.append(recommendation)
 
-    if any_bgw:
-        worst = max(rows, key=lambda r: r.get('squad_blanks', r['blank_teams']))
-        recommendations.append({
-            'chip': 'Free Hit', 'gw': worst['gw'],
-            'reason': (f"{worst.get('squad_blanks', worst['blank_teams'])} "
-                       f"of your squad blank"),
-            'confidence': 'high',
-        })
-    else:
-        recommendations.append({
-            'chip': 'Free Hit', 'gw': None,
-            'reason': 'hold -- its value is covering a blank gameweek, and none '
-                      'is scheduled in this window',
-            'confidence': 'high',
-        })
-
-    hardest = max(rows, key=lambda r: r['avg_fdr'])
-    wildcard = {
-        'chip': 'Wildcard', 'gw': hardest['gw'],
-        'reason': f"hardest run, avg FDR {hardest['avg_fdr']}",
-        'confidence': 'low',
-    }
-
-    if squad is not None and len(squad):
-        optimal, _ = solve_squad(players, squad['value_m'].sum() + 0.5)
-        current_xi = best_legal_xi_points(squad)
-        if optimal and current_xi is not None:
-            gap = float(optimal['xi']['predicted_points'].sum() - current_xi)
-            wildcard['squad_gap'] = round(gap, 2)
-            wildcard['reason'] += (f"; your squad is {gap:.2f} points off an "
-                                   f"optimal one at the same value")
-            if gap > 8:
-                wildcard['note'] = 'that is a wide gap -- a wildcard would pay for itself'
-    recommendations.append(wildcard)
+    for row in rows:
+        gw = row['gw']
+        row['opportunity'] = {
+            chip: None if scores[chip].get(gw) is None else round(scores[chip][gw], 2)
+            for chip in CHIP_IDS
+        }
 
     return {
-        'first_gw': first_gw,
-        'last_gw': first_gw + horizon - 1,
-        'any_dgw': any_dgw,
-        'any_bgw': any_bgw,
-        'rows': rows,
-        'recommendations': recommendations,
-        'unmapped_teams': unmapped,
-        'has_squad': squad is not None and len(squad) > 0,
+        'first_gw': first_gw, 'last_gw': first_gw + horizon - 1,
+        'current_gameweek': first_gw, 'any_dgw': any_dgw, 'any_bgw': any_bgw,
+        'rows': rows, 'recommendations': recommendations,
+        'unmapped_teams': unmapped, 'has_squad': has_squad,
+        'projection_mode': 'fixture_adjusted_baseline',
+        'inventory_status': 'synced' if normalized_inventory['_synced'] else 'not_synced',
+        'scheduled_gameweeks': scheduled,
     }
 
 

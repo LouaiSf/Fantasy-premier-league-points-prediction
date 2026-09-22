@@ -123,9 +123,9 @@ export default function WatchlistPage() {
             <span className="watch-pos-badge">{player.position}</span>
           </div>
           <div className="watch-meta">
-            <span>{player.team}</span>
+            <span className="watch-club">{player.team}</span>
             {player.opponent_team && (
-              <span>vs {player.opponent_team} ({player.was_home ? "H" : "A"})</span>
+              <span className="watch-fixture">Next: {player.opponent_team} · {player.was_home ? "Home" : "Away"}</span>
             )}
             {player.selected_by != null && (
               <span className="watch-ownership">

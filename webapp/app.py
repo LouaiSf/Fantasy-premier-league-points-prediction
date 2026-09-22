@@ -277,7 +277,10 @@ PROFILE_NUMERIC = [
     'saves', 'goals_conceded', 'yellow_cards', 'red_cards',
     'chance_of_playing_next_round', 'transfers_in_event', 'transfers_out_event',
 ]
-PROFILE_TEXT = ['news', 'birth_date', 'team_join_date', 'squad_number', 'photo']
+PROFILE_TEXT = [
+    'news', 'birth_date', 'team_join_date', 'squad_number', 'photo',
+    'first_name', 'second_name', 'web_name',
+]
 
 # England, Scotland and Wales are ISO subdivisions, not countries, so their
 # flags are the tag sequences rather than regional-indicator pairs.
@@ -324,12 +327,19 @@ def enriched_players() -> list:
 
     raw = pd.read_csv(raw_path, low_memory=False)
     regions = load_regions()
+    team_rows = {
+        int(row['id']): row['short_name']
+        for row in pd.read_csv(os.path.join('data', s['season'], 'teams.csv')).to_dict('records')
+    }
 
     keep = ['id'] + [c for c in PROFILE_NUMERIC + PROFILE_TEXT if c in raw.columns]
     if 'region' in raw.columns:
         keep.append('region')
     if 'code' in raw.columns:
         keep.append('code')
+    for column in ('team', 'team_code'):
+        if column in raw.columns:
+            keep.append(column)
     profile = raw[keep].set_index('id')
 
     has_element = bool(base) and 'element' in base[0]
@@ -351,7 +361,8 @@ def enriched_players() -> list:
         for key in PROFILE_NUMERIC:
             value = row.get(key)
             record[key] = None if value is None or pd.isna(value) else float(value)
-        for key in ('news', 'birth_date', 'team_join_date'):
+        for key in ('news', 'birth_date', 'team_join_date', 'first_name',
+                    'second_name', 'web_name'):
             value = row.get(key)
             record[key] = None if value is None or (isinstance(value, float) and pd.isna(value)) else str(value)
 
@@ -360,12 +371,31 @@ def enriched_players() -> list:
         record['photo'] = photo_url(code)
         record['photo_large'] = photo_url(code, '500x500')
 
+        team_id = row.get('team')
+        record['team_id'] = None if team_id is None or pd.isna(team_id) else int(team_id)
+        team_code = row.get('team_code')
+        record['team_code'] = None if team_code is None or pd.isna(team_code) else int(team_code)
+        record['team_short'] = team_rows.get(record['team_id'])
+
         region = row.get('region')
         meta = regions.get(str(int(region))) if region is not None and not pd.isna(region) else None
         record['country'] = meta['name'] if meta else None
         record['flag'] = flag_for(meta.get('iso') if meta else None)
         out.append(record)
     return out
+
+
+def enriched_squad_records(frame: pd.DataFrame) -> list:
+    records = opt.squad_records(frame)
+    by_element = {
+        player['element']: player
+        for player in enriched_players()
+        if player.get('element') is not None
+    }
+    return [
+        {**record, **by_element.get(record.get('element'), {})}
+        for record in records
+    ]
 
 
 @app.route('/api/players')
@@ -435,14 +465,14 @@ def lineup_response(result: dict, budget: float) -> dict:
         selected = result.get(key)
         if selected is None:
             return None
-        return opt.squad_records(pd.DataFrame([selected]))[0]
+        return enriched_squad_records(pd.DataFrame([selected]))[0]
 
     return {
         'ok': True,
         'budget': budget,
         'spend': round(float(result['squad']['value_m'].sum()), 1),
-        'xi': opt.squad_records(result['xi']),
-        'bench': opt.squad_records(result['bench']),
+        'xi': enriched_squad_records(result['xi']),
+        'bench': enriched_squad_records(result['bench']),
         'captain': selected_player('captain'),
         'vice_captain': selected_player('vice_captain'),
         'xi_points': round(float(result['xi']['predicted_points'].sum()), 2),
@@ -548,7 +578,25 @@ def api_chips():
     if not 1 <= horizon <= 38:
         return fail('horizon must be between 1 and 38 gameweeks')
 
-    data = opt.compute_chips(squad, s['season'], s['gameweek'], horizon, s['players'])
+    inventory = body.get('chip_inventory')
+    scheduled = body.get('scheduled_gameweeks', [])
+    if scheduled is None:
+        scheduled = []
+    if not isinstance(scheduled, list) or any(
+            not isinstance(gameweek, (int, float)) for gameweek in scheduled):
+        return fail('scheduled_gameweeks must be a list of numbers')
+    try:
+        last_free_hit = body.get('last_free_hit_gameweek')
+        if last_free_hit is not None:
+            last_free_hit = int(last_free_hit)
+    except (TypeError, ValueError):
+        return fail('last_free_hit_gameweek must be a number')
+    data = opt.compute_chips(
+        squad, s['season'], s['gameweek'], horizon, s['players'],
+        inventory=inventory,
+        scheduled_gameweeks=[int(gameweek) for gameweek in scheduled],
+        last_free_hit_gameweek=last_free_hit,
+    )
     data['ok'] = True
     return jsonify(data)
 
