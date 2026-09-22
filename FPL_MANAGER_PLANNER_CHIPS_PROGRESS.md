@@ -51,7 +51,7 @@ Always re-run `git status --short` because the user may add more work between se
 
 ## Implementation phases
 
-- [ ] Phase 1: public-manager adapter and API
+- [x] Phase 1: public-manager adapter and API
 - [ ] Phase 2: manager search, preview, and local import
 - [ ] Phase 3: combined transfer/lineup plan on My Team
 - [ ] Phase 4: real horizon matrix in Chip Advisor
@@ -59,6 +59,18 @@ Always re-run `git status --short` because the user may add more work between se
 - [ ] Phase 6: full automated and browser verification
 
 ## Next exact action
+
+## 2026-09-22 — Phase 1: public-manager adapter and API
+
+Starting SHA: `80be3f97`
+Files changed: `webapp/fpl_client.py`, `webapp/manager_routes.py`, `webapp/app.py`, `tests/test_fpl_client.py`, `tests/test_webapp.py`, this ledger
+Behavior completed: Numeric public entry lookup, typed read-only lineup fetch, backward fallback to the latest public picks event, FPL tenths-to-millions price normalization, bounded successful-response TTL cache, stable route error codes, local element safety reporting, and explicit `search_not_configured` for undocumented text search.
+Automated evidence: `python -m pytest tests/test_fpl_client.py tests/test_webapp.py -q` — 15 passed; `git diff --check` passed. Repository-owned CSV changes and generated/untracked handoff files remain unstaged.
+Manual browser evidence: Not run in this backend-only phase.
+Commit SHA and message: `ddfae853 Add public FPL manager lookup and lineup API`
+Push result: pending
+Known issues/blockers: The repository contains no text manager-search provider contract or configured provider schema. Text search is intentionally not guessed and returns `503 search_not_configured`.
+Next exact action: Stage only the Phase 1 implementation, tests, and ledger; inspect the staged diff; commit and push `Add public FPL manager lookup and lineup API`. Then begin Phase 2 with failing frontend/API contract tests for preview and deliberate import.
 
 After confirming the plan commit exists locally and on `origin/main`, begin Phase 1 by locating the real text manager-search API contract in repository configuration/documentation. Then create failing HTTP-boundary tests for numeric entry lookup, lineup event fallback, and the `search_not_configured` text-query behavior before implementing `webapp/fpl_client.py` and `webapp/manager_routes.py`.
 

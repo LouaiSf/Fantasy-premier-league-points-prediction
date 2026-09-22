@@ -132,3 +132,65 @@ def test_refresh_pulls_the_live_source_and_forces_it(monkeypatch) -> None:
     assert "--force" in seen["command"]
     assert "olbauday" in seen["command"]
     assert seen["command"][seen["command"].index("--source") + 1] == "olbauday"
+
+
+def test_manager_search_numeric_and_text_contract(monkeypatch) -> None:
+    client = app.test_client()
+
+    class Summary:
+        entry_id = 123
+        manager_name = "First Last"
+        team_name = "Example XI"
+        overall_rank = 42
+        total_points = 231
+
+    monkeypatch.setattr(app_module.manager_client, "get_entry", lambda _entry_id: Summary())
+
+    numeric = client.get("/api/managers/search?q=123")
+    assert numeric.status_code == 200
+    assert numeric.get_json()["results"][0]["entry_id"] == 123
+
+    text = client.get("/api/managers/search?q=First%20Last")
+    assert text.status_code == 503
+    assert text.get_json()["code"] == "search_not_configured"
+
+
+def test_manager_lineup_returns_missing_local_elements(monkeypatch) -> None:
+    client = app.test_client()
+
+    class Summary:
+        entry_id = 123
+        manager_name = "First Last"
+        team_name = "Example XI"
+        overall_rank = 42
+        total_points = 231
+        current_event = 7
+        bank = 1.2
+        team_value = 100.0
+        event_points = 55
+        event_rank = 10
+        active_chip = None
+
+    class Pick:
+        element = 999999
+        position = 1
+        multiplier = 2
+        is_captain = True
+        is_vice_captain = False
+        purchase_price = 4.5
+        selling_price = 4.6
+
+    class Lineup:
+        summary = Summary()
+        requested_gameweek = None
+        lineup_gameweek = 7
+        picks = (Pick(),)
+
+    monkeypatch.setattr(app_module.manager_client, "get_lineup", lambda _entry_id, **_kwargs: Lineup())
+
+    response = client.get("/api/managers/123/lineup")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["missing_elements"] == [999999]
+    assert payload["manager"]["entry_id"] == 123

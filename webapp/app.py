@@ -40,6 +40,8 @@ from webapp.platform_data import (  # noqa: E402
     photo_url,
     player_history,
 )
+from webapp.fpl_client import FplClient  # noqa: E402
+from webapp.manager_routes import create_manager_blueprint  # noqa: E402
 
 # optimise.py takes this as a CLI default rather than a module constant.
 DEFAULT_BUDGET = 100.0
@@ -57,6 +59,7 @@ CORS(app, resources={r'/api/*': {'origins': _origins or '*'}})
 # Loaded once. The CSV is small (a few hundred rows) and rereading it per
 # request would just add latency.
 _state: dict = {}
+manager_client = FplClient()
 
 
 def state() -> dict:
@@ -74,6 +77,16 @@ def state() -> dict:
     if os.path.exists(path) and ('mtime' in _state and os.path.getmtime(path) != _state['mtime']):
         return reload_predictions()
     return _state
+
+
+def local_element_ids() -> set[int]:
+    current = state().get('everyone')
+    if current is None or 'element' not in current.columns:
+        return set()
+    return {int(element) for element in current['element'].dropna()}
+
+
+app.register_blueprint(create_manager_blueprint(manager_client, local_element_ids))
 
 
 def reload_predictions() -> dict:
