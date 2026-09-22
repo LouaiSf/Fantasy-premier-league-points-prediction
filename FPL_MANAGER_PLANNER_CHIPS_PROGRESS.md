@@ -1,7 +1,7 @@
 # FPL Manager Planner and Chip Advisor Progress
 
 Last updated: 2026-09-22
-Plan status: implementation in progress; Phases 1, 2, and 3 complete
+Plan status: implementation in progress; Phases 1, 2, 3, and 4 complete
 
 ## Repository baseline
 
@@ -54,13 +54,13 @@ Always re-run `git status --short` because the user may add more work between se
 - [x] Phase 1: public-manager adapter and API
 - [x] Phase 2: manager search, preview, and local import
 - [x] Phase 3: combined transfer/lineup plan on My Team
-- [ ] Phase 4: real horizon matrix in Chip Advisor
+- [x] Phase 4: real horizon matrix in Chip Advisor
 - [ ] Phase 5: auditable chip decision evidence
 - [ ] Phase 6: full automated and browser verification
 
 ## Next exact action
 
-Continue Phase 4: make prediction loading horizon-safe, feed the real multi-GW matrix into Chip Advisor, and test single-GW degradation and full horizon coverage. Preserve unrelated data refreshes and generated files.
+Continue Phase 5: replace anonymous chip score bags and opaque thresholds with typed, auditable chip-specific evidence and a named decision policy. Preserve unrelated data refreshes and generated files.
 
 ## 2026-09-22 — Phase 1: public-manager adapter and API
 
@@ -118,3 +118,16 @@ Push result:
 Known issues/blockers:
 Next exact action:
 ```
+
+## 2026-09-22 — Phase 4: real horizon matrix in Chip Advisor
+
+Branch: `main`
+Starting SHA: `6226ffe6`
+Files changed: `README.md`, `scripts/optimise.py`, `webapp/app.py`, `tests/test_optimise.py`, `tests/test_webapp.py`, `tests/test_chip_advisor.py`
+Behavior completed: Prediction reload retains the earliest current gameweek for the current roster while preserving the horizon matrix; current double-fixture rows sum; the web route aligns matrix rows by stable element ID and passes all columns to Chip Advisor. Complete requested coverage uses model projections; missing coverage uses fixture-signal context with null gain and no captain evidence. Wildcard optimization no longer receives NaN fixture-signal values.
+Automated evidence: `python -m pytest tests/test_optimise.py tests/test_webapp.py tests/test_chip_advisor.py -q` — 45 passed; `git diff --check` passed.
+Manual browser evidence: Deferred to Phase 6 real-browser verification at 375, 768, and 1280 px.
+Commit SHA and message: `dc3aa48464d96677b4f0b84bc46c2fbb23e05625 Use horizon projections in chip advisor`
+Push result: `origin/main` advanced from `6226ffe6` to `dc3aa484` successfully.
+Known issues/blockers: PuLP emits existing deprecation warnings. A single-gameweek prediction export cannot produce future player point gains and intentionally yields fixture-signal context. Text manager search still needs a real provider contract.
+Next exact action: Begin Phase 5: replace anonymous chip score bags and opaque thresholds with typed, auditable chip-specific evidence and a named decision policy.
