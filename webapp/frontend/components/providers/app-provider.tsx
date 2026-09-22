@@ -2,19 +2,15 @@
 
 import * as React from "react";
 import { api } from "@/lib/api";
-import type { PlatformSnapshot, PlayerRecord, SquadResult } from "@/lib/types";
+import type {
+  ManagerLineup,
+  PlatformSnapshot,
+  PlayerRecord,
+  SquadResult,
+  StoredSquad,
+} from "@/lib/types";
 
 const SQUAD_STORAGE_KEY = "fpl-assistant-squad";
-
-interface StoredSquadData {
-  season?: string;
-  ids: number[];
-  formation?: string;
-  captainId?: number;
-  viceCaptainId?: number;
-  xiIds?: number[];
-  benchIds?: number[];
-}
 
 interface AppState {
   snapshot: PlatformSnapshot | null;
@@ -31,7 +27,9 @@ interface AppState {
   squadPlayers: PlayerRecord[];
 
   teamResult: SquadResult | null;
-  setTeamResult: (result: SquadResult | null) => void;
+  setTeamResult: (result: SquadResult | null, source?: "manual" | "optimizer") => void;
+  setImportedTeam: (lineup: ManagerLineup) => void;
+  storedSquad: StoredSquad | null;
 
   selectedPlayer: PlayerRecord | null;
   openProfile: (player: PlayerRecord) => void;
@@ -44,7 +42,7 @@ interface AppState {
 
 const AppContext = React.createContext<AppState | null>(null);
 
-function parseStoredSquad(): StoredSquadData | null {
+function parseStoredSquad(): StoredSquad | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(SQUAD_STORAGE_KEY);
@@ -54,8 +52,8 @@ function parseStoredSquad(): StoredSquadData | null {
       // Legacy format: array of strings
       return { ids: [], season: undefined };
     }
-    if (parsed && typeof parsed === "object" && Array.isArray(parsed.ids)) {
-      return parsed as StoredSquadData;
+    if (isStoredSquad(parsed)) {
+      return parsed;
     }
     return null;
   } catch {
@@ -76,6 +74,12 @@ function parseLegacyNames(): string[] {
   } catch {
     return [];
   }
+}
+
+function isStoredSquad(value: unknown): value is StoredSquad {
+  if (typeof value !== "object" || value === null || !("ids" in value)) return false;
+  const ids = value.ids;
+  return Array.isArray(ids) && ids.every((id) => typeof id === "number");
 }
 
 function normalizeSquadResult(result: SquadResult, snapshot: PlatformSnapshot | null): SquadResult {
@@ -100,6 +104,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = React.useState<string | null>(null);
   const [squadElements, setSquadElementsState] = React.useState<number[]>([]);
   const [teamResult, setTeamResultState] = React.useState<SquadResult | null>(null);
+  const [storedSquad, setStoredSquad] = React.useState<StoredSquad | null>(null);
   const [selectedPlayer, setSelectedPlayer] = React.useState<PlayerRecord | null>(null);
 
   const [toastQueue, setToastQueue] = React.useState<string[]>([]);
@@ -133,7 +138,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const saveSquadData = React.useCallback(
     (ids: number[], currentSnapshot: PlatformSnapshot | null, result: SquadResult | null) => {
       if (typeof window === "undefined" || !currentSnapshot) return;
-      const data: StoredSquadData = {
+      const data: StoredSquad = {
         season: currentSnapshot.season,
         ids,
         formation: result?.formation,
@@ -141,8 +146,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         viceCaptainId: result?.vice_captain?.element,
         xiIds: result?.xi.map((p) => p.element),
         benchIds: result?.bench.map((p) => p.element),
+        bank: currentSnapshot.players.length ? 100 - (result?.spend ?? 0) : 0,
+        source: "manual",
       };
       window.localStorage.setItem(SQUAD_STORAGE_KEY, JSON.stringify(data));
+      setStoredSquad(data);
     },
     [],
   );
@@ -154,11 +162,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const playerByName = new Map(data.players.map((p) => [p.name, p]));
 
       const stored = parseStoredSquad();
+      setStoredSquad(stored);
       const legacyNames = parseLegacyNames();
 
       if (stored && stored.ids.length > 0) {
         if (stored.season && stored.season !== data.season) {
           window.localStorage.removeItem(SQUAD_STORAGE_KEY);
+          setStoredSquad(null);
           setSquadElementsState([]);
           setTeamResultState(null);
           toast(`New season (${data.season}) — please rebuild your squad.`);
@@ -244,16 +254,80 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const setTeamResult = React.useCallback(
-    (result: SquadResult | null) => {
+    (result: SquadResult | null, source: "manual" | "optimizer" = "optimizer") => {
       const normalized = result ? normalizeSquadResult(result, snapshot) : null;
       setTeamResultState(normalized);
       if (normalized) {
         const ids = normalized.xi.map((p) => p.element).concat(normalized.bench.map((p) => p.element));
         setSquadElementsState(ids);
-        saveSquadData(ids, snapshot, normalized);
+        if (snapshot) {
+          const data: StoredSquad = {
+            season: snapshot.season,
+            ids,
+            formation: normalized.formation,
+            captainId: normalized.captain?.element,
+            viceCaptainId: normalized.vice_captain?.element,
+            xiIds: normalized.xi.map((player) => player.element),
+            benchIds: normalized.bench.map((player) => player.element),
+            bank: 100 - normalized.spend,
+            source,
+          };
+          window.localStorage.setItem(SQUAD_STORAGE_KEY, JSON.stringify(data));
+          setStoredSquad(data);
+        }
       }
     },
-    [saveSquadData, snapshot],
+    [snapshot],
+  );
+
+  const setImportedTeam = React.useCallback(
+    (lineup: ManagerLineup) => {
+      if (!snapshot || lineup.missing_elements.length > 0 || lineup.picks.length !== 15) return;
+      const byElement = new Map(snapshot.players.map((player) => [player.element, player]));
+      const picks = [...lineup.picks].sort((a, b) => a.position - b.position);
+      const selected = picks
+        .map((pick) => byElement.get(pick.element))
+        .filter((player): player is PlayerRecord => player != null);
+      const xi = selected.slice(0, 11);
+      const bench = selected.slice(11);
+      const captain = selected.find((player) => picks.find((pick) => pick.element === player.element)?.is_captain) ?? null;
+      const viceCaptain = selected.find((player) => picks.find((pick) => pick.element === player.element)?.is_vice_captain) ?? null;
+      const counts = xi.reduce<Record<string, number>>((result, player) => {
+        result[player.position] = (result[player.position] ?? 0) + 1;
+        return result;
+      }, {});
+      const result: SquadResult = {
+        ok: true,
+        budget: 100,
+        spend: selected.reduce((total, player) => total + player.value_m, 0),
+        xi,
+        bench,
+        captain,
+        vice_captain: viceCaptain,
+        xi_points: xi.reduce((total, player) => total + (player.predicted_points ?? 0), 0),
+        formation: `${counts.DEF ?? 0}-${counts.MID ?? 0}-${counts.FWD ?? 0}`,
+      };
+      const data: StoredSquad = {
+        season: snapshot.season,
+        ids: selected.map((player) => player.element),
+        formation: result.formation,
+        captainId: captain?.element,
+        viceCaptainId: viceCaptain?.element,
+        xiIds: xi.map((player) => player.element),
+        benchIds: bench.map((player) => player.element),
+        bank: lineup.bank ?? 0,
+        source: "manager",
+        sourceEntryId: lineup.manager.entry_id,
+        sourceManagerName: lineup.manager.manager_name,
+        sourceTeamName: lineup.manager.team_name,
+        sourceGameweek: lineup.lineup_gameweek,
+      };
+      window.localStorage.setItem(SQUAD_STORAGE_KEY, JSON.stringify(data));
+      setStoredSquad(data);
+      setSquadElementsState(data.ids);
+      setTeamResultState(result);
+    },
+    [snapshot],
   );
 
   const squadPlayers = React.useMemo(() => {
@@ -283,6 +357,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     squadPlayers,
     teamResult,
     setTeamResult,
+    setImportedTeam,
+    storedSquad,
     selectedPlayer,
     openProfile: setSelectedPlayer,
     closeProfile: () => setSelectedPlayer(null),

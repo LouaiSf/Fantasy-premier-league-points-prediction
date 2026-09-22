@@ -2,6 +2,8 @@ import type {
   ApiError,
   ChipInventory,
   ChipsResult,
+  ManagerLineup,
+  ManagerSearchCandidate,
   PlatformSnapshot,
   PlayerHistoryRecord,
   SquadResult,
@@ -44,6 +46,14 @@ function postJson<T>(path: string, body: unknown): Promise<T> {
 }
 
 export const api = {
+  searchManagers: (query: string) =>
+    requestJson<{ ok: true; query: string; results: ManagerSearchCandidate[] }>(
+      `/api/managers/search?q=${encodeURIComponent(query)}`,
+    ),
+  managerLineup: (entryId: number, gameweek?: number) =>
+    requestJson<ManagerLineup>(
+      `/api/managers/${entryId}/lineup${gameweek ? `?gameweek=${gameweek}` : ""}`,
+    ),
   meta: () =>
     requestJson<{
       ok: boolean;

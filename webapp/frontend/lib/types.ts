@@ -166,6 +166,50 @@ export interface StoredSquad {
   formation?: string;
   captainId?: number;
   viceCaptainId?: number;
+  xiIds?: number[];
+  benchIds?: number[];
+  bank?: number;
+  source?: "manual" | "manager" | "optimizer";
+  sourceEntryId?: number;
+  sourceManagerName?: string;
+  sourceTeamName?: string;
+  sourceGameweek?: number;
+}
+
+export interface ManagerSearchCandidate {
+  entry_id: number;
+  manager_name: string;
+  team_name: string;
+  overall_rank: number | null;
+  total_points: number | null;
+}
+
+export interface ManagerPick {
+  element: number;
+  position: number;
+  multiplier: number;
+  is_captain: boolean;
+  is_vice_captain: boolean;
+  purchase_price: number;
+  selling_price: number;
+}
+
+export interface ManagerLineup {
+  ok: true;
+  fetched_at: string;
+  source: "fpl_public_api";
+  manager: ManagerSearchCandidate;
+  requested_gameweek: number | null;
+  lineup_gameweek: number;
+  bank: number | null;
+  team_value: number | null;
+  event_points: number | null;
+  event_rank: number | null;
+  overall_rank: number | null;
+  total_points: number | null;
+  active_chip: string | null;
+  missing_elements: number[];
+  picks: ManagerPick[];
 }
 
 export interface WatchlistPlayer {

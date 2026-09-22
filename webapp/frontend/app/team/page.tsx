@@ -10,6 +10,7 @@ import { SquadEditor } from "@/components/team/squad-editor";
 import { PlayerPhoto } from "@/components/player-photo";
 import { Loading } from "@/components/loading";
 import { ModelInfo } from "@/components/model-info";
+import { ManagerSearch } from "@/components/team/manager-search";
 
 // The FPL budget every manager starts a season with.
 const BUDGET = 100.0;
@@ -24,6 +25,8 @@ export default function TeamPage() {
     teamResult,
     setTeamResult,
     setSquadElements,
+    setImportedTeam,
+    storedSquad,
     toast,
     openProfile,
   } = useApp();
@@ -63,7 +66,11 @@ export default function TeamPage() {
   // FPL gives every manager 100.0m. Prices move during a season, so a squad
   // saved last week can be worth more than the budget that bought it -- show
   // that as a negative rather than clamping it to zero and hiding the problem.
-  const bank = preview ? BUDGET - preview.spend : 0;
+  const bank = storedSquad?.source === "manager" && storedSquad.bank != null
+    ? storedSquad.bank
+    : preview
+      ? BUDGET - preview.spend
+      : 0;
   const flagged = squadPlayers.filter(
     (player) => player.status !== "a" || (player.chance_of_playing_next_round ?? 100) < 100,
   );
@@ -152,6 +159,18 @@ export default function TeamPage() {
         )}
       </div>
 
+      <div className="manager-search-zone">
+        <div className="shell">
+          <ManagerSearch
+            snapshot={snapshot}
+            onImport={(lineup) => {
+              setImportedTeam(lineup);
+              toast(`Imported ${lineup.manager.team_name || "public team"} as My Team.`);
+            }}
+          />
+        </div>
+      </div>
+
       <div className="pitch-zone">
         <div className="shell pitch-layout">
           <div>
@@ -209,6 +228,13 @@ export default function TeamPage() {
                   {preview ? money(bank) : "--"}
                 </strong>
               </div>
+              {storedSquad?.source === "manager" && (
+                <div className="team-source-note">
+                  <span className="kicker">Imported source</span>
+                  <strong>{storedSquad.sourceTeamName || "Public team"}</strong>
+                  <small>GW{storedSquad.sourceGameweek ?? snapshot.gameweek ?? "--"} · Entry {storedSquad.sourceEntryId ?? "--"}</small>
+                </div>
+              )}
               <button
                 className="btn w-full"
                 type="button"
