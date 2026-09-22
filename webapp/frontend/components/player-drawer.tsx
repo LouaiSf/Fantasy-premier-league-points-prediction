@@ -144,6 +144,7 @@ export function PlayerDrawer() {
                       fallbackSrc={player.photo ?? undefined}
                       alt={player.name}
                       name={player.name}
+                      variant="hero"
                       width={160}
                       height={200}
                     />

@@ -19,14 +19,19 @@ function cellLevel(value: number | null | undefined): string {
 interface ChipOpportunityMatrixProps {
   rows: ChipRow[];
   recommendations: ChipRecommendation[];
+  projectionMode: "fixture_signal" | "model_projection";
 }
 
-export function ChipOpportunityMatrix({ rows, recommendations }: ChipOpportunityMatrixProps) {
-  const recommended = new Map(recommendations.map((rec) => [rec.chip, rec.candidate_gw]));
+export function ChipOpportunityMatrix({ rows, recommendations, projectionMode }: ChipOpportunityMatrixProps) {
+  const recommended = new Map(
+    recommendations
+      .filter((rec) => rec.status === "play")
+      .map((rec) => [rec.chip, rec.candidate_gw]),
+  );
   return (
     <div className="chip-opportunity-scroll">
       <table className="chip-opportunity-matrix">
-        <caption>Opportunity score by chip and gameweek</caption>
+        <caption>{projectionMode === "fixture_signal" ? "Fixture signal by chip and gameweek" : "Opportunity score by chip and gameweek"}</caption>
         <thead>
           <tr>
             <th scope="col">Chip</th>
@@ -49,7 +54,7 @@ export function ChipOpportunityMatrix({ rows, recommendations }: ChipOpportunity
                   <td
                     key={`${chip}-${row.gw}`}
                     className={`chip-score chip-score--${cellLevel(value)}${isRecommended ? " is-recommended" : ""}`}
-                    title={`${CHIP_LABELS[chip]} GW${row.gw}: ${value == null ? "fixture signal only" : `${value.toFixed(1)} points`}`}
+                    title={`${CHIP_LABELS[chip]} GW${row.gw}: ${value == null ? "No signal" : `${value.toFixed(1)} points`}`}
                   >
                     {value == null ? "—" : value.toFixed(1)}
                   </td>

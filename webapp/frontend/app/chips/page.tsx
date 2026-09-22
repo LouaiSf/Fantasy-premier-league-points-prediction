@@ -53,6 +53,31 @@ function nextInventoryState(state: ChipInventory["first_half"][ChipId]): ChipInv
   return "unused";
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isChipState(value: unknown): value is ChipInventory["first_half"][ChipId] {
+  return value === "unused" || value === "used" || value === "expired";
+}
+
+function isInventoryHalf(value: unknown): value is ChipInventory["first_half"] {
+  return isRecord(value) && CHIP_IDS.every((chip) => isChipState(value[chip]));
+}
+
+function readInventory(): ChipInventory | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = window.localStorage.getItem("fpl-assistant-chip-inventory");
+    if (!stored) return null;
+    const parsed: unknown = JSON.parse(stored);
+    if (!isRecord(parsed) || !isInventoryHalf(parsed.first_half) || !isInventoryHalf(parsed.second_half)) return null;
+    return { first_half: parsed.first_half, second_half: parsed.second_half };
+  } catch {
+    return null;
+  }
+}
+
 export default function ChipsPage() {
   const { snapshot, loading, squadNames } = useApp();
   const [data, setData] = React.useState<ChipsResult | null>(null);
@@ -61,7 +86,8 @@ export default function ChipsPage() {
   const [horizon, setHorizon] = React.useState<number>(8);
   const [useSquad, setUseSquad] = React.useState<boolean>(true);
   const [inventory, setInventory] = React.useState<ChipInventory | null>(null);
-  const scheduledGameweeks: number[] = [];
+  const [inventoryLoaded, setInventoryLoaded] = React.useState(false);
+  const scheduledGameweeks = React.useMemo<number[]>(() => [], []);
   const lastFreeHitGameweek: number | null = null;
 
   const maxPossibleHorizon = Math.max(1, 38 - (snapshot?.gameweek ?? 1) + 1);
@@ -90,7 +116,7 @@ export default function ChipsPage() {
         setFetching(false);
       }
     },
-    [inventory],
+    [inventory, scheduledGameweeks],
   );
 
   React.useEffect(() => {
@@ -103,10 +129,21 @@ export default function ChipsPage() {
   }, [snapshot?.prediction_available, useSquad, squadNames, effectiveHorizon, loadChips]);
 
   React.useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setInventory(readInventory());
+      setInventoryLoaded(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  React.useEffect(() => {
+    if (!inventoryLoaded) return;
     if (typeof window !== "undefined" && inventory) {
       window.localStorage.setItem("fpl-assistant-chip-inventory", JSON.stringify(inventory));
+    } else if (typeof window !== "undefined") {
+      window.localStorage.removeItem("fpl-assistant-chip-inventory");
     }
-  }, [inventory]);
+  }, [inventory, inventoryLoaded]);
 
   function updateChipState(half: "first_half" | "second_half", chip: ChipId) {
     setInventory((current) => {
@@ -206,7 +243,7 @@ export default function ChipsPage() {
 
         {useSquad && squadNames.length < 15 && (
           <div className="chip-squad-notice">
-            <span className="kicker" style={{ color: "var(--gold)" }}>i</span>
+            <span className="chip-squad-notice-icon" aria-hidden="true">i</span>
             <span>
               Your squad has {squadNames.length}/15 players. Using league-wide fixture signals.
               Head to <strong>My Team</strong> to complete your squad for tailored analysis.
@@ -214,7 +251,7 @@ export default function ChipsPage() {
           </div>
         )}
 
-        <section className="chip-inventory" aria-label="Chip inventory">
+        <section className={`chip-inventory inventory-${inventory ? "synced" : "not-synced"}`} aria-label="Chip inventory">
           <div>
             <span className="kicker">Manager inventory</span>
             <h2>{inventory ? "Local chip history synced" : "Chip history not synced"}</h2>
@@ -224,6 +261,9 @@ export default function ChipsPage() {
                 : "Recommendations are provisional until you mark the two half-season sets as available. No private FPL account data is connected."}
             </p>
           </div>
+          <span className={`chip-inventory-state state-${inventory ? "synced" : "not-synced"}`}>
+            {inventory ? "Synced" : "Not synced"}
+          </span>
           <button type="button" className="btn secondary sm" onClick={() => setInventory(inventory ? null : blankInventory())}>
             {inventory ? "Reset to not synced" : "Mark chips available"}
           </button>
@@ -259,19 +299,30 @@ export default function ChipsPage() {
           <div className="chip-error">{fetchError}</div>
         )}
 
-        <section className="chip-next-decision" aria-live="polite">
+        <section className={`chip-next-decision${nextDecision ? ` status-${nextDecision.status}` : ""}`} aria-live="polite">
           <div className="chip-next-decision-copy">
             <span className="kicker">Next chip decision</span>
             <h2>{nextDecision ? CHIP_LABELS[nextDecision.chip] : "No chip data yet"}</h2>
             <p>
               {nextDecision?.reasons[0] ?? "Adjust the horizon or add a complete squad to calculate a decision."}
             </p>
+            {nextDecision && data && (
+              <small className="chip-decision-context">
+                {data.projection_mode === "fixture_signal" ? "Fixture signal" : "Player projection"} · {data.inventory_sync_state === "synced" ? "inventory synced" : "inventory not synced"}
+              </small>
+            )}
             {nextDecision?.warnings.map((warning) => <small key={warning}>{warning}</small>)}
           </div>
           {nextDecision && (
             <div className={`chip-decision-score status-${nextDecision.status}`}>
               <ChipIcon id={nextDecision.chip} size="large" />
-              <strong>{nextDecision.gw ? `GW${nextDecision.gw}` : "Hold"}</strong>
+              <strong>
+                {nextDecision.status === "play" && nextDecision.gw
+                  ? `GW${nextDecision.gw}`
+                  : nextDecision.candidate_gw
+                    ? `Candidate GW${nextDecision.candidate_gw}`
+                    : "Hold"}
+              </strong>
               <span>{nextDecision.status}</span>
               {nextDecision.expected_gain != null && <small>+{num(nextDecision.expected_gain, 1)} pts</small>}
             </div>
@@ -286,7 +337,7 @@ export default function ChipsPage() {
                   <ChipIcon id={rec.chip} />
                   {CHIP_LABELS[rec.chip]}
                 </div>
-                <span className={`chip-conf ${rec.confidence}`}>{rec.status}</span>
+                <span className={`chip-conf ${rec.confidence} status-${rec.status}`}>{rec.status}</span>
               </div>
               <div>
                 <div className={`chip-advisor-target${rec.status === "hold" ? " hold" : ""}`}>
@@ -297,14 +348,19 @@ export default function ChipsPage() {
                 </p>
               </div>
               <p className="chip-advisor-desc">{rec.reasons[0]}</p>
-              {rec.expected_gain != null && <p className="chip-advisor-gain">Expected gain +{num(rec.expected_gain, 1)} pts</p>}
+              {rec.expected_gain != null && <p className="chip-advisor-gain">Expected gain {rec.expected_gain >= 0 ? "+" : ""}{num(rec.expected_gain, 1)} pts</p>}
               {rec.note && <p className="chip-advisor-note">{rec.note}</p>}
+              {rec.bench_players && rec.bench_players.length > 0 && (
+                <p className="chip-advisor-bench">
+                  Bench evidence: {rec.bench_players.map((player) => `${player.player} ${num(player.points, 1)}`).join(" · ")}
+                </p>
+              )}
               <div className="chip-advisor-footer">{CHIP_DESCRIPTIONS[rec.chip]}</div>
             </article>
           ))}
         </div>
 
-        {data && <ChipOpportunityMatrix rows={data.rows} recommendations={data.recommendations} />}
+        {data && <ChipOpportunityMatrix rows={data.rows} recommendations={data.recommendations} projectionMode={data.projection_mode} />}
 
         <div className="chip-heatmap-section">
           <div className="sub-head">
@@ -357,7 +413,7 @@ export default function ChipsPage() {
                       key={row.gw}
                       className={isDgw ? "is-dgw" : isBgw ? "is-bgw" : undefined}
                     >
-                      <td style={{ fontWeight: 800 }}>
+                      <td className="chip-row-gw">
                         GW{row.gw}
                       </td>
                       <td>
@@ -365,30 +421,29 @@ export default function ChipsPage() {
                       </td>
                       {hasSquad && (
                         <td>
-                          <span style={{ color: (row.squad_blanks ?? 0) > 0 ? "var(--pink)" : "var(--lime)", fontWeight: 700 }}>
+                          <span className={(row.squad_blanks ?? 0) > 0 ? "chip-squad-active is-blank" : "chip-squad-active"}>
                             {row.squad_playing ?? 15}/15
                           </span>
                           {(row.squad_blanks ?? 0) > 0 && (
-                            <small style={{ color: "var(--pink)", marginLeft: "4px" }}>
+                            <small className="chip-squad-blank">
                               ({row.squad_blanks} blank)
                             </small>
                           )}
                         </td>
                       )}
-                      <td style={{ color: row.dgw_teams > 0 ? "var(--lime)" : "var(--muted-mid)", fontWeight: row.dgw_teams > 0 ? 700 : 400 }}>
+                      <td className={row.dgw_teams > 0 ? "chip-count chip-count--dgw" : "chip-count"}>
                         {row.dgw_teams > 0 ? `+${row.dgw_teams}` : "0"}
                       </td>
-                      <td style={{ color: row.blank_teams > 0 ? "var(--pink)" : "var(--muted-mid)", fontWeight: row.blank_teams > 0 ? 700 : 400 }}>
+                      <td className={row.blank_teams > 0 ? "chip-count chip-count--blank" : "chip-count"}>
                         {row.blank_teams > 0 ? row.blank_teams : "0"}
                       </td>
                       <td>
-                        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                        <div className="chip-fdr-readout">
                           <span
                             className={`fdr`}
                             data-fdr={Math.round(avgFdr)}
-                            style={{ minWidth: "12px", height: "12px" }}
                           />
-                          <span style={{ fontWeight: 700 }}>
+                          <span className="chip-fdr-value">
                             {num(avgFdr, 1)}
                           </span>
                         </div>
@@ -413,8 +468,9 @@ export default function ChipsPage() {
             FDR, and availability. A complete squad enables legal XI, bench, one-week optimized XI, and rolling squad comparisons.
           </p>
           <p>
-            Until a future per-player projection matrix is available, the output is labelled a fixture-adjusted baseline rather
-            than a certainty. Play is shown only when the expected gain clears the chip-specific threshold.
+            Until a future per-player projection matrix is available, the output is labelled a fixture signal rather than an
+            optimized recommendation. A candidate week is shown for low-confidence output; Play requires synchronized inventory
+            and a complete player projection matrix.
           </p>
         </details>
       </div>

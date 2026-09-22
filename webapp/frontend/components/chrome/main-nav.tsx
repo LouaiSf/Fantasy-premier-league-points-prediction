@@ -68,19 +68,18 @@ export function MainNav() {
 
   React.useLayoutEffect(() => {
     positionInk();
-    // Enable the CSS transition after the first frame so the ink jumps to its
-    // initial position without animating from 0 (which looks like a bug).
-    // On subsequent route changes is-ready is already set, so the slide fires.
     const frame = requestAnimationFrame(() => {
+      positionInk();
+      centerActiveTab();
       inkRef.current?.classList.add("is-ready");
+      requestAnimationFrame(() => {
+        positionInk();
+        centerActiveTab();
+      });
     });
-    centerActiveTab();
     return () => cancelAnimationFrame(frame);
   }, [centerActiveTab, positionInk, pathname]);
 
-  // Google Fonts swap in after first paint and reflow the tab widths, so a
-  // single on-mount measurement goes stale; a ResizeObserver catches that
-  // (and window resizes) without polling.
   React.useEffect(() => {
     const container = tabsRef.current;
     if (!container || typeof ResizeObserver === "undefined") return;

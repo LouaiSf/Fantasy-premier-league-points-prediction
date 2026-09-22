@@ -105,6 +105,7 @@ export function SquadEditor() {
                               src={player.photo ?? undefined}
                               alt={player.name}
                               name={player.name}
+                              variant="avatar"
                               loading="lazy"
                             />
                           </span>

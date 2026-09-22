@@ -223,7 +223,7 @@ export interface ChipRecommendation {
   gw: number | null;
   candidate_gw: number | null;
   expected_gain: number | null;
-  score_breakdown: Record<string, number | null>;
+  score_breakdown: Record<string, number | string | null>;
   reasons: string[];
   warnings: string[];
   inventory_set: "first_half" | "second_half";
@@ -232,6 +232,14 @@ export interface ChipRecommendation {
   confidence: "high" | "low" | "medium";
   note?: string;
   squad_gap?: number;
+  bench_players?: ChipBenchPlayer[];
+}
+
+export interface ChipBenchPlayer {
+  player: string;
+  element: number | string;
+  points: number;
+  available: boolean;
 }
 
 export interface ChipsResult {
@@ -245,8 +253,9 @@ export interface ChipsResult {
   recommendations: ChipRecommendation[];
   unmapped_teams?: string[];
   current_gameweek: number;
-  projection_mode: "fixture_adjusted_baseline";
+  projection_mode: "fixture_signal" | "model_projection";
   inventory_status: "synced" | "not_synced";
+  inventory_sync_state: "synced" | "not_synced";
   scheduled_gameweeks: number[];
 }
 

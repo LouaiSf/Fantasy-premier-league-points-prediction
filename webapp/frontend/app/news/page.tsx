@@ -304,7 +304,7 @@ export default function NewsPage() {
               </div>
             </div>
             <div className="lead-shot">
-              <PlayerPhoto src={lead.photo ?? undefined} alt={lead.name} name={lead.name} />
+              <PlayerPhoto src={lead.photo ?? undefined} alt={lead.name} name={lead.name} variant="hero" />
             </div>
             <div className="lead-panel">
               <h3>Squad relevance</h3>
@@ -346,7 +346,7 @@ export default function NewsPage() {
                   style={{ "--i": idx } as React.CSSProperties}
                 >
                   <span className="wire-shot" style={clubStyle(player.team)}>
-                    <PlayerPhoto src={player.photo ?? undefined} alt={player.name} name={player.name} loading="lazy" />
+                    <PlayerPhoto src={player.photo ?? undefined} alt={player.name} name={player.name} variant="avatar" loading="lazy" />
                     <ClubCrest
                       className="wire-badge"
                       code={teamCodeByName.get(player.team)}
@@ -407,7 +407,7 @@ export default function NewsPage() {
                     aria-hidden="true"
                   />
                   <div className="shot">
-                    <PlayerPhoto src={player.photo ?? undefined} alt={player.name} name={player.name} loading="lazy" />
+                    <PlayerPhoto src={player.photo ?? undefined} alt={player.name} name={player.name} variant="card" loading="lazy" />
                   </div>
                 </div>
                 <div className="news-card-copy">

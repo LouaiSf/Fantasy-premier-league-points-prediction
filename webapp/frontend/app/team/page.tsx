@@ -256,6 +256,7 @@ export default function TeamPage() {
                             src={player.photo ?? undefined}
                             alt={player.name}
                             name={player.name}
+                            variant="pitch"
                             loading="lazy"
                           />
                         </div>

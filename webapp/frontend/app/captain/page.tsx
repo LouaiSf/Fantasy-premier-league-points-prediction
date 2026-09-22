@@ -97,19 +97,22 @@ export default function CaptainPage() {
                 fallbackSrc={lead.photo ?? undefined}
                 alt={lead.name}
                 name={lead.name}
+                variant="hero"
                 width={250}
                 height={250}
                 loading="eager"
                 fetchPriority="high"
               />
             </div>
-            <span className="cap-armband">
-              <span className="cap-marker-mark" aria-hidden="true">C</span> Captain pick
-            </span>
           </>
         )}
         <div className="shell cap-inner">
           <div className="cap-copy">
+            {lead && (
+              <span className="cap-armband" aria-label="Captain pick">
+                <span className="cap-marker-mark" aria-hidden="true">C</span> Captain pick
+              </span>
+            )}
             <span className="eyebrow">Armband desk</span>
             <h1>
               Captain
@@ -218,7 +221,7 @@ export default function CaptainPage() {
               >
                 <span className="cand-rank">{String(index + 1).padStart(2, "0")}</span>
                 <span className="shot">
-                  <PlayerPhoto src={player.photo ?? undefined} alt={player.name} name={player.name} loading="lazy" />
+                  <PlayerPhoto src={player.photo ?? undefined} alt={player.name} name={player.name} variant="avatar" loading="lazy" />
                 </span>
                 <span className="cand-id">
                   <b>
@@ -297,6 +300,7 @@ export default function CaptainPage() {
                     fallbackSrc={lead.photo ?? undefined}
                     alt={lead.name}
                     name={lead.name}
+                    variant="card"
                   />
                 </div>
                 <div className="battle-pick-copy">
@@ -344,6 +348,7 @@ export default function CaptainPage() {
                     fallbackSrc={runnerUp.photo ?? undefined}
                     alt={runnerUp.name}
                     name={runnerUp.name}
+                    variant="card"
                   />
                 </div>
                 <div className="battle-pick-copy">

@@ -1391,15 +1391,7 @@
      club gradient — text at the left, photo at the right, safe margin in between. */
   .cap-hero::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
     background:linear-gradient(90deg,rgba(26,0,34,.74) 0%,rgba(26,0,34,.30) 36%,transparent 64%)}
-  .armband-ring{position:absolute;left:49%;top:59%;z-index:3;width:20%;height:8%;
-    transform:rotate(-10deg);border:2px solid rgba(255,255,255,.7);border-radius:.25rem;pointer-events:none;
-    background:repeating-linear-gradient(90deg,rgba(33,0,37,.26) 0 8%,transparent 8% 16%),linear-gradient(90deg,#a8781e,var(--gold) 46%,#fff0a5 52%,#b88a24);
-    box-shadow:0 5px 10px rgba(26,0,34,.45),inset 0 0 0 1px rgba(255,255,255,.34);animation:armbandSettle var(--motion-stage) var(--ease-out) both}
-  .armband-ring::before{content:"";position:absolute;inset:15% 38%;border-inline:2px solid rgba(33,0,37,.28);opacity:.8}
-  .armband-ring::after{content:"C";position:absolute;right:6%;top:50%;display:grid;place-items:center;width:28%;aspect-ratio:1;
-    transform:translateY(-50%);border:2px solid var(--ink);border-radius:50%;background:var(--gold);color:var(--ink);font:900 clamp(.7rem,1.2vw,1rem) var(--display)}
-  @keyframes armbandSettle{from{opacity:0;transform:translateY(5px) rotate(-10deg)}to{opacity:1;transform:rotate(-10deg)}}
-  .cap-armband{position:absolute;left:12px;bottom:14px;z-index:3;display:flex;align-items:center;gap:6px;
+  .cap-armband{display:inline-flex;align-items:center;gap:8px;width:max-content;margin-bottom:var(--space-3);
     padding:5px 10px 5px 8px;background:var(--gold);color:var(--ink);font:800 10px var(--data);
     letter-spacing:.1em;text-transform:uppercase;clip-path:polygon(0 0,100% 0,calc(100% - 8px) 100%,0 100%)}
   @keyframes heroFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
@@ -1438,10 +1430,6 @@
     .verdict-side,.verdict-side.right{text-align:left}
     .verdict-side.right .verdict-side-copy{margin-left:0}
     .verdict-side .shot{opacity:.5}
-    .armband-ring{left:47%;top:59%;width:24%;height:9%}
-  }
-  @media (max-width:560px){
-    .armband-ring{left:44%;top:54%;width:28%;height:11%}
   }
 
   /* ── Blade CSS vars (for card/panel clip-paths) ─────────────────────────── */
@@ -1818,7 +1806,9 @@
   .photo-fb--avatar{font-size:.78rem}
   .photo-fb--pitch{font-size:.7rem}
   .photo-fb--hero{font-size:clamp(1rem,2vw,1.5rem)}
-  .player-photo--hero,.player-photo--card,.player-photo--avatar,.player-photo--pitch{width:100%;height:100%;object-fit:cover}
+  .player-photo--hero,.player-photo--card,.player-photo--avatar,.player-photo--pitch{width:100%;height:100%}
+  .player-photo--hero{object-fit:contain}
+  .player-photo--card,.player-photo--avatar,.player-photo--pitch{object-fit:cover}
   .main-nav .nav-scroll{min-width:0}
   @media (max-width:1360px) and (min-width:861px){
     .main-nav-row{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"brand actions" "rail rail";gap:0;min-height:0;padding-block:10px}
@@ -1832,12 +1822,15 @@
     .main-nav-row .brand{grid-area:brand}
     .main-nav-row .nav-scroll{grid-area:rail;width:100%;margin-top:8px;border-top:1px solid rgba(255,255,255,.12);mask-image:linear-gradient(90deg,transparent 0,#000 20px,#000 calc(100% - 20px),transparent 100%);-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 20px,#000 calc(100% - 20px),transparent 100%)}
     .main-nav-row .nav-actions{grid-area:actions}
+    .main-nav .nav-scroll::before,.main-nav .nav-scroll::after{content:"";position:absolute;top:0;bottom:0;width:28px;z-index:5;pointer-events:none}
+    .main-nav .nav-scroll::before{left:0;background:linear-gradient(90deg,var(--pl-purple),transparent)}
+    .main-nav .nav-scroll::after{right:0;background:linear-gradient(270deg,var(--pl-purple),transparent)}
     .nav-tabs{padding-inline:20px}
     .nav-tab{min-height:48px;padding-inline:12px}
   }
   .cand{grid-template-columns:44px 56px minmax(150px,1.15fr) minmax(150px,1fr) minmax(170px,1.2fr) auto;grid-template-areas:"rank photo identity fixture meters right";min-height:96px}
   .cand-rank{grid-area:rank}.cand .shot{grid-area:photo}.cand-id{grid-area:identity}.cand-fix{grid-area:fixture}.cand-meters{grid-area:meters}.cand-right{grid-area:right}
-  .cap-armband{gap:8px;bottom:18px}
+  .cap-armband{gap:8px}
   .cap-marker-mark{display:grid;place-items:center;width:25px;height:25px;border:2px solid var(--ink);border-radius:50%;background:var(--gold);font:900 13px var(--display)}
   @media (max-width:1280px) and (min-width:1081px){
     .cand{grid-template-columns:44px 56px minmax(160px,1.15fr) minmax(150px,1fr) minmax(160px,1.1fr) auto;grid-template-areas:"rank photo identity fixture meters right";min-height:96px}
@@ -1862,4 +1855,53 @@
     .watch-meta > *{overflow:visible;text-overflow:clip;white-space:normal}
     .watch-fixture{grid-column:1/-1;line-height:1.25}
     .watch-ownership{grid-column:2;text-align:right}
+    .cand{grid-template-columns:38px minmax(0,1fr) auto;grid-template-areas:"rank identity right" "rank fixture right" "rank meters right";min-height:108px;row-gap:7px;align-items:center}
+    .cand .shot{display:none}
+    .cand-id,.cand-fix,.cand-meters,.cand-right{min-width:0}
+    .cand-fix{grid-column:auto;white-space:normal}
+    .cand-meters{grid-column:auto}
+    .cand-right{grid-column:auto}
+  }
+
+  .chip-inventory{position:relative}
+  .chip-inventory > div:first-child{padding-right:84px}
+  .chip-inventory-state{position:absolute;top:var(--space-5);right:var(--space-5);padding:4px 8px;font:800 9px var(--data);letter-spacing:.1em;text-transform:uppercase}
+  .chip-inventory-state.state-synced{background:rgba(0,255,135,.16);color:var(--lime)}
+  .chip-inventory-state.state-not-synced{background:rgba(255,212,90,.14);color:var(--gold)}
+  .chip-inventory > .btn{grid-column:2;grid-row:1;align-self:end}
+  .chip-squad-notice-icon{color:var(--gold);font:900 14px var(--display)}
+  .chip-decision-context{color:var(--muted-mid)!important}
+  .chip-decision-score.status-watch{color:var(--gold)}
+  .chip-decision-score.status-play{color:var(--lime)}
+  .chip-decision-score.status-hold{color:var(--muted-light)}
+  .chip-next-decision.status-watch{background:linear-gradient(120deg,rgba(255,212,90,.14),rgba(255,255,255,.04));border-left-color:var(--gold)}
+  .chip-next-decision.status-hold{background:rgba(255,255,255,.035);border-left-color:var(--muted-mid)}
+  .chip-next-decision.status-unavailable{background:rgba(255,255,255,.025);border-left-color:var(--pink)}
+  .chip-advisor-card.status-watch .chip-advisor-gain{color:var(--gold)}
+  .chip-advisor-card.status-hold .chip-advisor-gain,.chip-advisor-card.status-unavailable .chip-advisor-gain{color:var(--muted-light)}
+  .chip-advisor-bench{margin:0;color:var(--muted-light);font:600 10px/1.35 var(--data)}
+  .chip-row-gw{font-weight:800}
+  .chip-count{color:var(--muted-mid)}
+  .chip-count--dgw{color:var(--lime);font-weight:700}
+  .chip-count--blank{color:var(--pink);font-weight:700}
+  .chip-fdr-readout{display:flex;align-items:center;gap:var(--space-2)}
+  .chip-fdr-value{font-weight:700}
+  .watch-name-row .watch-tag{margin-left:auto}
+  .watch-crest-badge{top:-2px;bottom:auto;z-index:2}
+  .watch-price-row .watch-tag{display:none}
+  @media (max-width:560px){
+    .chip-inventory{grid-template-columns:1fr auto}
+    .chip-inventory-state{top:var(--space-5);right:var(--space-5)}
+    .chip-inventory > .btn{grid-column:1/-1;grid-row:2;justify-self:stretch}
+    .watch-card{display:grid;grid-template-columns:40px minmax(0,1fr) auto;grid-template-areas:"photo info points";align-items:center;gap:8px;min-height:78px}
+    .watch-photo-wrap{grid-area:photo;width:40px;height:40px}
+    .watch-info{grid-area:info;min-width:0}
+    .watch-pts-wrap{grid-area:points}
+    .watch-name-row{min-width:0;gap:5px}
+    .watch-name{min-width:0}
+    .watch-meta{display:flex;align-items:baseline;gap:4px;overflow:visible;font-size:9px;white-space:nowrap}
+    .watch-meta > *{min-width:0;overflow:visible;text-overflow:clip;white-space:nowrap}
+    .watch-fixture{line-height:1.25}
+    .watch-ownership{margin-left:0}
+    .watch-price-row{align-items:flex-end}
   }

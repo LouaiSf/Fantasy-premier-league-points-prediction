@@ -121,11 +121,12 @@ export default function WatchlistPage() {
           <div className="watch-name-row">
             <span className="watch-name">{player.name}</span>
             <span className="watch-pos-badge">{player.position}</span>
+            <span className={`watch-tag ${tagClass}`}>{tagLabel}</span>
           </div>
           <div className="watch-meta">
             <span className="watch-club">{player.team}</span>
             {player.opponent_team && (
-              <span className="watch-fixture">Next: {player.opponent_team} · {player.was_home ? "Home" : "Away"}</span>
+              <span className="watch-fixture">· {player.opponent_team} ({player.was_home ? "Home" : "Away"})</span>
             )}
             {player.selected_by != null && (
               <span className="watch-ownership">
@@ -142,7 +143,6 @@ export default function WatchlistPage() {
           </div>
           <div className="watch-price-row">
             <span className="watch-price">{money(player.value_m)}</span>
-            <span className={`watch-tag ${tagClass}`}>{tagLabel}</span>
           </div>
         </div>
       </button>

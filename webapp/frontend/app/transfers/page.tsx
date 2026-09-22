@@ -49,6 +49,7 @@ function DeskRow({
           src={player.photo ?? undefined}
           alt={player.name}
           name={player.name}
+          variant="card"
           loading="lazy"
         />
         {teamCode && (
@@ -385,6 +386,7 @@ export default function TransfersPage() {
                       src={outgoing.photo ?? undefined}
                       alt={outgoing.name}
                       name={outgoing.name}
+                      variant="card"
                     />
                     <ClubCrest
                       className="badge-mini"
@@ -422,6 +424,7 @@ export default function TransfersPage() {
                       src={incoming.photo ?? undefined}
                       alt={incoming.name}
                       name={incoming.name}
+                      variant="card"
                     />
                     <ClubCrest
                       className="badge-mini"

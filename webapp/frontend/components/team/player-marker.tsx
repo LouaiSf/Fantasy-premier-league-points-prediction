@@ -50,7 +50,7 @@ export function PlayerMarker({
         </div>
       )}
       <div className="pm-bust" style={clubStyle(player.team)}>
-        <PlayerPhoto src={player.photo ?? undefined} alt={player.name} name={player.name} loading="lazy" />
+        <PlayerPhoto src={player.photo ?? undefined} alt={player.name} name={player.name} variant="pitch" loading="lazy" />
       </div>
       <span className="pm-name" style={clubStyle(player.team)}>
         {player.web_name || player.name}

@@ -60,8 +60,11 @@ function ComparisonPageInner() {
   // choice and must not be reset underneath them when the squad reloads.
   React.useEffect(() => {
     if (poolDefaulted || squadElements.length === 0) return;
-    setPool("squad");
-    setPoolDefaulted(true);
+    const timer = window.setTimeout(() => {
+      setPool("squad");
+      setPoolDefaulted(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [poolDefaulted, squadElements.length]);
 
   // Mirror ?a=/?b= into state once hydrated, and keep the URL in sync
@@ -71,11 +74,14 @@ function ComparisonPageInner() {
   // effect waits for it so it doesn't clobber ?a=/?b= with the pre-hydration
   // empty state on first paint.
   React.useEffect(() => {
-    const a = searchParams.get("a");
-    const b = searchParams.get("b");
-    setSeatA(a ? Number(a) : null);
-    setSeatB(b ? Number(b) : null);
-    setHydratedFromUrl(true);
+    const timer = window.setTimeout(() => {
+      const a = searchParams.get("a");
+      const b = searchParams.get("b");
+      setSeatA(a ? Number(a) : null);
+      setSeatB(b ? Number(b) : null);
+      setHydratedFromUrl(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [searchParams]);
 
   React.useEffect(() => {
@@ -206,7 +212,7 @@ function ComparisonPageInner() {
               {playerA ? (
                 <>
                   <div className="shot">
-                    <PlayerPhoto src={playerA.photo ?? undefined} alt={playerA.name} name={playerA.name} />
+                    <PlayerPhoto src={playerA.photo ?? undefined} alt={playerA.name} name={playerA.name} variant="card" />
                   </div>
                   <span className="plinth-copy">
                     <span className="slotlabel">Player A</span>
@@ -244,7 +250,7 @@ function ComparisonPageInner() {
               {playerB ? (
                 <>
                   <div className="shot">
-                    <PlayerPhoto src={playerB.photo ?? undefined} alt={playerB.name} name={playerB.name} />
+                    <PlayerPhoto src={playerB.photo ?? undefined} alt={playerB.name} name={playerB.name} variant="card" />
                   </div>
                   <span className="plinth-copy">
                     <span className="slotlabel">Player B</span>
@@ -348,6 +354,7 @@ function ComparisonPageInner() {
                               src={player.photo ?? undefined}
                               alt={player.name}
                               name={player.name}
+                              variant="avatar"
                               loading="lazy"
                             />
                           </span>
@@ -392,7 +399,7 @@ function ComparisonPageInner() {
                   A
                 </span>
                 <div className="shot">
-                  <PlayerPhoto src={playerA.photo ?? undefined} alt={playerA.name} name={playerA.name} />
+                          <PlayerPhoto src={playerA.photo ?? undefined} alt={playerA.name} name={playerA.name} variant="card" />
                 </div>
                 <div className="cmp-copy">
                   <span className="kicker">
@@ -414,7 +421,7 @@ function ComparisonPageInner() {
                   B
                 </span>
                 <div className="shot">
-                  <PlayerPhoto src={playerB.photo ?? undefined} alt={playerB.name} name={playerB.name} />
+                          <PlayerPhoto src={playerB.photo ?? undefined} alt={playerB.name} name={playerB.name} variant="card" />
                 </div>
                 <div className="cmp-copy">
                   <span className="kicker">
@@ -499,6 +506,7 @@ function ComparisonPageInner() {
                             src={(tie ? playerA : winner!).photo ?? undefined}
                             alt={(tie ? playerA : winner!).name}
                             name={(tie ? playerA : winner!).name}
+                            variant="card"
                           />
                         </div>
                         <div className="verdict-side-copy">
@@ -524,6 +532,7 @@ function ComparisonPageInner() {
                             src={(tie ? playerB : loser!).photo ?? undefined}
                             alt={(tie ? playerB : loser!).name}
                             name={(tie ? playerB : loser!).name}
+                            variant="card"
                           />
                         </div>
                         <div className="verdict-side-copy">
