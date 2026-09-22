@@ -1,7 +1,7 @@
 # FPL Manager Planner and Chip Advisor Progress
 
 Last updated: 2026-09-22
-Plan status: implementation in progress; Phases 1 and 2 complete
+Plan status: implementation in progress; Phases 1, 2, and 3 complete
 
 ## Repository baseline
 
@@ -53,14 +53,14 @@ Always re-run `git status --short` because the user may add more work between se
 
 - [x] Phase 1: public-manager adapter and API
 - [x] Phase 2: manager search, preview, and local import
-- [ ] Phase 3: combined transfer/lineup plan on My Team
+- [x] Phase 3: combined transfer/lineup plan on My Team
 - [ ] Phase 4: real horizon matrix in Chip Advisor
 - [ ] Phase 5: auditable chip decision evidence
 - [ ] Phase 6: full automated and browser verification
 
 ## Next exact action
 
-Continue Phase 3: finish the combined element-ID transfer and lineup planner, write failing boundary tests for remaining cases, verify the existing partial backend work, and complete the My Team and Transfer Studio integrations. Preserve unrelated data refreshes and generated files.
+Continue Phase 4: make prediction loading horizon-safe, feed the real multi-GW matrix into Chip Advisor, and test single-GW degradation and full horizon coverage. Preserve unrelated data refreshes and generated files.
 
 ## 2026-09-22 — Phase 1: public-manager adapter and API
 
@@ -88,6 +88,19 @@ Commit SHA and message: `35710f37 Add manager lineup search and local import`
 Push result: `origin/main` advanced from `29e2e6fd` to `35710f37` successfully.
 Known issues/blockers: No documented/configured text manager-search provider contract exists; typed `503 search_not_configured` behavior from Phase 1 remains deliberate. Numeric ID lookup works. Phase 3 implementation was already partially present in the worktree and remains unstaged.
 Next exact action: Continue Phase 3 as described above.
+
+## 2026-09-22 — Phase 3: combined transfer and lineup planner
+
+Branch: `main`
+Starting SHA: `8f474c25`
+Files changed: `scripts/optimise.py`, `webapp/app.py`, `tests/test_optimise.py`, `tests/test_webapp.py`, `webapp/frontend/lib/types.ts`, `webapp/frontend/lib/api.ts`, `webapp/frontend/components/providers/app-provider.tsx`, `webapp/frontend/components/team/team-plan.tsx`, `webapp/frontend/app/team/page.tsx`, `webapp/frontend/app/transfers/page.tsx`, `webapp/frontend/app/broadcast.css`
+Behavior completed: Shared lineup serializer used by `/api/lineup` and transfer plans; strict element-ID transfer requests; transfer rows include solver XI, bench, armbands, formation and budget; My Team plans only 0..selected free transfers, exposes editable bank, and applies the selected squad/lineup in one persisted optimizer action; Transfer Studio uses element IDs and still allows deliberate hit comparisons.
+Automated evidence: `python -m pytest tests/test_optimise.py tests/test_webapp.py -q` — 30 passed; `npm run lint` — passed with three existing `<img>` warnings; `npm run build` — passed; `git diff --check` — passed.
+Manual browser evidence: Deferred to Phase 6 real-browser verification.
+Commit SHA and message: `88db5d2d Add combined transfer and lineup planner`
+Push result: `origin/main` advanced from `8f474c25` to `88db5d2d` successfully.
+Known issues/blockers: Existing PuLP deprecation warnings are emitted during optimizer tests. Text manager search remains unavailable until its provider contract is supplied.
+Next exact action: Continue Phase 4 as described above.
 
 ## Session entry format
 
