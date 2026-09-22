@@ -130,14 +130,17 @@ Showing every count matters: a second transfer nearly always buys raw points
 and nearly never survives the hit. It also says when a gain is inside the
 model's error (~1.0 MAE per player) and the transfer is worth rolling.
 
-**`chips`** compares Triple Captain, Bench Boost, Free Hit and Wildcard using
+**Chips** compares Triple Captain, Bench Boost, Free Hit and Wildcard using
 the player-by-gameweek matrix in the prediction export. Generate enough weeks
-for the horizon you want to inspect. A single-gameweek export can still show
-fixture-signal context, but it cannot produce point-labelled gain estimates
-for later weeks. When no double or blank gameweek is scheduled it says so
-rather than inventing a recommendation.
+for the horizon you want to inspect. A single-gameweek or partial export shows
+fixture-signal indices separately and withholds projected gains. Candidate
+weeks show the top three calculations and their inputs. A play recommendation
+is limited to the current gameweek, a complete squad, synced inventory, and a
+projected gain above the named DECISION_MARGIN policy; this is product policy,
+not a learned threshold. Free Hit compares the optimized and current XI plus
+captain totals without adding speculative avoided-hit value.
 
-**`watchlist`** surfaces value picks, differentials by ownership, players
+**Watchlist** surfaces value picks, differentials by ownership, players
 priced above what they return, and anyone whose number comes from no prior
 data at all.
 

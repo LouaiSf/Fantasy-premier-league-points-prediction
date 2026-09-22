@@ -83,6 +83,55 @@ function readInventory(): ChipInventory | null {
   }
 }
 
+function WhyThisChoice({ recommendation, data }: { recommendation: ChipRecommendation; data: ChipsResult }) {
+  const evidence = recommendation.evidence;
+  return (
+    <details className="chip-method chip-why">
+      <summary>Why this choice</summary>
+      <p>{recommendation.formula ?? "No player-level calculation is available for this candidate."}</p>
+      {evidence?.chip === "triple_captain" && evidence.captain && (
+        <p>
+          {evidence.captain.name} ({evidence.captain.team}) projects {num(evidence.captain.projected_points ?? 0, 1)} points across {captainFixtureLabel(evidence.captain.fixtures)}.
+          Normal captain total: {num(evidence.normal_captain_total, 1)}; Triple Captain total: {num(evidence.triple_captain_total ?? 0, 1)}; incremental gain: {num(evidence.incremental_gain ?? 0, 1)}.
+        </p>
+      )}
+      {evidence?.chip === "bench_boost" && (
+        <>
+          <ul>{evidence.ordered_bench.map((player) => (
+            <li key={player.element}>{player.player}: {num(player.points, 1)} pts, {player.available ? "available" : "unavailable"}</li>
+          ))}</ul>
+          <p>Bench total: {num(evidence.bench_total, 1)} points.</p>
+        </>
+      )}
+      {evidence?.chip === "free_hit" && (
+        <p>
+          Current total {num(evidence.current_xi_captain_total, 1)}; optimized total {num(evidence.optimized_xi_captain_total ?? 0, 1)}; raw gain {num(evidence.raw_delta ?? 0, 1)} points across {evidence.changed_player_count} changed players.
+        </p>
+      )}
+      {evidence?.chip === "wildcard" && (
+        <>
+          <p>
+            Current total {num(evidence.current_cumulative_total, 1)}; optimized total {num(evidence.optimized_cumulative_total, 1)} across {evidence.horizon_length} weeks and {evidence.changed_player_count} changed players.
+          </p>
+          <p>Weekly gains: {Object.entries(evidence.weekly_deltas).map(([gw, gain]) => "GW" + gw + " " + num(gain, 1)).join(" · ")}.</p>
+        </>
+      )}
+      {recommendation.alternatives.length > 0 && (
+        <p>
+          Top candidates: {recommendation.alternatives.map((candidate) => (
+            "GW" + candidate.gw + " " + (candidate.projected_gain == null ? "index " + num(candidate.fixture_signal_index ?? 0, 1) : "+" + num(candidate.projected_gain, 1) + " pts")
+          )).join(" · ")}.
+          {recommendation.runner_up_gameweek != null && recommendation.gap_to_runner_up != null
+            ? " Runner-up GW" + recommendation.runner_up_gameweek + "; gap " + num(recommendation.gap_to_runner_up, 1) + (recommendation.projected_gain != null ? " pts." : " index units.")
+            : ""}
+        </p>
+      )}
+      <p>Source: {data.projection_source}; coverage: {data.projection_gameweeks.length ? data.projection_gameweeks.map((gw) => "GW" + gw).join(", ") : "none"}. Inventory: {data.inventory_sync_state}. {recommendation.decision_policy.uncertainty_note}</p>
+      {recommendation.warnings.map((warning) => <p key={warning}>{warning}</p>)}
+    </details>
+  );
+}
+
 export default function ChipsPage() {
   const { snapshot, loading, squadNames } = useApp();
   const [data, setData] = React.useState<ChipsResult | null>(null);
@@ -207,7 +256,7 @@ export default function ChipsPage() {
             <span className="badge lime">Chip planning desk</span>
             <h1>Chip Advisor</h1>
             <p>
-              Quantified fixture-adjusted opportunities, with the evidence and inventory rules shown beside every decision.
+              Player-level projected gains with candidate weeks, inventory state, and supporting evidence.
             </p>
           </div>
 
@@ -313,28 +362,11 @@ export default function ChipsPage() {
             </p>
             {nextDecision && data && (
               <small className="chip-decision-context">
-                {data.projection_mode === "fixture_signal" ? "Fixture signal" : "Player projection"} · {data.inventory_sync_state === "synced" ? "inventory synced" : "inventory not synced"}
+                {data.projection_mode === "fixture_signal" || !data.has_squad ? "Fixture signal" : "Player projections"} · {data.inventory_sync_state === "synced" ? "inventory synced" : "inventory not synced"}
               </small>
             )}
-            {nextDecision?.chip === "triple_captain" && nextDecision.captain_evidence && (
-              <div className="chip-captain-evidence" aria-label="Triple Captain driver">
-                <div>
-                  <span className="kicker">Captain driving the upside</span>
-                  <strong>{nextDecision.captain_evidence.player} · {nextDecision.captain_evidence.team}</strong>
-                  <small>{nextDecision.captain_evidence.position} · {captainFixtureLabel(nextDecision.captain_evidence.fixtures)}</small>
-                </div>
-                <div>
-                  <span className="kicker">Why it works</span>
-                  <strong>
-                    {nextDecision.captain_evidence.points == null
-                      ? "Projection pending"
-                      : `+${num(nextDecision.captain_evidence.points, 1)} pts`}
-                  </strong>
-                  <small>Extra over normal captaincy</small>
-                </div>
-              </div>
-            )}
             {nextDecision?.warnings.map((warning) => <small key={warning}>{warning}</small>)}
+            {nextDecision && data && <WhyThisChoice recommendation={nextDecision} data={data} />}
           </div>
           {nextDecision && (
             <div className={`chip-decision-score status-${nextDecision.status}`}>
@@ -347,7 +379,8 @@ export default function ChipsPage() {
                     : "Hold"}
               </strong>
               <span>{nextDecision.status}</span>
-              {nextDecision.expected_gain != null && <small>+{num(nextDecision.expected_gain, 1)} pts</small>}
+              {nextDecision.projected_gain != null && <small>+{num(nextDecision.projected_gain, 1)} projected pts</small>}
+              {nextDecision.fixture_signal_index != null && <small>Fixture index {num(nextDecision.fixture_signal_index, 1)}</small>}
             </div>
           )}
         </section>
@@ -367,32 +400,19 @@ export default function ChipsPage() {
                   {rec.gw ? `GW${rec.gw}` : rec.candidate_gw ? `Candidate GW${rec.candidate_gw}` : rec.status}
                 </div>
                 <p className="chip-advisor-sub">
-                  {rec.status === "play" ? "Threshold met" : rec.status === "watch" ? "Candidate week" : rec.status}
+                  {rec.status === "play" ? "Policy margin met" : rec.status === "watch" ? "Candidate week" : rec.status}
                 </p>
               </div>
               <p className="chip-advisor-desc">{rec.reasons[0]}</p>
-              {rec.expected_gain != null && <p className="chip-advisor-gain">Expected gain {rec.expected_gain >= 0 ? "+" : ""}{num(rec.expected_gain, 1)} pts</p>}
-              {rec.note && <p className="chip-advisor-note">{rec.note}</p>}
-              {rec.chip === "triple_captain" && rec.captain_evidence && (
-                <div className="chip-captain-driver" aria-label="Triple Captain driver">
-                  <span>Driver</span>
-                  <strong>{rec.captain_evidence.player} · {rec.captain_evidence.team}</strong>
-                  <small>
-                    {captainFixtureLabel(rec.captain_evidence.fixtures)} · {rec.captain_evidence.points == null ? "Projection pending" : `+${num(rec.captain_evidence.points, 1)} extra captain pts`}
-                  </small>
-                </div>
-              )}
-              {rec.bench_players && rec.bench_players.length > 0 && (
-                <p className="chip-advisor-bench">
-                  Bench evidence: {rec.bench_players.map((player) => `${player.player} ${num(player.points, 1)}`).join(" · ")}
-                </p>
-              )}
+              {rec.projected_gain != null && <p className="chip-advisor-gain">Projected gain +{num(rec.projected_gain, 1)} pts</p>}
+              {rec.fixture_signal_index != null && <p className="chip-advisor-note">Fixture signal index {num(rec.fixture_signal_index, 1)} (not points)</p>}
+              <WhyThisChoice recommendation={rec} data={data!} />
               <div className="chip-advisor-footer">{CHIP_DESCRIPTIONS[rec.chip]}</div>
             </article>
           ))}
         </div>
 
-        {data && <ChipOpportunityMatrix rows={data.rows} recommendations={data.recommendations} projectionMode={data.projection_mode} />}
+        {data && <ChipOpportunityMatrix rows={data.rows} recommendations={data.recommendations} projectionMode={data.projection_mode} hasSquad={data.has_squad} />}
 
         <div className="chip-heatmap-section">
           <div className="sub-head">
@@ -493,18 +513,14 @@ export default function ChipsPage() {
           </div>
         </div>
 
-        <details className="chip-method">
-          <summary>How this was calculated</summary>
-          <p>
-            The current export has a next-gameweek player projection. Each future cell adjusts that baseline for fixture count,
-            FDR, and availability. A complete squad enables legal XI, bench, one-week optimized XI, and rolling squad comparisons.
-          </p>
-          <p>
-            Until a future per-player projection matrix is available, the output is labelled a fixture signal rather than an
-            optimized recommendation. A candidate week is shown for low-confidence output; Play requires synchronized inventory
-            and a complete player projection matrix.
-          </p>
-        </details>
+        {data && (
+          <details className="chip-method">
+            <summary>Projection and decision policy</summary>
+            <p>Source: {data.projection_source}. Coverage: {data.projection_gameweeks.length ? data.projection_gameweeks.map((gw) => "GW" + gw).join(", ") : "none"}. Evaluated: {data.evaluated_horizon} of {data.requested_horizon} requested weeks. Data quality: {data.data_quality}. Method: {data.methodology_version}.</p>
+            <p>Generated: {data.projection_generated_at ?? "timestamp unavailable"}. {data.decision_policy.basis}. {data.decision_policy.uncertainty_note}</p>
+            {data.coverage_warning && <p>{data.coverage_warning}</p>}
+          </details>
+        )}
       </div>
     </section>
   );

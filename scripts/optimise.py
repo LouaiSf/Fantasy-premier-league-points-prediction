@@ -40,6 +40,7 @@ surname is usually enough.
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
 import os
 import sys
@@ -49,6 +50,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from console import force_utf8  # noqa: E402
+from chip_policy import ChipDecisionPolicy  # noqa: E402
 
 force_utf8()
 
@@ -1047,12 +1049,7 @@ CHIP_LABELS = {
     'free_hit': 'Free Hit',
     'wildcard': 'Wildcard',
 }
-CHIP_THRESHOLDS = {
-    'triple_captain': 2.0,
-    'bench_boost': 4.0,
-    'free_hit': 5.0,
-    'wildcard': 8.0,
-}
+CHIP_METHOD_VERSION = '1.0'
 
 
 def _availability_factor(players: pd.DataFrame) -> pd.Series:
@@ -1067,30 +1064,6 @@ def _availability_factor(players: pd.DataFrame) -> pd.Series:
             factor = values.fillna(factor).clip(lower=0.0, upper=1.0)
             break
     return factor
-
-
-def _fixture_adjusted_players(players: pd.DataFrame, calendar: pd.DataFrame,
-                              gameweek: int, name_to_id: dict) -> pd.DataFrame:
-    adjusted = players.copy()
-    base = pd.to_numeric(adjusted['predicted_points'], errors='coerce').fillna(0.0).clip(lower=0.0)
-    schedule = calendar[calendar['event'] == gameweek].copy()
-    if schedule.empty:
-        adjusted['predicted_points'] = 0.0
-        return adjusted
-    schedule['fixture_factor'] = schedule['fixtures'] * (1.0 + (3.0 - schedule['difficulty']) * 0.08)
-    team_factor = schedule.set_index('team')['fixture_factor'].clip(lower=0.35)
-    team_ids = adjusted['team'].map(name_to_id)
-    adjusted['predicted_points'] = (base * team_ids.map(team_factor).fillna(0.0)
-                                    * _availability_factor(adjusted))
-    return adjusted
-
-
-def _legal_xi_value(squad: pd.DataFrame, budget: float) -> float | None:
-    result, _status = solve_squad(
-        squad, budget=budget, squad_size=len(squad), captain=False)
-    if result is None:
-        return None
-    return float(result['xi']['predicted_points'].sum())
 
 
 def _player_key(row: pd.Series) -> str | int:
@@ -1154,9 +1127,9 @@ def _projection_matrix(players: pd.DataFrame, calendar: pd.DataFrame,
                        future_points: pd.DataFrame | None = None) -> tuple[pd.DataFrame, str]:
     if future_points is not None:
         candidate = future_points.reindex(index=players.index, columns=gameweeks)
-        if not candidate.empty and candidate.notna().all().all():
-            matrix = candidate.apply(pd.to_numeric, errors='coerce').fillna(0.0)
-            matrix = matrix.mul(_availability_factor(players), axis=0)
+        numeric = candidate.apply(pd.to_numeric, errors='coerce')
+        if not numeric.empty and numeric.notna().all().all():
+            matrix = numeric.fillna(0.0).mul(_availability_factor(players), axis=0)
             return matrix, 'model_projection'
     return pd.DataFrame(index=players.index, columns=gameweeks, dtype=float), 'fixture_signal'
 
@@ -1179,93 +1152,130 @@ def _candidate_window(first_gw: int, horizon: int, chip: str,
     return eligible, half, expires
 
 
-def _recommendation(chip: str, scores: dict, candidate_gameweeks: list,
-                    inventory: dict, scheduled: list, has_squad: bool,
-                    half: str, expires: str, projection_mode: str) -> dict:
-    threshold = CHIP_THRESHOLDS[chip]
+def _recommendation(chip: str, scores: dict, breakdowns: dict,
+                    fixture_indexes: dict, candidate_gameweeks: list,
+                    inventory: dict, has_squad: bool, half: str,
+                    expires: str, projection_mode: str, current_gameweek: int,
+                    policy: ChipDecisionPolicy) -> dict:
     label = CHIP_LABELS[chip]
     state = inventory.get(half, {}).get(chip, 'unknown')
     warnings = []
     inventory_synced = inventory.get('_synced') is True
     if not inventory_synced:
         warnings.append('Chip history is not synced; confirm this chip is still available.')
-    if state in {'used', 'expired'}:
-        return {
-            'chip': chip, 'label': label, 'status': 'unavailable',
-            'candidate_gameweeks': [], 'gw': None, 'candidate_gw': None,
-            'confidence': 'high',
-            'expected_gain': None, 'score_breakdown': {},
-            'reasons': [f'{label} is marked {state}.'], 'warnings': warnings,
-            'inventory_set': half, 'expires_after_gameweek': int(expires),
-            'reason': f'{label} is marked {state}.', 'note': None,
-        }
-    if not candidate_gameweeks:
-        if scheduled:
-            warnings.append('Every eligible week in this window already has a chip scheduled.')
-        else:
-            warnings.append(f'No eligible {label} gameweek remains in this window.')
-        reason = f'No eligible {label} window in the current horizon.'
-        return {
-            'chip': chip, 'label': label, 'status': 'hold',
-            'candidate_gameweeks': [], 'gw': None, 'candidate_gw': None,
-            'confidence': 'low',
-            'expected_gain': None, 'score_breakdown': {}, 'reasons': [reason],
-            'warnings': warnings, 'inventory_set': half,
-            'expires_after_gameweek': int(expires), 'reason': reason, 'note': None,
-        }
-    best_gw = max(
-        candidate_gameweeks,
-        key=lambda gw: scores.get(gw) if scores.get(gw) is not None else float('-inf'),
-    )
-    gain = scores.get(best_gw) if has_squad and projection_mode == 'model_projection' else None
-    has_gain = gain is not None
-    if projection_mode == 'fixture_signal':
-        status = 'watch'
-        confidence = 'low'
-    elif not has_gain:
-        status = 'watch'
-        confidence = 'low'
-    elif gain >= threshold and has_squad and inventory_synced and projection_mode == 'model_projection':
-        status = 'play'
-        confidence = 'medium'
-    elif gain >= threshold * 0.5:
-        status = 'watch'
-        confidence = 'low'
-    else:
-        status = 'hold'
-        confidence = 'low'
-    if not has_squad and status == 'play':
-        status = 'watch'
-        confidence = 'low'
-    if has_gain:
-        gain_label = 'Best fixture signal' if projection_mode == 'fixture_signal' else 'Best projected gain'
-        reason = f'{gain_label} is {gain:.1f} points in GW{best_gw}.'
-    else:
-        reason = f'GW{best_gw} is the strongest fixture signal; squad projections are needed to quantify gain.'
-    if status == 'hold':
-        reason = f'Hold: no meaningful {label} gain clears the {threshold:.1f}-point threshold.'
-    note = None
-    if projection_mode == 'fixture_signal':
-        note = 'Fixture signal only; future per-player projections are not available.'
-    return {
-        'chip': chip, 'label': label, 'status': status,
-        'candidate_gameweeks': candidate_gameweeks,
-        'gw': best_gw if status in {'play', 'watch'} else None,
-        'candidate_gw': best_gw,
-        'confidence': confidence, 'expected_gain': None if gain is None else round(gain, 2),
-        'score_breakdown': {'opportunity_score': None if gain is None else round(gain, 2),
-                            'threshold': threshold},
-        'reasons': [reason], 'warnings': warnings, 'inventory_set': half,
-        'expires_after_gameweek': int(expires), 'reason': reason, 'note': note,
+
+    base = {
+        'chip': chip, 'label': label, 'projection_mode': projection_mode,
+        'candidate_gameweeks': [],
+        'gw': None, 'candidate_gw': None, 'projected_gain': None,
+        'fixture_signal_index': None,
+        'alternatives': [], 'runner_up_gameweek': None,
+        'gap_to_runner_up': None, 'evidence': None,
+        'decision_policy': policy.as_dict(), 'confidence': 'low',
+        'reasons': [], 'warnings': warnings,
+        'inventory_set': half, 'expires_after_gameweek': int(expires),
     }
+    if state in {'used', 'expired'}:
+        base.update(status='unavailable', reasons=[f'{label} is marked {state}.'])
+        return base
+    if not candidate_gameweeks:
+        warnings.append(f'No eligible {label} gameweek remains in this horizon.')
+        base.update(status='hold', reasons=[f'No eligible {label} window in this horizon.'])
+        return base
+
+    fixture_only = projection_mode == 'fixture_signal' or not has_squad
+    values = fixture_indexes if fixture_only else scores
+    ranked = sorted(
+        candidate_gameweeks,
+        key=lambda gw: (values.get(gw) is not None,
+                        values.get(gw) if values.get(gw) is not None else float('-inf'),
+                        -gw),
+        reverse=True,
+    )
+    alternatives = []
+    for gw in ranked[:3]:
+        gain = scores.get(gw) if projection_mode == 'model_projection' else None
+        alternatives.append({
+            'chip': chip,
+            'gw': int(gw),
+            'projected_gain': None if gain is None else round(float(gain), 2),
+            'fixture_signal_index': (
+                round(float(fixture_indexes[gw]), 2)
+                if projection_mode == 'fixture_signal' and fixture_indexes.get(gw) is not None
+                else None
+            ),
+            'evidence': None if fixture_only else {'chip': chip, **breakdowns.get(gw, {})},
+        })
+
+    best_gw = ranked[0]
+    gain = scores.get(best_gw) if not fixture_only else None
+    status = policy.status(
+        gain, current_gameweek=best_gw == current_gameweek,
+        inventory_synced=inventory_synced,
+        model_projection=projection_mode == 'model_projection' and has_squad,
+        has_complete_squad=has_squad,
+    )
+    second = alternatives[1] if len(alternatives) > 1 else None
+    gap = None
+    if second is not None:
+        best_value = values.get(best_gw)
+        second_value = values.get(second['gw'])
+        if best_value is not None and second_value is not None:
+            gap = round(float(best_value - second_value), 2)
+
+    evidence = None if fixture_only else {'chip': chip, **breakdowns.get(best_gw, {})}
+    if fixture_only:
+        formula = None
+    elif chip == 'triple_captain':
+        formula = 'One additional copy of the selected captain projection.'
+    elif chip == 'bench_boost':
+        formula = 'The sum of the four ordered bench player projections.'
+    elif chip == 'free_hit':
+        formula = 'Optimized legal XI and captain total minus the current XI and captain total.'
+    else:
+        formula = 'Optimized persistent squad total minus the current squad total over the remaining horizon.'
+
+    if fixture_only:
+        reason = f'GW{best_gw} has the strongest fixture signal; complete squad projections are needed to quantify gain.'
+    elif status == 'play':
+        reason = f'{label} clears the {policy.minimum_projected_gain:.1f}-point policy margin in the current gameweek.'
+    elif status == 'hold':
+        reason = f'Projected gain is below the {policy.minimum_projected_gain:.1f}-point policy margin.'
+    elif best_gw != current_gameweek:
+        reason = f'GW{best_gw} is a future candidate; chip decisions are held until that gameweek.'
+    elif not inventory_synced:
+        reason = 'Current-week gain is provisional until chip inventory is synced.'
+    else:
+        reason = 'A complete squad and current-week decision are needed for a play recommendation.'
+
+    base.update({
+        'status': status,
+        'candidate_gameweeks': [candidate['gw'] for candidate in alternatives],
+        'gw': best_gw if status == 'play' else None,
+        'candidate_gw': best_gw,
+        'projected_gain': None if gain is None else round(float(gain), 2),
+        'fixture_signal_index': (
+            round(float(fixture_indexes[best_gw]), 2)
+            if fixture_only and fixture_indexes.get(best_gw) is not None
+            else None
+        ),
+        'alternatives': alternatives,
+        'runner_up_gameweek': None if second is None else second['gw'],
+        'gap_to_runner_up': gap,
+        'evidence': evidence,
+        'formula': formula,
+        'reasons': [reason],
+        'confidence': 'medium' if status == 'play' else 'low',
+    })
+    return base
 
 
 def compute_chips(squad, season: str, first_gw: int, horizon: int,
                   players: pd.DataFrame, inventory: dict | None = None,
                   scheduled_gameweeks: list | None = None,
                   last_free_hit_gameweek: int | None = None,
-                  free_transfers: int = 1,
-                  future_points: pd.DataFrame | None = None) -> dict:
+                  future_points: pd.DataFrame | None = None,
+                  projection_generated_at: str | None = None) -> dict:
     players = players.copy()
     if not players.index.is_unique:
         players = players.reset_index(drop=True)
@@ -1335,109 +1345,104 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
         players, calendar, gameweeks, name_to_id, future_points)
     scores = {chip: {} for chip in CHIP_IDS}
     breakdowns = {chip: {} for chip in CHIP_IDS}
-    bench_evidence = {chip: {} for chip in CHIP_IDS}
-    captain_evidence = {}
+    fixture_indexes = {chip: {} for chip in CHIP_IDS}
     current_totals = {}
     squad_budget = float(squad['value_m'].sum()) if has_squad else None
+    policy = ChipDecisionPolicy(
+        minimum_projected_gain=DECISION_MARGIN,
+        uncertainty_note='Player point projections have model error; the decision margin is a conservative product policy.',
+    )
 
     for gw in gameweeks:
         if projection_mode == 'fixture_signal' or not has_squad:
-            signal = rows[gw - first_gw]['dgw_teams'] * 1.5 + rows[gw - first_gw]['blank_teams'] * 1.25
-            signal += max(0.0, 3.0 - rows[gw - first_gw]['avg_fdr'])
-            scores['triple_captain'][gw] = round(signal + rows[gw - first_gw]['dgw_teams'], 2)
-            scores['bench_boost'][gw] = round(signal + rows[gw - first_gw]['dgw_teams'] * 2, 2)
-            scores['free_hit'][gw] = round(signal + rows[gw - first_gw]['blank_teams'] * 2, 2)
-            scores['wildcard'][gw] = round(signal + max(0.0, rows[gw - first_gw]['avg_fdr'] - 3.0), 2)
+            row = rows[gw - first_gw]
+            signal = row['dgw_teams'] * 1.5 + row['blank_teams'] * 1.25
+            signal += max(0.0, 3.0 - row['avg_fdr'])
+            fixture_indexes['triple_captain'][gw] = round(signal + row['dgw_teams'], 2)
+            fixture_indexes['bench_boost'][gw] = round(signal + row['dgw_teams'] * 2, 2)
+            fixture_indexes['free_hit'][gw] = round(signal + row['blank_teams'] * 2, 2)
+            fixture_indexes['wildcard'][gw] = round(signal + max(0.0, row['avg_fdr'] - 3.0), 2)
             for chip in CHIP_IDS:
-                breakdowns[chip][gw] = {'fixture_signal_index': scores[chip][gw]}
+                breakdowns[chip][gw] = {'chip': chip, 'fixture_signal_index': fixture_indexes[chip][gw]}
             continue
 
-        current_result = None
-        current_xi = None
-        current_budget = None
-        if has_squad:
-            adjusted_squad = squad.copy()
-            adjusted_squad['predicted_points'] = point_matrix.loc[
-                squad.index, gw].to_numpy()
-            current_budget = float(squad['value_m'].sum())
-            current_result, _status = solve_squad(
-                adjusted_squad, current_budget + 0.01, squad_size=len(squad),
-                bench_weight=0.0, captain=True)
-            current_xi = (float(current_result['xi']['predicted_points'].sum())
-                          if current_result is not None else None)
-
-        if current_result is not None:
-            captain = current_result.get('captain')
-            captain_points = None if captain is None else float(captain['predicted_points'])
-            captain_team_id = None if captain is None else name_to_id.get(captain['team'])
-            captain_fixture_rows = calendar[(calendar['event'] == gw) &
-                                            (calendar['team'] == captain_team_id)]
-            captain_fixtures = 0.0 if captain_fixture_rows.empty else float(
-                captain_fixture_rows['fixtures'].sum())
-            bench = current_result['bench']
-            bench_points = float(bench['predicted_points'].sum())
-            current_total = _result_total(current_result)
-            current_totals[gw] = current_total
-
-            scores['triple_captain'][gw] = captain_points
-            breakdowns['triple_captain'][gw] = {
-                'normal_captain_points': captain_points,
-                'triple_captain_points': None if captain_points is None else captain_points * 3,
-                'incremental_gain': captain_points,
-                'captain_fixture_count': captain_fixtures,
-            }
-            if captain is not None:
-                captain_evidence[gw] = {
-                    'player': str(captain.get('name', '')),
-                    'team': str(captain.get('team', '')),
-                    'position': str(captain.get('position', '')),
-                    'points': None if captain_points is None else round(captain_points, 2),
-                    'fixtures': int(captain_fixtures),
-                }
-            scores['bench_boost'][gw] = bench_points
-            bench_evidence['bench_boost'][gw] = _bench_evidence(bench)
-            breakdowns['bench_boost'][gw] = {
-                'bench_points': bench_points,
-                'bench_playing_points': float(bench[bench['predicted_points'] > 0]['predicted_points'].sum()),
-                'bench_unavailable_count': float((bench['predicted_points'] <= 0).sum()),
-                'bench_player_count': float(len(bench)),
-            }
-
-            optimized = solve_squad(
-                players.assign(predicted_points=point_matrix[gw]),
-                current_budget + 0.01, squad_size=SQUAD_SIZE,
-                bench_weight=0.0, captain=True)[0]
-            optimized_xi = None if optimized is None else float(
-                optimized['xi']['predicted_points'].sum())
-            optimized_total = None if optimized is None else _result_total(optimized)
-            optimized_captain = (None if optimized is None or optimized.get('captain') is None
-                                 else float(optimized['captain']['predicted_points']))
-            current_captain = (None if current_result.get('captain') is None
-                               else float(current_result['captain']['predicted_points']))
-            current_elements = {
-                _player_key(row) for _, row in squad.iterrows()}
-            optimized_elements = (set() if optimized is None else {
-                _player_key(row) for _, row in optimized['squad'].iterrows()})
-            transfer_count = float(len(current_elements - optimized_elements))
-            forced_changes = float((current_result['xi']['predicted_points'] <= 0).sum())
-            avoided_hits = float(max(0, forced_changes - free_transfers) * HIT_COST)
-            free_hit_gain = None if optimized_total is None else (
-                optimized_total - current_total + avoided_hits)
-            scores['free_hit'][gw] = free_hit_gain
-            breakdowns['free_hit'][gw] = {
-                'current_xi': current_xi,
-                'optimized_xi': optimized_xi,
-                'current_total': current_total,
-                'optimized_total': optimized_total,
-                'xi_gain': None if optimized_xi is None or current_xi is None else optimized_xi - current_xi,
-                'captain_delta': None if optimized_captain is None or current_captain is None else optimized_captain - current_captain,
-                'transfer_count': transfer_count,
-                'forced_changes': forced_changes,
-                'avoided_transfer_hits': avoided_hits,
-            }
-
-        else:
+        adjusted_squad = squad.copy()
+        adjusted_squad['predicted_points'] = point_matrix.loc[squad.index, gw].to_numpy()
+        current_budget = float(squad['value_m'].sum())
+        current_result, _status = solve_squad(
+            adjusted_squad, current_budget + 0.01, squad_size=len(squad),
+            bench_weight=0.0, captain=True)
+        if current_result is None:
             continue
+        current_xi = float(current_result['xi']['predicted_points'].sum())
+        captain = current_result.get('captain')
+        captain_points = None if captain is None else float(captain['predicted_points'])
+        captain_team_id = None if captain is None else name_to_id.get(captain['team'])
+        captain_fixture_rows = calendar[(calendar['event'] == gw) &
+                                        (calendar['team'] == captain_team_id)]
+        captain_fixtures = 0 if captain_fixture_rows.empty else int(
+            captain_fixture_rows['fixtures'].sum())
+        bench = current_result['bench']
+        current_total = _result_total(current_result)
+        current_totals[gw] = current_total
+
+        triple_total = None if captain_points is None else current_xi + captain_points * 3
+        scores['triple_captain'][gw] = captain_points
+        breakdowns['triple_captain'][gw] = {
+            'chip': 'triple_captain',
+            'captain': None if captain is None else {
+                'element': _player_key(captain),
+                'name': str(captain.get('name', '')),
+                'team': str(captain.get('team', '')),
+                'position': str(captain.get('position', '')),
+                'projected_points': round(captain_points, 2),
+                'fixtures': captain_fixtures,
+                'available': bool(captain_points and captain_points > 0),
+            },
+            'normal_captain_total': round(current_total, 2),
+            'triple_captain_total': None if triple_total is None else round(triple_total, 2),
+            'incremental_gain': None if captain_points is None else round(captain_points, 2),
+        }
+
+        bench_players = _bench_evidence(bench)
+        bench_total = float(bench['predicted_points'].sum())
+        scores['bench_boost'][gw] = bench_total
+        breakdowns['bench_boost'][gw] = {
+            'chip': 'bench_boost',
+            'ordered_bench': bench_players,
+            'bench_total': round(bench_total, 2),
+        }
+
+        optimized = solve_squad(
+            players.assign(predicted_points=point_matrix[gw]),
+            current_budget + 0.01, squad_size=SQUAD_SIZE,
+            bench_weight=0.0, captain=True)[0]
+        optimized_xi = None if optimized is None else float(
+            optimized['xi']['predicted_points'].sum())
+        optimized_total = None if optimized is None else _result_total(optimized)
+        optimized_captain = (
+            None if optimized is None or optimized.get('captain') is None
+            else float(optimized['captain']['predicted_points']))
+        current_captain = (
+            None if current_result.get('captain') is None
+            else float(current_result['captain']['predicted_points']))
+        current_elements = {_player_key(row) for _, row in squad.iterrows()}
+        optimized_elements = set() if optimized is None else {
+            _player_key(row) for _, row in optimized['squad'].iterrows()}
+        changed_count = len(current_elements - optimized_elements)
+        free_hit_gain = None if optimized_total is None else optimized_total - current_total
+        scores['free_hit'][gw] = free_hit_gain
+        breakdowns['free_hit'][gw] = {
+            'chip': 'free_hit',
+            'current_xi_captain_total': round(current_total, 2),
+            'optimized_xi_captain_total': None if optimized_total is None else round(optimized_total, 2),
+            'raw_delta': None if free_hit_gain is None else round(free_hit_gain, 2),
+            'current_xi_total': round(current_xi, 2),
+            'optimized_xi_total': None if optimized_xi is None else round(optimized_xi, 2),
+            'current_captain_points': current_captain,
+            'optimized_captain_points': optimized_captain,
+            'changed_player_count': changed_count,
+        }
 
     if has_squad and squad_budget is not None and projection_mode == 'model_projection':
         for gw in gameweeks:
@@ -1451,47 +1456,71 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
             optimized_cumulative = sum(
                 _horizon_week_total(wildcard_result['weeks'][future_gw], point_matrix, future_gw)
                 for future_gw in remaining)
+            weekly_deltas = {
+                int(future_gw): round(
+                    _horizon_week_total(wildcard_result['weeks'][future_gw], point_matrix, future_gw)
+                    - current_totals.get(future_gw, 0.0), 2)
+                for future_gw in remaining
+            }
+            current_elements = {_player_key(row) for _, row in squad.iterrows()}
+            optimized_elements = {
+                _player_key(row) for _, row in wildcard_result['squad'].iterrows()}
             scores['wildcard'][gw] = optimized_cumulative - current_cumulative
             breakdowns['wildcard'][gw] = {
-                'current_cumulative': current_cumulative,
-                'optimized_cumulative': optimized_cumulative,
-                'weekly_gain': (_horizon_week_total(wildcard_result['weeks'][gw], point_matrix, gw)
-                                - current_totals.get(gw, 0.0)),
-                'horizon_weeks': float(len(remaining)),
+                'chip': 'wildcard',
+                'current_cumulative_total': round(current_cumulative, 2),
+                'optimized_cumulative_total': round(optimized_cumulative, 2),
+                'weekly_deltas': weekly_deltas,
+                'horizon_length': len(remaining),
+                'changed_player_count': len(current_elements - optimized_elements),
             }
 
     recommendations = []
     for chip in CHIP_IDS:
         eligible, half, expires = candidate_windows[chip]
         recommendation = _recommendation(
-            chip, scores[chip], eligible, normalized_inventory, scheduled,
-            has_squad, half, expires, projection_mode)
-        recommendation['score_breakdown'] = {
-            **recommendation['score_breakdown'],
-            **breakdowns[chip].get(recommendation.get('candidate_gw'), {}),
-        }
-        if chip == 'bench_boost':
-            recommendation['bench_players'] = bench_evidence[chip].get(
-                recommendation.get('candidate_gw'), [])
-        if chip == 'triple_captain':
-            evidence = captain_evidence.get(recommendation.get('candidate_gw'))
-            if evidence is not None:
-                recommendation['captain_evidence'] = evidence
+            chip, scores[chip], breakdowns[chip], fixture_indexes[chip],
+            eligible, normalized_inventory, has_squad, half, expires,
+            projection_mode, first_gw, policy)
         recommendations.append(recommendation)
 
     for row in rows:
         gw = row['gw']
-        row['opportunity'] = {
+        row['projected_gain'] = {
             chip: None if scores[chip].get(gw) is None else round(scores[chip][gw], 2)
             for chip in CHIP_IDS
         }
+        row['fixture_signal_index'] = {
+            chip: fixture_indexes[chip].get(gw)
+            for chip in CHIP_IDS
+        }
 
+    projection_gameweeks = [] if future_points is None else sorted(
+        int(gw) for gw in future_points.columns if pd.notna(gw))
+    evaluated_horizon = sum(gw in projection_gameweeks for gw in gameweeks)
+    coverage_warning = None
+    if projection_mode != 'model_projection':
+        if projection_gameweeks:
+            coverage_warning = (
+                f'Projection export covers {evaluated_horizon} of {horizon} requested weeks; '
+                'player point gains are withheld.')
+        else:
+            coverage_warning = 'No multi-gameweek projection matrix is available; player point gains are withheld.'
     return {
         'first_gw': first_gw, 'last_gw': first_gw + horizon - 1,
         'current_gameweek': first_gw, 'any_dgw': any_dgw, 'any_bgw': any_bgw,
         'rows': rows, 'recommendations': recommendations,
         'unmapped_teams': unmapped, 'has_squad': has_squad,
         'projection_mode': projection_mode,
+        'projection_source': 'prediction export' if projection_gameweeks else 'unavailable',
+        'projection_generated_at': projection_generated_at,
+        'projection_gameweeks': projection_gameweeks,
+        'requested_horizon': horizon,
+        'evaluated_horizon': evaluated_horizon,
+        'coverage_warning': coverage_warning,
+        'data_quality': 'complete_horizon' if projection_mode == 'model_projection' else 'fixture_signal_only',
+        'methodology_version': CHIP_METHOD_VERSION,
+        'decision_policy': policy.as_dict(),
         'inventory_status': 'synced' if normalized_inventory['_synced'] else 'not_synced',
         'inventory_sync_state': 'synced' if normalized_inventory['_synced'] else 'not_synced',
         'scheduled_gameweeks': scheduled,
@@ -1500,23 +1529,35 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
 
 def chip_advice(squad: pd.DataFrame | None, season: str, first_gw: int,
                 horizon: int, players: pd.DataFrame) -> None:
-    data = compute_chips(squad, season, first_gw, horizon, players)
+    future_points = None
+    try:
+        horizon_players, horizon_matrix, _gameweeks = load_horizon(PREDICTIONS)
+        identity = 'element' if 'element' in players.columns and 'element' in horizon_players.columns else 'name'
+        horizon_matrix.index = horizon_players[identity].to_list()
+        future_points = horizon_matrix.reindex(players[identity].to_list())
+        future_points.index = players.index
+    except SystemExit:
+        pass
+
+    data = compute_chips(
+        squad, season, first_gw, horizon, players,
+        future_points=future_points,
+        projection_generated_at=datetime.datetime.fromtimestamp(
+            os.path.getmtime(PREDICTIONS), tz=datetime.timezone.utc).isoformat()
+            if os.path.exists(PREDICTIONS) else None,
+    )
 
     print(f"\n{'=' * 78}")
     print(f"CHIP TIMING   GW{data['first_gw']}-{data['last_gw']}")
     print("=" * 78)
 
     if not data['any_dgw'] and not data['any_bgw']:
-        print("\n  No double or blank gameweeks are scheduled in this window.")
-        print("  They appear only once cup runs force postponements, usually from")
-        print("  around GW18. Until then Bench Boost and Free Hit have no fixture")
-        print("  edge to aim at, and the ranking below reflects fixture difficulty")
-        print("  and your squad's form alone.")
+        print('No double or blank gameweeks are scheduled in this window.')
 
-    print("\n  Note: the model's per-player number does not vary by gameweek --")
-    print("  its features are current form, and opponent strength was measured")
-    print("  and dropped. Ranking below combines that form with fixture count")
-    print("  and FDR, which is where the gameweek-to-gameweek signal comes from.")
+    print('Projection mode: ' + data['projection_mode'])
+    print('Coverage: ' + str(data['projection_gameweeks']))
+    if data['coverage_warning']:
+        print(data['coverage_warning'])
 
     if data['unmapped_teams']:
         print(f"\n  could not map teams to ids: {data['unmapped_teams']}")
@@ -1530,9 +1571,7 @@ def chip_advice(squad: pd.DataFrame | None, season: str, first_gw: int,
     for rec in data['recommendations']:
         target = f"GW{rec['gw']}" if rec['gw'] else "hold"
         print(f"\n  {rec['chip']} -> {target}")
-        print(f"    {rec['reason']}")
-        if rec.get('note'):
-            print(f"    {rec['note']}")
+        print(f"    {rec['reasons'][0]}")
 
 
 # ---------------------------------------------------------------------------

@@ -20,9 +20,10 @@ interface ChipOpportunityMatrixProps {
   rows: ChipRow[];
   recommendations: ChipRecommendation[];
   projectionMode: "fixture_signal" | "model_projection";
+  hasSquad: boolean;
 }
 
-export function ChipOpportunityMatrix({ rows, recommendations, projectionMode }: ChipOpportunityMatrixProps) {
+export function ChipOpportunityMatrix({ rows, recommendations, projectionMode, hasSquad }: ChipOpportunityMatrixProps) {
   const recommended = new Map(
     recommendations
       .filter((rec) => rec.status === "play")
@@ -31,7 +32,7 @@ export function ChipOpportunityMatrix({ rows, recommendations, projectionMode }:
   return (
     <div className="chip-opportunity-scroll">
       <table className="chip-opportunity-matrix">
-        <caption>{projectionMode === "fixture_signal" ? "Fixture signal by chip and gameweek" : "Opportunity score by chip and gameweek"}</caption>
+        <caption>{projectionMode === "fixture_signal" || !hasSquad ? "Fixture signal index by chip and gameweek" : "Projected gain by chip and gameweek"}</caption>
         <thead>
           <tr>
             <th scope="col">Chip</th>
@@ -48,13 +49,15 @@ export function ChipOpportunityMatrix({ rows, recommendations, projectionMode }:
                 </span>
               </th>
               {rows.map((row) => {
-                const value = row.opportunity[chip] ?? null;
+                const points = row.projected_gain[chip] ?? null;
+                const fixtureIndex = row.fixture_signal_index[chip] ?? null;
+                const value = points ?? fixtureIndex;
                 const isRecommended = recommended.get(chip) === row.gw;
                 return (
                   <td
                     key={`${chip}-${row.gw}`}
                     className={`chip-score chip-score--${cellLevel(value)}${isRecommended ? " is-recommended" : ""}`}
-                    title={`${CHIP_LABELS[chip]} GW${row.gw}: ${value == null ? "No signal" : `${value.toFixed(1)} points`}`}
+                    title={CHIP_LABELS[chip] + " GW" + row.gw + ": " + (value == null ? "No value" : points == null ? "fixture signal index " + value.toFixed(1) : value.toFixed(1) + " projected points")}
                   >
                     {value == null ? "—" : value.toFixed(1)}
                   </td>

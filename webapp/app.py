@@ -631,8 +631,11 @@ def api_chips():
         scheduled_gameweeks=[int(gameweek) for gameweek in scheduled],
         last_free_hit_gameweek=last_free_hit,
         future_points=s.get('future_points'),
+        projection_generated_at=(
+            datetime.datetime.fromtimestamp(s['mtime'], tz=datetime.timezone.utc).isoformat()
+            if s.get('mtime') else None
+        ),
     )
-    data['projection_gameweeks'] = s.get('future_gameweeks', [])
     data['ok'] = True
     return jsonify(data)
 

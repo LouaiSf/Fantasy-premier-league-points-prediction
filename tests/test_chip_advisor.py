@@ -91,10 +91,14 @@ def test_no_squad_is_explicit_fixture_signal(monkeypatch, tmp_path):
 
     assert data['inventory_status'] == 'not_synced'
     assert data['projection_mode'] == 'fixture_signal'
-    assert all(rec['expected_gain'] is None for rec in data['recommendations'])
+    assert all(rec['projected_gain'] is None for rec in data['recommendations'])
+    assert all(rec['fixture_signal_index'] is not None for rec in data['recommendations'])
+    assert all(row['projected_gain'] == {chip: None for chip in CHIPS} for row in data['rows'])
     assert all(rec['status'] == 'watch' for rec in data['recommendations'])
     assert all('fixture signal' in rec['reasons'][0] for rec in data['recommendations'])
-    assert all('captain_evidence' not in rec for rec in data['recommendations'])
+    assert all(rec['evidence'] is None for rec in data['recommendations'])
+    assert all('expected_gain' not in rec and 'score_breakdown' not in rec
+               for rec in data['recommendations'])
 
 
 def test_dgw_scores_actual_captain_and_bench(monkeypatch, tmp_path):
@@ -110,18 +114,20 @@ def test_dgw_scores_actual_captain_and_bench(monkeypatch, tmp_path):
     by_chip = {rec['chip']: rec for rec in data['recommendations']}
 
     assert data['rows'][1]['dgw_teams'] == 4
-    assert by_chip['triple_captain']['expected_gain'] > 0
-    assert by_chip['bench_boost']['score_breakdown']['bench_points'] >= 0
-    assert by_chip['bench_boost']['bench_players'] and len(by_chip['bench_boost']['bench_players']) == 4
-    assert by_chip['triple_captain']['score_breakdown']['incremental_gain'] == by_chip['triple_captain']['expected_gain']
-    assert by_chip['triple_captain']['score_breakdown']['captain_fixture_count'] == 2
-    assert by_chip['triple_captain']['score_breakdown']['triple_captain_points'] == round(
-        by_chip['triple_captain']['score_breakdown']['normal_captain_points'] * 3, 2)
-    assert by_chip['triple_captain']['captain_evidence']['player'] == 'MID 0'
-    assert by_chip['triple_captain']['captain_evidence']['team'] == 'Club 8'
-    assert by_chip['triple_captain']['captain_evidence']['position'] == 'MID'
-    assert by_chip['triple_captain']['captain_evidence']['points'] == by_chip['triple_captain']['score_breakdown']['incremental_gain']
-    assert by_chip['triple_captain']['captain_evidence']['fixtures'] == 2
+    assert by_chip['triple_captain']['projected_gain'] > 0
+    assert by_chip['bench_boost']['evidence']['bench_total'] == round(sum(
+        player['points'] for player in by_chip['bench_boost']['evidence']['ordered_bench']), 2)
+    assert len(by_chip['bench_boost']['evidence']['ordered_bench']) == 4
+    assert by_chip['triple_captain']['evidence']['incremental_gain'] == by_chip['triple_captain']['projected_gain']
+    assert by_chip['triple_captain']['evidence']['captain']['fixtures'] == 2
+    assert by_chip['triple_captain']['evidence']['triple_captain_total'] == round(
+        by_chip['triple_captain']['evidence']['normal_captain_total']
+        + 2 * by_chip['triple_captain']['evidence']['captain']['projected_points'], 2)
+    assert by_chip['triple_captain']['evidence']['captain']['name'] == 'MID 0'
+    assert by_chip['triple_captain']['evidence']['captain']['team'] == 'Club 8'
+    assert by_chip['triple_captain']['evidence']['captain']['position'] == 'MID'
+    assert by_chip['triple_captain']['evidence']['captain']['projected_points'] == by_chip['triple_captain']['evidence']['incremental_gain']
+    assert by_chip['triple_captain']['evidence']['captain']['fixtures'] == 2
     assert by_chip['triple_captain']['candidate_gw'] == 2
 
 
@@ -137,8 +143,8 @@ def test_blank_gameweek_gives_free_hit_a_squad_comparison(monkeypatch, tmp_path)
     free_hit = next(rec for rec in data['recommendations'] if rec['chip'] == 'free_hit')
 
     assert data['rows'][1]['blank_teams'] == 2
-    assert free_hit['score_breakdown']['current_xi'] >= 0
-    assert free_hit['score_breakdown']['optimized_xi'] >= 0
+    assert free_hit['evidence']['current_xi_total'] >= 0
+    assert free_hit['evidence']['optimized_xi_total'] >= 0
     assert free_hit['candidate_gameweeks'] == [2, 3, 4]
 
 
@@ -155,7 +161,7 @@ def test_non_prefix_squad_keeps_projection_identity(monkeypatch, tmp_path):
     triple_captain = next(rec for rec in data['recommendations']
                           if rec['chip'] == 'triple_captain')
 
-    assert triple_captain['expected_gain'] > 15.0
+    assert triple_captain['projected_gain'] > 15.0
 
 
 def test_free_hit_includes_new_captain_delta(monkeypatch, tmp_path):
@@ -170,16 +176,57 @@ def test_free_hit_includes_new_captain_delta(monkeypatch, tmp_path):
                          future_points=horizon_points(players, [1, 2]))
     free_hit = next(rec for rec in data['recommendations']
                     if rec['chip'] == 'free_hit')
-    breakdown = free_hit['score_breakdown']
+    breakdown = free_hit['evidence']
 
-    assert breakdown['captain_delta'] > 0
-    assert round(breakdown['captain_delta'], 2) == 10.0
-    assert free_hit['expected_gain'] == round(
-        breakdown['xi_gain'] + breakdown['captain_delta']
-        + breakdown['avoided_transfer_hits'], 2)
-    assert free_hit['expected_gain'] == round(
-        breakdown['optimized_total'] - breakdown['current_total']
-        + breakdown['avoided_transfer_hits'], 2)
+    assert breakdown['optimized_captain_points'] > breakdown['current_captain_points']
+    assert free_hit['projected_gain'] == round(
+        breakdown['optimized_xi_captain_total'] - breakdown['current_xi_captain_total'], 2)
+    assert 'avoided_transfer_hits' not in breakdown
+
+
+def test_future_chip_candidates_are_ranked_and_never_marked_play(monkeypatch, tmp_path):
+    write_season(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    players = market()
+    squad = players.iloc[:15].copy()
+    points = horizon_points(players, [5, 6, 7, 8])
+    points.loc[:, 7] = 1.0
+    points.loc[11, 7] = 25.0
+
+    data = compute_chips(squad, 'test-season', 5, 4, players,
+                         inventory=synced_inventory(), future_points=points)
+    triple_captain = next(rec for rec in data['recommendations']
+                          if rec['chip'] == 'triple_captain')
+
+    assert triple_captain['candidate_gw'] == 7
+    assert triple_captain['status'] == 'watch'
+    assert triple_captain['projected_gain'] == 25.0
+    assert len(triple_captain['alternatives']) == 3
+    assert triple_captain['alternatives'][0]['evidence']['captain']['element'] == 24
+    assert triple_captain['alternatives'][0]['evidence']['incremental_gain'] == 25.0
+    assert triple_captain['runner_up_gameweek'] == triple_captain['alternatives'][1]['gw']
+    assert triple_captain['gap_to_runner_up'] > 0
+
+
+def test_current_complete_candidate_uses_named_margin_policy(monkeypatch, tmp_path):
+    write_season(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    players = market()
+    squad = players.iloc[:15].copy()
+
+    data = compute_chips(squad, 'test-season', 1, 2, players,
+                         inventory=synced_inventory(),
+                         future_points=horizon_points(players, [1, 2]))
+    triple_captain = next(rec for rec in data['recommendations']
+                          if rec['chip'] == 'triple_captain')
+
+    assert triple_captain['status'] == 'play'
+    assert triple_captain['decision_policy']['minimum_projected_gain'] == data['decision_policy']['minimum_projected_gain']
+    assert triple_captain['decision_policy']['minimum_projected_gain'] > 0
+    assert data['projection_mode'] == 'model_projection'
+    assert data['projection_gameweeks'] == [1, 2]
+    assert data['data_quality'] == 'complete_horizon'
+    assert data['coverage_warning'] is None
 
 
 def test_injured_bench_reduces_bench_boost_value(monkeypatch, tmp_path):
@@ -199,7 +246,7 @@ def test_injured_bench_reduces_bench_boost_value(monkeypatch, tmp_path):
     healthy_bb = next(rec for rec in healthy_result['recommendations'] if rec['chip'] == 'bench_boost')
     injured_bb = next(rec for rec in injured_result['recommendations'] if rec['chip'] == 'bench_boost')
 
-    assert injured_bb['expected_gain'] < healthy_bb['expected_gain']
+    assert injured_bb['projected_gain'] < healthy_bb['projected_gain']
 
 
 def test_inventory_expiry_and_scheduled_week_conflict(monkeypatch, tmp_path):
@@ -242,6 +289,22 @@ def test_unsynced_inventory_never_promotes_fixture_signal_to_play(monkeypatch, t
     assert all(rec['status'] != 'play' for rec in data['recommendations'])
 
 
+
+def test_complete_projection_without_synced_inventory_cannot_play(monkeypatch, tmp_path):
+    write_season(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    players = market()
+    squad = players.iloc[:15].copy()
+
+    data = compute_chips(squad, 'test-season', 1, 2, players,
+                         future_points=horizon_points(players, [1, 2]))
+
+    triple_captain = next(rec for rec in data['recommendations']
+                          if rec['chip'] == 'triple_captain')
+    assert triple_captain['projected_gain'] is not None
+    assert triple_captain['status'] == 'watch'
+    assert all(rec['status'] != 'play' for rec in data['recommendations'])
+
 def test_wildcard_uses_cumulative_multi_gameweek_gain(monkeypatch, tmp_path):
     write_season(tmp_path)
     monkeypatch.chdir(tmp_path)
@@ -253,10 +316,10 @@ def test_wildcard_uses_cumulative_multi_gameweek_gain(monkeypatch, tmp_path):
                          future_points=horizon_points(players, range(2, 10)))
     wildcard = next(rec for rec in data['recommendations'] if rec['chip'] == 'wildcard')
 
-    assert wildcard['score_breakdown']['horizon_weeks'] == 8
-    assert 'current_cumulative' in wildcard['score_breakdown']
-    assert 'optimized_cumulative' in wildcard['score_breakdown']
-    assert all(data['rows'][index]['opportunity']['wildcard'] is not None
+    assert wildcard['evidence']['horizon_length'] == 8
+    assert 'current_cumulative_total' in wildcard['evidence']
+    assert 'optimized_cumulative_total' in wildcard['evidence']
+    assert all(data['rows'][index]['projected_gain']['wildcard'] is not None
                for index in range(len(data['rows'])))
 
 
@@ -276,8 +339,8 @@ def test_wildcard_reoptimizes_for_each_remaining_horizon(monkeypatch, tmp_path):
     wildcard = next(rec for rec in data['recommendations'] if rec['chip'] == 'wildcard')
 
     assert wildcard['candidate_gw'] == 3
-    assert wildcard['score_breakdown']['horizon_weeks'] == 2
-    assert wildcard['expected_gain'] > 8.0
+    assert wildcard['evidence']['horizon_length'] == 2
+    assert wildcard['projected_gain'] > 8.0
 
 
 def test_horizon_changes_candidate_matrix(monkeypatch, tmp_path):

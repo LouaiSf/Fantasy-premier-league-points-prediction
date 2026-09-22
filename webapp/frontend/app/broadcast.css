@@ -1803,6 +1803,10 @@
   .chip-score.is-recommended{outline:3px solid var(--cyan);outline-offset:-3px}
   .chip-method{margin-bottom:var(--space-16);padding:var(--space-4) var(--space-5);border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.03);color:var(--muted-light)}
   .chip-method summary{cursor:pointer;color:var(--white);font:800 12px var(--display);letter-spacing:.08em;text-transform:uppercase}
+  .chip-why{margin:0;padding:10px 12px;border-color:rgba(255,255,255,.1);background:rgba(0,0,0,.16)}
+  .chip-why summary{font-size:10px}
+  .chip-why ul{margin:8px 0 0;padding-left:18px;font-size:11px}
+  .chip-why li{margin:4px 0}
   .chip-method p{max-width:80ch;margin:12px 0 0;font-size:12px}
   .transfer-onboarding{display:grid;justify-items:start;gap:var(--space-4);min-height:calc(100dvh - 220px);align-content:center}
   .transfer-onboarding h1{margin:0;font:900 clamp(2.3rem,6vw,5rem)/.9 var(--display);text-transform:uppercase;letter-spacing:-.05em}

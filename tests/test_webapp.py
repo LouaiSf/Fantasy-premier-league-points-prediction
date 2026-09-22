@@ -81,7 +81,7 @@ def test_reload_predictions_keeps_current_table_and_stable_horizon_matrix(
 
     def capture_chip_inputs(*_args, **kwargs):
         received.update(kwargs)
-        return {"recommendations": []}
+        return {"recommendations": [], "projection_gameweeks": [1, 2]}
 
     monkeypatch.setattr(app_module.opt, "compute_chips", capture_chip_inputs)
     response = app.test_client().post("/api/chips", json={"horizon": 2})

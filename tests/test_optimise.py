@@ -6,9 +6,11 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+import optimise as optimise_module
 from optimise import (  # noqa: E402
     annotate_marginals,
     choose_transfer_recommendation,
+    chip_advice,
     compute_squad_alternatives,
     compute_transfers,
     expected_total,
@@ -251,6 +253,42 @@ def test_load_predictions_uses_earliest_gw_and_sums_double_fixtures(tmp_path) ->
     assert points.set_axis(horizon_players['element']).loc[1].to_dict() == {5: 4.5, 6: 10.0}
 
 
+
+def test_cli_chip_advice_loads_and_aligns_horizon_matrix(tmp_path, monkeypatch, capsys):
+    prediction_path = tmp_path / 'predictions.csv'
+    pd.DataFrame([
+        {'element': 11, 'name': 'One', 'team': 'Club', 'position': 'MID',
+         'value_m': 5.0, 'GW': 1, 'predicted_points': 2.0},
+        {'element': 11, 'name': 'One', 'team': 'Club', 'position': 'MID',
+         'value_m': 5.0, 'GW': 2, 'predicted_points': 8.0},
+        {'element': 12, 'name': 'Two', 'team': 'Club', 'position': 'MID',
+         'value_m': 5.0, 'GW': 1, 'predicted_points': 3.0},
+        {'element': 12, 'name': 'Two', 'team': 'Club', 'position': 'MID',
+         'value_m': 5.0, 'GW': 2, 'predicted_points': 4.0},
+    ]).to_csv(prediction_path, index=False)
+    players = pd.DataFrame([
+        {'element': 12, 'name': 'Two'},
+        {'element': 11, 'name': 'One'},
+    ])
+    received = {}
+
+    def capture_inputs(_squad, _season, _first_gw, _horizon, _players, **kwargs):
+        received.update(kwargs)
+        return {
+            'first_gw': 1, 'last_gw': 2, 'any_dgw': False, 'any_bgw': False,
+            'projection_mode': 'model_projection', 'projection_gameweeks': [1, 2],
+            'coverage_warning': None, 'unmapped_teams': [], 'rows': [],
+            'recommendations': [],
+        }
+
+    monkeypatch.setattr(optimise_module, 'PREDICTIONS', str(prediction_path))
+    monkeypatch.setattr(optimise_module, 'compute_chips', capture_inputs)
+
+    chip_advice(None, 'test-season', 1, 2, players)
+
+    assert received['future_points'].to_numpy().tolist() == [[3.0, 4.0], [2.0, 8.0]]
+    assert received['projection_generated_at'] is not None
+
 def test_single_gameweek_matrix_cannot_become_future_player_gain(monkeypatch, tmp_path):
     from test_chip_advisor import market, synced_inventory, write_season
     from optimise import compute_chips
@@ -267,9 +305,12 @@ def test_single_gameweek_matrix_cannot_become_future_player_gain(monkeypatch, tm
     )
 
     assert data['projection_mode'] == 'fixture_signal'
-    assert all(rec['expected_gain'] is None for rec in data['recommendations'])
+    assert data['evaluated_horizon'] == 1
+    assert 'covers 1 of 4' in data['coverage_warning']
+    assert all(rec['projected_gain'] is None for rec in data['recommendations'])
+    assert all(rec['fixture_signal_index'] is not None for rec in data['recommendations'])
     assert all(rec['status'] != 'play' for rec in data['recommendations'])
-    assert all('captain_evidence' not in rec for rec in data['recommendations'])
+    assert all(rec['evidence'] is None for rec in data['recommendations'])
 
 
 def test_fixed_squad_gets_xi_ordered_bench_and_two_armbands() -> None:

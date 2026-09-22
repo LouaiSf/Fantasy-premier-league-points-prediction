@@ -248,7 +248,8 @@ export interface ChipRow {
   avg_fdr: number;
   squad_playing?: number;
   squad_blanks?: number;
-  opportunity: Partial<Record<ChipId, number | null>>;
+  projected_gain: Partial<Record<ChipId, number | null>>;
+  fixture_signal_index: Partial<Record<ChipId, number | null>>;
 }
 
 export const CHIP_IDS = ["triple_captain", "bench_boost", "free_hit", "wildcard"] as const;
@@ -261,26 +262,95 @@ export interface ChipInventory {
   second_half: Record<ChipId, ChipState>;
 }
 
-export interface ChipRecommendation {
+export interface ChipDecisionPolicy {
+  minimum_projected_gain: number;
+  uncertainty_note: string;
+  basis: string;
+}
+
+export interface ChipCaptainEvidence {
+  chip: "triple_captain";
+  captain: {
+    element: number | string;
+    name: string;
+    team: string;
+    position: string;
+    projected_points: number | null;
+    fixtures: number;
+    available: boolean;
+  } | null;
+  normal_captain_total: number;
+  triple_captain_total: number | null;
+  incremental_gain: number | null;
+}
+
+export interface ChipBenchEvidence {
+  chip: "bench_boost";
+  ordered_bench: ChipBenchPlayer[];
+  bench_total: number;
+}
+
+export interface ChipFreeHitEvidence {
+  chip: "free_hit";
+  current_xi_captain_total: number;
+  optimized_xi_captain_total: number | null;
+  raw_delta: number | null;
+  current_xi_total: number;
+  optimized_xi_total: number | null;
+  current_captain_points: number | null;
+  optimized_captain_points: number | null;
+  changed_player_count: number;
+}
+
+export interface ChipWildcardEvidence {
+  chip: "wildcard";
+  current_cumulative_total: number;
+  optimized_cumulative_total: number;
+  weekly_deltas: Record<string, number>;
+  horizon_length: number;
+  changed_player_count: number;
+}
+
+export type ChipEvidence =
+  | ChipCaptainEvidence
+  | ChipBenchEvidence
+  | ChipFreeHitEvidence
+  | ChipWildcardEvidence;
+
+export interface ChipAlternative {
   chip: ChipId;
+  gw: number;
+  projected_gain: number | null;
+  fixture_signal_index: number | null;
+  evidence: ChipEvidence | null;
+}
+
+export interface ChipRecommendationBase {
   label: string;
   status: ChipStatus;
+  projection_mode: "fixture_signal" | "model_projection";
   candidate_gameweeks: number[];
   gw: number | null;
   candidate_gw: number | null;
-  expected_gain: number | null;
-  score_breakdown: Record<string, number | string | null>;
+  projected_gain: number | null;
+  fixture_signal_index: number | null;
+  alternatives: ChipAlternative[];
+  runner_up_gameweek: number | null;
+  gap_to_runner_up: number | null;
+  decision_policy: ChipDecisionPolicy;
   reasons: string[];
   warnings: string[];
   inventory_set: "first_half" | "second_half";
   expires_after_gameweek: number;
-  reason: string;
   confidence: "high" | "low" | "medium";
-  note?: string;
-  squad_gap?: number;
-  bench_players?: ChipBenchPlayer[];
-  captain_evidence?: ChipCaptainEvidence;
+  formula?: string;
 }
+
+export type ChipRecommendation =
+  | (ChipRecommendationBase & { chip: "triple_captain"; evidence: ChipCaptainEvidence | null })
+  | (ChipRecommendationBase & { chip: "bench_boost"; evidence: ChipBenchEvidence | null })
+  | (ChipRecommendationBase & { chip: "free_hit"; evidence: ChipFreeHitEvidence | null })
+  | (ChipRecommendationBase & { chip: "wildcard"; evidence: ChipWildcardEvidence | null });
 
 export interface ChipBenchPlayer {
   player: string;
@@ -289,13 +359,6 @@ export interface ChipBenchPlayer {
   available: boolean;
 }
 
-export interface ChipCaptainEvidence {
-  player: string;
-  team: string;
-  position: string;
-  points: number | null;
-  fixtures: number;
-}
 
 export interface ChipsResult {
   ok: boolean;
@@ -312,5 +375,14 @@ export interface ChipsResult {
   inventory_status: "synced" | "not_synced";
   inventory_sync_state: "synced" | "not_synced";
   scheduled_gameweeks: number[];
+  projection_source: string;
+  projection_generated_at: string | null;
+  projection_gameweeks: number[];
+  requested_horizon: number;
+  evaluated_horizon: number;
+  coverage_warning: string | null;
+  data_quality: "complete_horizon" | "fixture_signal_only";
+  methodology_version: string;
+  decision_policy: ChipDecisionPolicy;
 }
 
