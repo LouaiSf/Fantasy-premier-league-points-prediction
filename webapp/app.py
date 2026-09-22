@@ -187,6 +187,20 @@ def squad_from_names(names: list) -> pd.DataFrame:
     return everyone.loc[indices]
 
 
+def squad_from_elements(elements: list[int]) -> pd.DataFrame:
+    everyone = state()['everyone']
+    if len(elements) != opt.SQUAD_SIZE or len(set(elements)) != opt.SQUAD_SIZE:
+        raise ValueError(f'a squad is {opt.SQUAD_SIZE} distinct players; you gave {len(set(elements))}')
+    current = everyone[everyone['element'].isin(elements)].copy()
+    found = set(current['element'])
+    missing = [str(element) for element in elements if element not in found]
+    if missing:
+        raise ValueError(f"unknown player element(s): {', '.join(missing)}")
+    order = {element: position for position, element in enumerate(elements)}
+    current['_order'] = current['element'].map(order)
+    return current.sort_values('_order').drop(columns='_order').reset_index(drop=True)
+
+
 def fail(message: str, code: int = 400):
     return jsonify({'ok': False, 'error': message}), code
 
@@ -469,28 +483,14 @@ def api_squad():
 
 def lineup_response(result: dict, budget: float) -> dict:
     """Serialize a solved squad with its complete matchday lineup."""
-    # show_squad derives this for the terminal; the browser needs it too.
-    shape = result['xi']['position'].value_counts()
-    formation = (f"{int(shape.get('DEF', 0))}-{int(shape.get('MID', 0))}"
-                 f"-{int(shape.get('FWD', 0))}")
-
-    def selected_player(key: str):
+    payload = opt.lineup_payload(result, budget)
+    payload['xi'] = enriched_squad_records(result['xi'])
+    payload['bench'] = enriched_squad_records(result['bench'])
+    for key in ('captain', 'vice_captain'):
         selected = result.get(key)
-        if selected is None:
-            return None
-        return enriched_squad_records(pd.DataFrame([selected]))[0]
-
-    return {
-        'ok': True,
-        'budget': budget,
-        'spend': round(float(result['squad']['value_m'].sum()), 1),
-        'xi': enriched_squad_records(result['xi']),
-        'bench': enriched_squad_records(result['bench']),
-        'captain': selected_player('captain'),
-        'vice_captain': selected_player('vice_captain'),
-        'xi_points': round(float(result['xi']['predicted_points'].sum()), 2),
-        'formation': formation,
-    }
+        payload[key] = (None if selected is None else
+                        enriched_squad_records(pd.DataFrame([selected]))[0])
+    return payload
 
 
 @app.route('/api/lineup', methods=['POST'])
@@ -537,12 +537,15 @@ def api_transfers():
         return unavailable(s['error'])
 
     body = request.get_json(force=True) or {}
-    names = [n for n in body.get('squad', []) if n]
-    if len(names) != opt.SQUAD_SIZE:
-        return fail(f'a squad is {opt.SQUAD_SIZE} players; you gave {len(names)}')
-
+    raw_elements = body.get('elements')
+    if not isinstance(raw_elements, list) or any(
+            isinstance(element, bool) or not isinstance(element, int)
+            for element in raw_elements):
+        return fail('elements must be a list of numeric FPL element IDs')
     try:
-        current = squad_from_names(names)
+        if len(raw_elements) != opt.SQUAD_SIZE or len(set(raw_elements)) != opt.SQUAD_SIZE:
+            return fail('elements must contain 15 distinct numeric FPL element IDs')
+        current = squad_from_elements(raw_elements)
     except (ValueError, KeyError) as exc:
         return fail(str(exc))
 

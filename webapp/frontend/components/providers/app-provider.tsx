@@ -27,7 +27,7 @@ interface AppState {
   squadPlayers: PlayerRecord[];
 
   teamResult: SquadResult | null;
-  setTeamResult: (result: SquadResult | null, source?: "manual" | "optimizer") => void;
+  setTeamResult: (result: SquadResult | null, source?: "manual" | "optimizer", bankAfter?: number) => void;
   setImportedTeam: (lineup: ManagerLineup) => void;
   storedSquad: StoredSquad | null;
 
@@ -254,7 +254,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const setTeamResult = React.useCallback(
-    (result: SquadResult | null, source: "manual" | "optimizer" = "optimizer") => {
+    (result: SquadResult | null, source: "manual" | "optimizer" = "optimizer", bankAfter?: number) => {
       const normalized = result ? normalizeSquadResult(result, snapshot) : null;
       setTeamResultState(normalized);
       if (normalized) {
@@ -269,7 +269,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             viceCaptainId: normalized.vice_captain?.element,
             xiIds: normalized.xi.map((player) => player.element),
             benchIds: normalized.bench.map((player) => player.element),
-            bank: 100 - normalized.spend,
+            bank: bankAfter ?? 100 - normalized.spend,
             source,
           };
           window.localStorage.setItem(SQUAD_STORAGE_KEY, JSON.stringify(data));

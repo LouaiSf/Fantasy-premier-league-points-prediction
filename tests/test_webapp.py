@@ -194,3 +194,45 @@ def test_manager_lineup_returns_missing_local_elements(monkeypatch) -> None:
     payload = response.get_json()
     assert payload["missing_elements"] == [999999]
     assert payload["manager"]["entry_id"] == 123
+
+
+def test_transfers_accept_element_ids_and_return_current_lineup() -> None:
+    client = app.test_client()
+    squad = client.post("/api/squad", json={"budget": 100.0}).get_json()
+    elements = [player["element"] for player in squad["xi"] + squad["bench"]]
+
+    response = client.post(
+        "/api/transfers",
+        json={"elements": elements, "free": 0, "bank": 0.0, "max": 0},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert len(payload["current_lineup"]["bench"]) == 4
+    assert payload["rows"][0]["captained_total"] == payload["rows"][0]["gross"]
+    assert set(payload["current_lineup"]) == {
+        "ok", "budget", "spend", "xi", "bench", "captain",
+        "vice_captain", "xi_points", "formation",
+    }
+
+
+def test_transfers_reject_legacy_name_identity() -> None:
+    client = app.test_client()
+    squad = client.post("/api/squad", json={"budget": 100.0}).get_json()
+    names = [player["name"] for player in squad["xi"] + squad["bench"]]
+
+    response = client.post("/api/transfers", json={"squad": names, "free": 0, "max": 0})
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "elements must be a list of numeric FPL element IDs"
+
+
+def test_transfers_reject_boolean_element_ids() -> None:
+    client = app.test_client()
+    response = client.post(
+        "/api/transfers",
+        json={"elements": [True] * 15, "free": 0, "max": 0},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "elements must be a list of numeric FPL element IDs"

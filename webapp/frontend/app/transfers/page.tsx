@@ -88,7 +88,7 @@ function DeskRow({
 }
 
 export default function TransfersPage() {
-  const { snapshot, loading, squadPlayers, squadNames, squadElements, toast } = useApp();
+  const { snapshot, loading, squadPlayers, squadElements, toast } = useApp();
   const [outQuery, setOutQuery] = React.useState("");
   const [inQuery, setInQuery] = React.useState("");
   const [outFilter, setOutFilter] = React.useState<(typeof OUT_FILTERS)[number]>("ALL");
@@ -202,7 +202,7 @@ export default function TransfersPage() {
     setAnalysing(true);
     setAnalysisError(null);
     try {
-      const result = await api.transfers({ squad: squadNames, free, bank, max: maxTransfers });
+      const result = await api.transfers({ elements: squadElements, free, bank, max: maxTransfers });
       setAnalysis(result);
     } catch (err) {
       setAnalysisError((err as Error).message);

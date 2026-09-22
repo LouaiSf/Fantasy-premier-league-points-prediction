@@ -1949,6 +1949,34 @@
   .team-source-note{display:flex;flex-direction:column;gap:var(--space-1);margin-top:var(--space-3);padding-top:var(--space-3);border-top:1px solid rgba(255,255,255,.1)}
   .team-source-note strong{font:700 var(--type-small)/1.1 var(--ui)}
   .team-source-note small{color:var(--muted-mid);font:600 var(--type-caption)/1 var(--data)}
+  .team-plan-wrap{grid-column:1/-1}
+  .team-plan{background:var(--night-850);border:1px solid rgba(255,255,255,.14);padding:var(--space-5);clip-path:var(--blade)}
+  .team-plan-head{display:flex;justify-content:space-between;gap:var(--space-5);align-items:flex-start}
+  .team-plan-head h2{margin:var(--space-1) 0 0;font:800 var(--type-h2)/1 var(--display);letter-spacing:-.03em}
+  .team-plan-head p{max-width:700px;margin:var(--space-2) 0 0;color:var(--muted-light);font-size:var(--type-small);line-height:1.45}
+  .team-plan-control{display:flex;flex-direction:column;gap:var(--space-2);min-width:140px}
+  .team-plan-control select{background:var(--white);color:var(--ink);border:0;padding:var(--space-2);font:700 var(--type-body)/1 var(--data)}
+  .team-plan-control input{width:100%;background:var(--night-900);border:1px solid rgba(255,255,255,.2);color:var(--white);padding:var(--space-2);font:700 var(--type-body)/1 var(--data)}
+  .team-plan-status{margin:var(--space-4) 0 0;color:var(--muted-light);font-size:var(--type-small)}
+  .team-plan-status.is-error{color:var(--pink)}
+  .team-plan-verdict{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--space-5);align-items:end;margin-top:var(--space-5);padding:var(--space-4);background:var(--gradient-matchday);color:var(--white)}
+  .team-plan-verdict strong{display:block;margin-top:var(--space-1);font:900 clamp(1.8rem,4vw,3rem)/.95 var(--display)}
+  .team-plan-verdict p{margin:var(--space-2) 0 0;font-size:var(--type-small)}
+  .team-plan-score{text-align:right}
+  .team-plan-score strong{font-size:clamp(1.8rem,3vw,2.8rem);color:var(--lime)}
+  .team-plan-score strong.is-negative{color:var(--pink)}
+  .team-plan-score small{display:block;margin-top:var(--space-1);font:700 var(--type-caption)/1 var(--data);text-transform:uppercase;letter-spacing:.06em}
+  .team-plan-evidence{display:grid;grid-template-columns:1.2fr 1fr .8fr;gap:var(--space-5);margin-top:var(--space-5)}
+  .team-plan-player-group ul{list-style:none;margin:var(--space-2) 0 0;padding:0;display:grid;gap:1px}
+  .team-plan-player-group li{display:grid;grid-template-columns:32px 1fr auto;gap:var(--space-2);align-items:center;background:var(--night-900);padding:var(--space-2)}
+  .team-plan-player-group li span{color:var(--cyan);font:700 var(--type-caption)/1 var(--data)}
+  .team-plan-player-group li strong{font:600 var(--type-small)/1.1 var(--ui)}
+  .team-plan-player-group li em{color:var(--muted-light);font:700 var(--type-caption)/1 var(--data)}
+  .team-plan-armbands{background:var(--night-900);padding:var(--space-3);display:flex;flex-direction:column;gap:var(--space-2)}
+  .team-plan-armbands p{margin:0;color:var(--muted-light);font-size:var(--type-small)}
+  .team-plan-armbands strong{display:block;color:var(--white);font:700 var(--type-body)/1.1 var(--ui)}
+  .team-plan-foot{display:flex;justify-content:space-between;align-items:center;gap:var(--space-4);margin-top:var(--space-5);padding-top:var(--space-4);border-top:1px solid rgba(255,255,255,.12)}
+  .team-plan-foot p{margin:0;color:var(--gold);font-size:var(--type-small);font-style:italic}
   @media (max-width:560px){
     .manager-search{padding:var(--space-4)}
     .manager-search-head,.manager-preview-head{display:block}
@@ -1960,4 +1988,12 @@
     .manager-preview-stats{grid-template-columns:1fr 1fr}
     .manager-preview-columns{grid-template-columns:1fr;gap:var(--space-4)}
     .manager-preview-actions .btn{width:100%}
+    .team-plan{padding:var(--space-4)}
+    .team-plan-head{display:block}
+    .team-plan-control{margin-top:var(--space-4)}
+    .team-plan-verdict{grid-template-columns:1fr}
+    .team-plan-score{text-align:left}
+    .team-plan-evidence{grid-template-columns:1fr;gap:var(--space-4)}
+    .team-plan-foot{display:block}
+    .team-plan-foot .btn{width:100%;margin-top:var(--space-3)}
   }

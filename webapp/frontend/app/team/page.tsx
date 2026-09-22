@@ -11,6 +11,8 @@ import { PlayerPhoto } from "@/components/player-photo";
 import { Loading } from "@/components/loading";
 import { ModelInfo } from "@/components/model-info";
 import { ManagerSearch } from "@/components/team/manager-search";
+import { TeamPlan } from "@/components/team/team-plan";
+import type { TransferResult, TransferRow } from "@/lib/types";
 
 // The FPL budget every manager starts a season with.
 const BUDGET = 100.0;
@@ -32,6 +34,48 @@ export default function TeamPage() {
   } = useApp();
   const [picking, setPicking] = React.useState(false);
   const [liningUp, setLiningUp] = React.useState(false);
+  const [freeTransfers, setFreeTransfers] = React.useState(1);
+  const [plannerBank, setPlannerBank] = React.useState<number | null>(null);
+  const [transferPlan, setTransferPlan] = React.useState<TransferResult | null>(null);
+  const [transferPlanError, setTransferPlanError] = React.useState<string | null>(null);
+  const [transferPlanLoading, setTransferPlanLoading] = React.useState(false);
+
+  const plannerBankValue = plannerBank ?? (
+    storedSquad?.source === "manager" && storedSquad.bank != null
+      ? Math.max(0, storedSquad.bank)
+      : 0
+  );
+
+  React.useEffect(() => {
+    if (!snapshot?.prediction_available || squadElements.length !== 15) return;
+
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (!active) return null;
+      setTransferPlanLoading(true);
+      setTransferPlanError(null);
+      return api.transfers({
+        elements: squadElements,
+        free: freeTransfers,
+        bank: plannerBankValue,
+        max: freeTransfers,
+      });
+    }).then((result) => {
+      if (!result) return;
+      if (active) setTransferPlan(result);
+    }).catch((err: Error) => {
+      if (active) {
+        setTransferPlan(null);
+        setTransferPlanError(err.message);
+      }
+    }).finally(() => {
+      if (active) setTransferPlanLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [snapshot, squadElements, freeTransfers, plannerBankValue]);
 
   if (loading) {
     return (
@@ -106,6 +150,21 @@ export default function TeamPage() {
     }
   }
 
+  function applyTransferPlan(row: TransferRow) {
+    setTeamResult(row, "optimizer", row.bank_after);
+    setPlannerBank(row.bank_after);
+    toast(row.transfers === 0 ? "Lineup recommendation applied." : "Transfer plan applied to My Team.");
+  }
+
+  const planUnavailable = Boolean(snapshot) && (
+    !snapshot?.prediction_available || squadElements.length !== 15
+  );
+  const planError = planUnavailable
+    ? !snapshot?.prediction_available
+      ? snapshot?.prediction_error ?? "Predictions are unavailable for this snapshot."
+      : "Save a legal 15-player squad to build a transfer plan."
+    : transferPlanError;
+
   return (
     <section className="page" aria-label="My team">
       <div className="hero-team">
@@ -164,6 +223,7 @@ export default function TeamPage() {
           <ManagerSearch
             snapshot={snapshot}
             onImport={(lineup) => {
+              setPlannerBank(lineup.bank ?? 0);
               setImportedTeam(lineup);
               toast(`Imported ${lineup.manager.team_name || "public team"} as My Team.`);
             }}
@@ -316,6 +376,18 @@ export default function TeamPage() {
               )}
             </section>
           </aside>
+          <div className="team-plan-wrap">
+            <TeamPlan
+              analysis={transferPlan}
+              freeTransfers={freeTransfers}
+              onFreeTransfersChange={setFreeTransfers}
+              bank={plannerBankValue}
+              onBankChange={(value) => setPlannerBank(Math.max(0, Math.min(100, Math.round(value * 10) / 10)))}
+              loading={transferPlanLoading}
+              error={planError}
+              onApply={applyTransferPlan}
+            />
+          </div>
         </div>
       </div>
     </section>

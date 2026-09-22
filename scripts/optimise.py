@@ -854,7 +854,9 @@ def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
             'out': list(out['name']),
             'in': list(into['name']),
             'squad': squad_records(result['squad']),
-            'xi': squad_records(result['xi']),
+            **lineup_payload(result, budget),
+            'bank_after': round(float(budget - result['squad']['value_m'].sum()), 1),
+            'captained_total': round(float(gross), 2),
         })
 
     annotate_marginals(rows)
@@ -879,6 +881,8 @@ def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
         'marginal_recommendation': bool(
             recommended is not None and recommended['transfers']
             and recommended['gain'] < DECISION_MARGIN),
+        'current_lineup': lineup_payload(
+            baseline_result, float(current['value_m'].sum())),
     }
 
 
@@ -907,6 +911,26 @@ def squad_records(frame: pd.DataFrame) -> list:
                 clean[key] = value
         out.append(clean)
     return out
+
+
+def lineup_payload(result: dict, budget: float) -> dict:
+    shape = result['xi']['position'].value_counts()
+    xi = result['xi']
+    captain = result.get('captain')
+    vice_captain = result.get('vice_captain')
+    xi_points = float(xi['predicted_points'].sum())
+    return {
+        'ok': True,
+        'budget': float(budget),
+        'spend': round(float(result['squad']['value_m'].sum()), 1),
+        'xi': squad_records(xi),
+        'bench': squad_records(result['bench']),
+        'captain': None if captain is None else squad_records(pd.DataFrame([captain]))[0],
+        'vice_captain': None if vice_captain is None else squad_records(pd.DataFrame([vice_captain]))[0],
+        'xi_points': round(xi_points, 2),
+        'formation': (f"{int(shape.get('DEF', 0))}-{int(shape.get('MID', 0))}-"
+                      f"{int(shape.get('FWD', 0))}"),
+    }
 
 
 def suggest_transfers(current: pd.DataFrame, players: pd.DataFrame,

@@ -105,7 +105,7 @@ export interface SquadResult {
   formation: string;
 }
 
-export interface TransferRow {
+export interface TransferRow extends SquadResult {
   transfers: number;
   gross: number;
   hit: number;
@@ -115,7 +115,8 @@ export interface TransferRow {
   out: string[];
   in: string[];
   squad: PlayerRecord[];
-  xi: PlayerRecord[];
+  bank_after: number;
+  captained_total: number;
 }
 
 export interface TransferFailure {
@@ -137,6 +138,7 @@ export interface TransferResult {
   recommended: TransferRow | null;
   recommendation_edge: number | null;
   marginal_recommendation: boolean;
+  current_lineup: SquadResult;
 }
 
 export interface ApiError {

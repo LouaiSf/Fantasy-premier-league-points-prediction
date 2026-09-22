@@ -68,6 +68,28 @@ def test_joint_transfers_can_downgrade_to_fund_a_larger_upgrade() -> None:
     assert result['best']['transfers'] == 2
 
 
+def test_transfer_rows_include_the_solver_lineup_and_current_lineup() -> None:
+    current = current_squad()
+
+    result = compute_transfers(current, current, free=0, bank=0.0, max_transfers=0)
+    row = result['rows'][0]
+
+    assert len(row['bench']) == 4
+    assert row['captain']['element'] in {player['element'] for player in row['xi']}
+    assert row['vice_captain']['element'] in {player['element'] for player in row['xi']}
+    assert row['formation'] == result['current_lineup']['formation']
+    assert row['spend'] == round(float(current['value_m'].sum()), 1)
+    assert row['bank_after'] == 0.0
+    assert row['xi_points'] > 0
+    assert row['captained_total'] == row['gross']
+    assert result['current_lineup']['captain']['element'] == row['captain']['element']
+    assert set(result['current_lineup']) == {
+        'ok', 'budget', 'spend', 'xi', 'bench', 'captain',
+        'vice_captain', 'xi_points', 'formation',
+    }
+    assert result['current_lineup']['ok'] is True
+
+
 def test_transfer_constraints_match_players_by_element_not_dataframe_index() -> None:
     current = current_squad()
     # Simulate available-player filtering: one squad player disappears and the
@@ -83,6 +105,23 @@ def test_transfer_constraints_match_players_by_element_not_dataframe_index() -> 
     assert result['failures'][0]['transfers'] == 0
     assert result['best']['out'] == ['GK 1']
     assert result['best']['in'] == ['Replacement GK']
+
+
+def test_transfer_plan_counts_zero_one_and_two_are_returned_without_extra_hits() -> None:
+    current = current_squad()
+    market = pd.concat([
+        current,
+        pd.DataFrame([
+            player(100, 'Cheap enabler', 'P', 'MID', 4.0, 7.0),
+            player(101, 'Elite upgrade', 'Q', 'MID', 11.0, 14.0),
+        ]),
+    ], ignore_index=True)
+
+    result = compute_transfers(current, market, free=2, bank=0.0, max_transfers=2)
+
+    assert [row['transfers'] for row in result['rows']] == [0, 1, 2]
+    assert all(row['hit'] == 0 for row in result['rows'])
+    assert all(len(row['xi']) == 11 and len(row['bench']) == 4 for row in result['rows'])
 
 
 def test_recommendation_rejects_a_tiny_edge_for_an_extra_hit() -> None:
