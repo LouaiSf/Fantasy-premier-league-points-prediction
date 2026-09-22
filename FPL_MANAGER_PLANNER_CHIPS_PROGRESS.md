@@ -36,7 +36,18 @@ Always re-run `git status --short` because the user may add more work between se
 - [x] Root-cause analysis for misleading future Triple Captain output
 - [x] Implementation plan written
 - [x] Luna starting prompt written
-- [ ] Plan artifacts committed and pushed
+- [x] Plan artifacts committed and pushed as `66648e25` (`Add manager planner and chip advisor plan`)
+
+## 2026-09-22 — Planning handoff
+
+- Starting SHA: `106f6ad9`
+- Files changed: this ledger, `FPL_MANAGER_PLANNER_CHIPS_PLAN.md`, and `FPL_MANAGER_PLANNER_CHIPS_PROMPT.md`
+- Behavior completed: repository-grounded implementation plan, explicit API/data contracts, phased acceptance criteria, commit/push protocol, and Luna launch prompt
+- Verification: `git diff --check` passed before commit; staged diff contained only the three planning artifacts
+- Commit: `66648e25 Add manager planner and chip advisor plan`
+- Push: `origin/main` advanced from `106f6ad9` to `66648e25`
+- Known blocker: the repository has no text manager-search provider contract; Phase 1 must locate the user's API contract or return `search_not_configured` without guessing
+- Next exact action: begin Phase 1 at the step recorded below
 
 ## Implementation phases
 
