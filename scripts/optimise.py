@@ -1305,6 +1305,7 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
     scores = {chip: {} for chip in CHIP_IDS}
     breakdowns = {chip: {} for chip in CHIP_IDS}
     bench_evidence = {chip: {} for chip in CHIP_IDS}
+    captain_evidence = {}
     current_totals = {}
     squad_budget = float(squad['value_m'].sum()) if has_squad else None
 
@@ -1343,6 +1344,14 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
                 'incremental_gain': captain_points,
                 'captain_fixture_count': captain_fixtures,
             }
+            if captain is not None:
+                captain_evidence[gw] = {
+                    'player': str(captain.get('name', '')),
+                    'team': str(captain.get('team', '')),
+                    'position': str(captain.get('position', '')),
+                    'points': None if captain_points is None else round(captain_points, 2),
+                    'fixtures': int(captain_fixtures),
+                }
             scores['bench_boost'][gw] = bench_points
             bench_evidence['bench_boost'][gw] = _bench_evidence(bench)
             breakdowns['bench_boost'][gw] = {
@@ -1429,6 +1438,10 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
         if chip == 'bench_boost':
             recommendation['bench_players'] = bench_evidence[chip].get(
                 recommendation.get('candidate_gw'), [])
+        if chip == 'triple_captain':
+            evidence = captain_evidence.get(recommendation.get('candidate_gw'))
+            if evidence is not None:
+                recommendation['captain_evidence'] = evidence
         recommendations.append(recommendation)
 
     for row in rows:

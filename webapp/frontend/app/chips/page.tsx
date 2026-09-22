@@ -53,6 +53,11 @@ function nextInventoryState(state: ChipInventory["first_half"][ChipId]): ChipInv
   return "unused";
 }
 
+function captainFixtureLabel(fixtures: number): string {
+  if (fixtures === 2) return "Double gameweek";
+  return `${fixtures} ${fixtures === 1 ? "fixture" : "fixtures"}`;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -311,6 +316,24 @@ export default function ChipsPage() {
                 {data.projection_mode === "fixture_signal" ? "Fixture signal" : "Player projection"} · {data.inventory_sync_state === "synced" ? "inventory synced" : "inventory not synced"}
               </small>
             )}
+            {nextDecision?.chip === "triple_captain" && nextDecision.captain_evidence && (
+              <div className="chip-captain-evidence" aria-label="Triple Captain driver">
+                <div>
+                  <span className="kicker">Captain driving the upside</span>
+                  <strong>{nextDecision.captain_evidence.player} · {nextDecision.captain_evidence.team}</strong>
+                  <small>{nextDecision.captain_evidence.position} · {captainFixtureLabel(nextDecision.captain_evidence.fixtures)}</small>
+                </div>
+                <div>
+                  <span className="kicker">Why it works</span>
+                  <strong>
+                    {nextDecision.captain_evidence.points == null
+                      ? "Projection pending"
+                      : `+${num(nextDecision.captain_evidence.points, 1)} pts`}
+                  </strong>
+                  <small>Extra over normal captaincy</small>
+                </div>
+              </div>
+            )}
             {nextDecision?.warnings.map((warning) => <small key={warning}>{warning}</small>)}
           </div>
           {nextDecision && (
@@ -350,6 +373,15 @@ export default function ChipsPage() {
               <p className="chip-advisor-desc">{rec.reasons[0]}</p>
               {rec.expected_gain != null && <p className="chip-advisor-gain">Expected gain {rec.expected_gain >= 0 ? "+" : ""}{num(rec.expected_gain, 1)} pts</p>}
               {rec.note && <p className="chip-advisor-note">{rec.note}</p>}
+              {rec.chip === "triple_captain" && rec.captain_evidence && (
+                <div className="chip-captain-driver" aria-label="Triple Captain driver">
+                  <span>Driver</span>
+                  <strong>{rec.captain_evidence.player} · {rec.captain_evidence.team}</strong>
+                  <small>
+                    {captainFixtureLabel(rec.captain_evidence.fixtures)} · {rec.captain_evidence.points == null ? "Projection pending" : `+${num(rec.captain_evidence.points, 1)} extra captain pts`}
+                  </small>
+                </div>
+              )}
               {rec.bench_players && rec.bench_players.length > 0 && (
                 <p className="chip-advisor-bench">
                   Bench evidence: {rec.bench_players.map((player) => `${player.player} ${num(player.points, 1)}`).join(" · ")}

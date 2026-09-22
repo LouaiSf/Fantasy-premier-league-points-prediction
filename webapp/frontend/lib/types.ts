@@ -233,6 +233,7 @@ export interface ChipRecommendation {
   note?: string;
   squad_gap?: number;
   bench_players?: ChipBenchPlayer[];
+  captain_evidence?: ChipCaptainEvidence;
 }
 
 export interface ChipBenchPlayer {
@@ -240,6 +241,14 @@ export interface ChipBenchPlayer {
   element: number | string;
   points: number;
   available: boolean;
+}
+
+export interface ChipCaptainEvidence {
+  player: string;
+  team: string;
+  position: string;
+  points: number | null;
+  fixtures: number;
 }
 
 export interface ChipsResult {

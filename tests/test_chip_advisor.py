@@ -87,6 +87,7 @@ def test_no_squad_is_explicit_fixture_signal(monkeypatch, tmp_path):
     assert all(rec['expected_gain'] is None for rec in data['recommendations'])
     assert all(rec['status'] == 'watch' for rec in data['recommendations'])
     assert all('fixture signal' in rec['reasons'][0] for rec in data['recommendations'])
+    assert all('captain_evidence' not in rec for rec in data['recommendations'])
 
 
 def test_dgw_scores_actual_captain_and_bench(monkeypatch, tmp_path):
@@ -107,6 +108,11 @@ def test_dgw_scores_actual_captain_and_bench(monkeypatch, tmp_path):
     assert by_chip['triple_captain']['score_breakdown']['captain_fixture_count'] == 2
     assert by_chip['triple_captain']['score_breakdown']['triple_captain_points'] == round(
         by_chip['triple_captain']['score_breakdown']['normal_captain_points'] * 3, 2)
+    assert by_chip['triple_captain']['captain_evidence']['player'] == 'MID 0'
+    assert by_chip['triple_captain']['captain_evidence']['team'] == 'Club 8'
+    assert by_chip['triple_captain']['captain_evidence']['position'] == 'MID'
+    assert by_chip['triple_captain']['captain_evidence']['points'] == by_chip['triple_captain']['score_breakdown']['incremental_gain']
+    assert by_chip['triple_captain']['captain_evidence']['fixtures'] == 2
     assert by_chip['triple_captain']['candidate_gw'] == 2
 
 
