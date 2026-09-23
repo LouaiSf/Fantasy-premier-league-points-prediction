@@ -16,31 +16,50 @@ from __future__ import annotations
 
 import os
 import sys
+import json
+import logging
 import math
+import hmac
+import contextlib
+import functools
 import traceback
 import datetime
 import subprocess
+import threading
+import time
 from pathlib import Path
+from types import MappingProxyType
+from typing import Mapping
 
 import pandas as pd
-from flask import Flask, jsonify, request
+from flask import Flask, Response, g, jsonify, request
 from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, 'scripts'))
-os.chdir(ROOT)   # every path in optimise.py is relative to the project root
+# No os.chdir(ROOT): the working directory is process-wide state that every
+# thread shares. Paths here are built from ROOT, and optimise.py is handed it
+# explicitly (its `root=` arguments) rather than relying on being run from it.
 
 try:
+    from scripts import artifacts  # noqa: E402
     from scripts import optimise as opt  # noqa: E402
+    from scripts import refresh_pipeline as pipeline  # noqa: E402
 except ImportError:
+    import artifacts  # noqa: E402
     import optimise as opt  # noqa: E402
+    import refresh_pipeline as pipeline  # noqa: E402
 from webapp.platform_data import (  # noqa: E402
     build_local_snapshot,
     latest_local_season,
     photo_url,
     player_history,
 )
+from webapp import contracts  # noqa: E402
+from webapp import observability as obs  # noqa: E402
+from webapp.contracts import API_CONTRACT_VERSION, MAX_BODY_BYTES, RequestError  # noqa: E402
 from webapp.fpl_client import FplClient  # noqa: E402
 from webapp.manager_routes import create_manager_blueprint  # noqa: E402
 
@@ -48,45 +67,183 @@ from webapp.manager_routes import create_manager_blueprint  # noqa: E402
 DEFAULT_BUDGET = 100.0
 
 app = Flask(__name__)
-# The Next.js frontend (webapp/frontend) runs on its own dev port and calls
-# this API cross-origin; the Jinja/vanilla-JS pages it is replacing served
-# same-origin and needed none of this.
-#
-# In production set ALLOWED_ORIGINS to the frontend's URL(s), comma separated,
-# so only the site itself can call the API from a browser.
-_origins = [o.strip() for o in os.environ.get('ALLOWED_ORIGINS', '*').split(',') if o.strip()]
-CORS(app, resources={r'/api/*': {'origins': _origins or '*'}})
+app.config['MAX_CONTENT_LENGTH'] = MAX_BODY_BYTES
+obs.configure_logging()
+request_metrics = obs.RequestMetrics()
 
-# Loaded once. The CSV is small (a few hundred rows) and rereading it per
-# request would just add latency.
-_state: dict = {}
+# The Next.js frontend (webapp/frontend) runs on its own port and calls this
+# API cross-origin. Fail closed: with ALLOWED_ORIGINS unset, development gets
+# the local Next.js origins and production (APP_ENV=production) gets none, so
+# browsers on other sites cannot call the API. '*' has to be asked for by name,
+# and is refused in production. CORS is a browser-side control only; it does
+# not stop curl, which is what the refresh token is for.
+DEV_ORIGINS = ['http://localhost:3000', 'http://127.0.0.1:3000']
+
+
+def is_production(environ=None) -> bool:
+    return (environ or os.environ).get('APP_ENV', '').strip().lower() == 'production'
+
+
+def resolve_allowed_origins(environ=None) -> list[str]:
+    environ = os.environ if environ is None else environ
+    raw = (environ.get('ALLOWED_ORIGINS') or '').strip()
+    if not raw:
+        return [] if is_production(environ) else list(DEV_ORIGINS)
+    origins = [o.strip().rstrip('/') for o in raw.split(',') if o.strip()]
+    if '*' in origins and is_production(environ):
+        raise RuntimeError(
+            "ALLOWED_ORIGINS='*' is not allowed when APP_ENV=production; "
+            'list the frontend origin(s) explicitly.')
+    return origins
+
+
+_origins = resolve_allowed_origins()
+if _origins:
+    CORS(app, resources={r'/api/*': {'origins': _origins}},
+         allow_headers=['Content-Type', 'Authorization'])
+
+# The loaded predictions are an immutable snapshot: a read-only mapping that is
+# replaced wholesale and never edited. A request grabs one snapshot and uses it
+# start to finish, so a reload or refresh on another thread can never hand it
+# half-old, half-new data (gunicorn runs several threads). Rebuilds are
+# serialised by an RLock; the common path -- a fresh snapshot -- takes no lock.
+# DataFrames inside a snapshot are shared between threads: treat them as
+# read-only.
+_snapshot: Mapping = MappingProxyType({})
+_state_lock = threading.RLock()
+_maintenance = 0    # > 0 while a refresh is rewriting the data files
 manager_client = FplClient()
 
 
-def state() -> dict:
-    path = opt.PREDICTIONS
-    if not _state:
-        return reload_predictions()
-    # A cached error has no mtime to compare against, so the staleness check
-    # below could never fire and the process stayed broken for its whole life
-    # even once the file it was complaining about had been generated. Retry
-    # whenever the file exists and the last attempt failed: the work is one
-    # CSV read, and the alternative is telling someone to restart the server
-    # after running the pipeline the error message just told them to run.
-    if _state.get('error') and os.path.exists(path):
-        return reload_predictions()
-    if os.path.exists(path) and ('mtime' in _state and os.path.getmtime(path) != _state['mtime']):
-        return reload_predictions()
-    season = _state.get('season')
-    if season:
-        market_path = market_prices_path(season)
-        if os.path.exists(market_path) and os.path.getmtime(market_path) != _state.get('market_mtime'):
-            return reload_predictions()
-    return _state
+def project_path(*parts: str) -> str:
+    return os.path.join(ROOT, *parts)
+
+
+def predictions_path() -> str:
+    return os.path.join(ROOT, opt.PREDICTIONS)   # an absolute PREDICTIONS wins
 
 
 def market_prices_path(season: str) -> str:
-    return os.path.join('data', season, 'players_raw.csv')
+    return project_path('data', season, 'players_raw.csv')
+
+
+def latest_season() -> str | None:
+    data_dir = project_path('data')
+    if not os.path.isdir(data_dir):
+        return None
+    seasons = sorted(d for d in os.listdir(data_dir)
+                     if os.path.isdir(os.path.join(data_dir, d)) and d[:4].isdigit())
+    return seasons[-1] if seasons else None
+
+
+def _mtime_ns(path: str) -> int | None:
+    try:
+        return os.stat(path).st_mtime_ns
+    except OSError:
+        return None
+
+
+def source_signature(season: str | None) -> tuple:
+    """Modification times of every file a snapshot is built from.
+
+    A snapshot is stale when any of them differs from what it was built with --
+    including appearing or disappearing (None). Taken *before* the files are
+    read, so a change landing mid-build makes the next request rebuild instead
+    of being silently absorbed.
+    """
+    manifest = _mtime_ns(artifacts.manifest_path(predictions_path()))
+    if season is None:
+        return (_mtime_ns(predictions_path()), manifest, None, None, None)
+    return (
+        _mtime_ns(predictions_path()),
+        manifest,
+        _mtime_ns(market_prices_path(season)),
+        _mtime_ns(project_path('data', season, 'teams.csv')),
+        _mtime_ns(project_path('data', season, 'fixtures.csv')),
+    )
+
+
+def _is_stale(snapshot: Mapping) -> bool:
+    season = snapshot.get('season') or latest_season()
+    return source_signature(season) != snapshot.get('signature')
+
+
+def state() -> Mapping:
+    """The current snapshot, rebuilt first if any source file has changed."""
+    snapshot = _snapshot
+    if snapshot and (_maintenance or not _is_stale(snapshot)):
+        return snapshot
+    with _state_lock:
+        snapshot = _snapshot
+        if snapshot and (_maintenance or not _is_stale(snapshot)):
+            return snapshot
+        return reload_predictions()
+
+
+_rebuild_failure: str | None = None    # why the last rebuild failed, until one succeeds
+
+
+def reload_predictions() -> Mapping:
+    """Build a new snapshot and install it.
+
+    A file that cannot be read -- half-written, truncated, corrupt -- must not
+    take the site down if there is good data already loaded: the previous
+    snapshot keeps being served, the failure is logged and raised as the
+    `predictions_rebuild_failing` alert, and the next request tries again. With
+    nothing loaded yet there is nothing to fall back to, so the snapshot says why.
+    """
+    global _snapshot, _rebuild_failure
+    with _state_lock:
+        previous = _snapshot
+        try:
+            built = _build_snapshot()
+        except (OSError, ValueError, KeyError) as exc:   # pandas' parse errors are ValueErrors
+            reason = f'{type(exc).__name__}: {exc}'
+            if _rebuild_failure != reason:
+                obs.log_event(logging.WARNING, 'snapshot_rebuild_failed', error=reason,
+                              serving_previous=bool(previous and not previous.get('error')))
+            _rebuild_failure = reason
+            if previous and not previous.get('error'):
+                return previous
+            built = {**_empty_snapshot(latest_season()),
+                     'error': f'{opt.PREDICTIONS} could not be read ({type(exc).__name__}).'}
+        else:
+            _rebuild_failure = None
+        _snapshot = MappingProxyType(built)
+        return _snapshot
+
+
+def reset_state() -> None:
+    global _snapshot
+    with _state_lock:
+        _snapshot = MappingProxyType({})
+
+
+@contextlib.contextmanager
+def maintenance():
+    """Hold readers on the last good snapshot while data files are rewritten.
+
+    fetch_data.py rewrites files in place, so a rebuild that started halfway
+    through would read a torn file. While this is active state() keeps serving
+    the current snapshot; the first request after it ends sees the new
+    signature and rebuilds.
+    """
+    global _maintenance
+    with _state_lock:
+        _maintenance += 1
+    try:
+        yield
+    finally:
+        with _state_lock:
+            _maintenance -= 1
+
+
+class MarketDataUnavailable(Exception):
+    """Live market prices cannot be established, so no price may be shown or used."""
+
+
+# A market file that prices under half the export is not this season's market.
+MIN_MARKET_COVERAGE = 0.5
 
 
 def join_market_prices(df: pd.DataFrame, season: str) -> pd.DataFrame:
@@ -99,17 +256,51 @@ def join_market_prices(df: pd.DataFrame, season: str) -> pd.DataFrame:
     saw at export time. A player missing from the current market file
     cannot be legally bought at any price, so he is dropped here rather
     than silently priced from the stale export.
+
+    Fails closed: when the market file is missing, unreadable, lacks the
+    columns, or covers too little of the export, this raises rather than
+    handing back the export's own (possibly weeks-old) prices.
     """
-    if df.empty or 'element' not in df.columns:
+    if df.empty:
         return df
     raw_path = market_prices_path(season)
+    shown = os.path.join('data', season, 'players_raw.csv')
+    if 'element' not in df.columns:
+        raise MarketDataUnavailable(
+            'The prediction export has no element IDs, so it cannot be matched to market prices.')
     if not os.path.exists(raw_path):
-        return df
-    raw = pd.read_csv(raw_path, usecols=['id', 'now_cost'], low_memory=False)
-    market_price = raw.set_index('id')['now_cost'] / 10.0
+        raise MarketDataUnavailable(
+            f'Market prices are unavailable: {shown} not found. Refresh the season data '
+            'before using budgets, transfers or chips.')
+    try:
+        raw = pd.read_csv(raw_path, usecols=['id', 'now_cost'], low_memory=False)
+    except (ValueError, OSError, pd.errors.ParserError, pd.errors.EmptyDataError) as exc:
+        raise MarketDataUnavailable(
+            f'Market prices are unavailable: {shown} is unreadable or lacks id/now_cost '
+            f'({type(exc).__name__}).') from exc
+    market_price = pd.to_numeric(raw.set_index('id')['now_cost'], errors='coerce') / 10.0
+    market_price = market_price[market_price.notna() & (market_price > 0)]
+    priced = df['element'].map(market_price)
+    if priced.notna().mean() < MIN_MARKET_COVERAGE:
+        raise MarketDataUnavailable(
+            f'Market prices are unavailable: {shown} prices only '
+            f'{int(priced.notna().sum())} of {len(df)} predicted players.')
     df = df.copy()
-    df['value_m'] = df['element'].map(market_price)
+    df['value_m'] = priced
     return df.dropna(subset=['value_m']).reset_index(drop=True)
+
+
+def without_prices(df: pd.DataFrame) -> pd.DataFrame:
+    """The export with its stale prices blanked, for when there is no market data.
+
+    Every price-dependent route is gated on `market_error`; blanking value_m
+    means a route that forgot the gate gets NaN, not last week's number.
+    """
+    if df.empty or 'value_m' not in df.columns:
+        return df
+    df = df.copy()
+    df['value_m'] = float('nan')
+    return df
 
 
 def local_element_ids() -> set[int]:
@@ -122,8 +313,32 @@ def local_element_ids() -> set[int]:
 app.register_blueprint(create_manager_blueprint(manager_client, local_element_ids))
 
 
-def reload_predictions() -> dict:
-    path = opt.PREDICTIONS
+def _empty_snapshot(season: str | None) -> dict:
+    return {
+        'loaded_at': time.time(),
+        'signature': source_signature(season),   # before reading, see source_signature
+        'season': season,
+        'gameweek': None,
+        'error': None,
+        'market_error': None,
+        'players': pd.DataFrame(),
+        'everyone': pd.DataFrame(),
+        'future_points': None,
+        'future_gameweeks': [],
+        'mtime': None,
+        'market_mtime': None,
+        'artifact': None,
+        'model': model_summary(),
+    }
+
+
+def _build_snapshot() -> dict:
+    """Read every source file and return a complete snapshot. Touches no globals."""
+    path = predictions_path()
+    season = latest_season()
+    snapshot = _empty_snapshot(season)
+    if season is None:
+        return {**snapshot, 'error': 'No season directory found under data/.'}
     if not os.path.exists(path):
         _state['error'] = (
             f"{path} not found. Run scripts/predict_gameweek.py first -- "
