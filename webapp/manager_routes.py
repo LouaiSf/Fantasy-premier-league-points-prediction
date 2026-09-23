@@ -9,6 +9,7 @@ from webapp.fpl_client import (
     FplClient,
     FplClientError,
     InvalidUpstreamResponse,
+    LeagueNotFound,
     LineupNotFound,
     ManagerNotFound,
     SearchNotConfigured,
@@ -31,6 +32,8 @@ def _error(exc: FplClientError):
         code, status = "search_not_configured", 503
     elif isinstance(exc, ManagerNotFound):
         code, status = "manager_not_found", 404
+    elif isinstance(exc, LeagueNotFound):
+        code, status = "league_not_found", 404
     elif isinstance(exc, LineupNotFound):
         code, status = "lineup_not_found", 404
     elif isinstance(exc, (InvalidUpstreamResponse, UpstreamUnavailable)):
@@ -63,6 +66,45 @@ def create_manager_blueprint(
             return jsonify({"ok": True, "query": query, "results": results})
         except FplClientError as exc:
             return _error(exc)
+
+    @blueprint.get("/leagues/<int:league_id>/standings")
+    def league_standings(league_id: int):
+        raw_page = request.args.get("page", "1")
+        try:
+            page = int(raw_page)
+        except ValueError:
+            return jsonify({
+                "ok": False,
+                "code": "invalid_page",
+                "error": "page must be a positive integer",
+            }), 400
+        if page < 1:
+            return jsonify({
+                "ok": False,
+                "code": "invalid_page",
+                "error": "page must be a positive integer",
+            }), 400
+        try:
+            standings = client.get_league_standings(league_id, page)
+        except FplClientError as exc:
+            return _error(exc)
+        return jsonify({
+            "ok": True,
+            "league_id": standings.league_id,
+            "league_name": standings.league_name,
+            "page": standings.page,
+            "has_next": standings.has_next,
+            "entries": [
+                {
+                    "entry_id": entry.entry_id,
+                    "manager_name": entry.manager_name,
+                    "team_name": entry.team_name,
+                    "rank": entry.rank,
+                    "total_points": entry.total_points,
+                }
+                for entry in standings.entries
+            ],
+        })
 
     @blueprint.get("/<int:entry_id>/lineup")
     def manager_lineup(entry_id: int):

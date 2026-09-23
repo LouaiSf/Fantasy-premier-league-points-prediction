@@ -1,6 +1,7 @@
 import type {
   ApiError,
   ChipInventory,
+  LeagueStandingsResult,
   ManagerLineup,
   ManagerSearchCandidate,
   PlatformSnapshot,
@@ -69,6 +70,10 @@ export const api = {
   managerLineup: (entryId: number, gameweek?: number) =>
     requestJson<ManagerLineup>(
       `/api/managers/${entryId}/lineup${gameweek ? `?gameweek=${gameweek}` : ""}`,
+    ),
+  leagueStandings: (leagueId: number, page = 1) =>
+    requestJson<LeagueStandingsResult>(
+      `/api/managers/leagues/${leagueId}/standings?page=${page}`,
     ),
   meta: () =>
     requestJson<{

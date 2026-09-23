@@ -7,6 +7,7 @@ import pytest
 from webapp.fpl_client import (
     FplClient,
     InvalidUpstreamResponse,
+    LeagueNotFound,
     ManagerNotFound,
     SearchNotConfigured,
     UpstreamUnavailable,
@@ -153,3 +154,45 @@ def test_missing_entry_is_typed_not_found(monkeypatch: pytest.MonkeyPatch) -> No
 def test_text_search_requires_a_configured_contract() -> None:
     with pytest.raises(SearchNotConfigured):
         FplClient().search_text("First Last")
+
+
+def test_league_standings_normalizes_entries_and_pagination(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    def fake_open(request, timeout):
+        calls.append(request.full_url)
+        return FakeResponse({
+            "league": {"id": 314, "name": "Overall"},
+            "standings": {
+                "has_next": True,
+                "page": 2,
+                "results": [
+                    {"entry": 895045, "player_name": "Jasper Selvaraj",
+                     "entry_name": "Jake Crow Sliced Jam", "rank": 1, "total": 468},
+                    {"entry": 5151567, "player_name": "Chris Greenwood",
+                     "entry_name": "I Want It Stach Way", "rank": 2, "total": 456},
+                ],
+            },
+        })
+
+    monkeypatch.setattr("webapp.fpl_client.request.urlopen", fake_open)
+
+    page = FplClient().get_league_standings(314, page=2)
+
+    assert page.league_id == 314
+    assert page.league_name == "Overall"
+    assert page.has_next is True
+    assert [entry.entry_id for entry in page.entries] == [895045, 5151567]
+    assert page.entries[0].manager_name == "Jasper Selvaraj"
+    assert page.entries[0].team_name == "Jake Crow Sliced Jam"
+    assert calls == ["https://fantasy.premierleague.com/api/leagues-classic/314/standings/?page_standings=2"]
+
+
+def test_league_standings_typed_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_open(request, timeout):
+        return FakeResponse({}, status=404)
+
+    monkeypatch.setattr("webapp.fpl_client.request.urlopen", fake_open)
+
+    with pytest.raises(LeagueNotFound):
+        FplClient().get_league_standings(999999999)

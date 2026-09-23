@@ -212,6 +212,23 @@ export interface ManagerSearchCandidate {
   total_points: number | null;
 }
 
+export interface LeagueStandingsEntry {
+  entry_id: number;
+  manager_name: string;
+  team_name: string;
+  rank: number | null;
+  total_points: number | null;
+}
+
+export interface LeagueStandingsResult {
+  ok: true;
+  league_id: number;
+  league_name: string;
+  page: number;
+  has_next: boolean;
+  entries: LeagueStandingsEntry[];
+}
+
 export interface ManagerPick {
   element: number;
   position: number;

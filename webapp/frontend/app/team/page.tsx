@@ -13,6 +13,7 @@ import { Loading } from "@/components/loading";
 import { ModelInfo } from "@/components/model-info";
 import { ManagerSearch } from "@/components/team/manager-search";
 import { TeamPlan } from "@/components/team/team-plan";
+import { DataPortability } from "@/components/team/data-portability";
 import type { TransferResult, TransferRow } from "@/lib/types";
 
 // The FPL budget every manager starts a season with.
@@ -32,9 +33,11 @@ export default function TeamPage() {
     financeSummary,
     toast,
     openProfile,
+    reload,
   } = useApp();
   const [picking, setPicking] = React.useState(false);
   const [liningUp, setLiningUp] = React.useState(false);
+  const [refreshingPrices, setRefreshingPrices] = React.useState(false);
   const [freeTransfers, setFreeTransfers] = React.useState(1);
   const [plannerBank, setPlannerBank] = React.useState<number | null>(null);
   const [transferPlan, setTransferPlan] = React.useState<TransferResult | null>(null);
@@ -128,6 +131,19 @@ export default function TeamPage() {
   const flagged = squadPlayers.filter(
     (player) => player.status !== "a" || (player.chance_of_playing_next_round ?? 100) < 100,
   );
+
+  async function refreshPrices() {
+    setRefreshingPrices(true);
+    try {
+      const res = await api.refresh();
+      toast(res.message || "Season data refreshed.");
+      reload();
+    } catch (err) {
+      toast(`Refresh failed: ${(err as Error).message}`);
+    } finally {
+      setRefreshingPrices(false);
+    }
+  }
 
   async function autoPick() {
     setPicking(true);
@@ -309,7 +325,15 @@ export default function TeamPage() {
               )}
               {marketStale && (
                 <p className="finance-basis-note">
-                  Local market prices are more than 24 hours old (as of {marketPricesUpdatedLabel}).
+                  Local market prices are more than 24 hours old (as of {marketPricesUpdatedLabel}).{" "}
+                  <button
+                    type="button"
+                    className="finance-basis-refresh"
+                    onClick={() => void refreshPrices()}
+                    disabled={refreshingPrices}
+                  >
+                    {refreshingPrices ? "Refreshing…" : "Refresh now"}
+                  </button>
                 </p>
               )}
               {snapshot.predictions_older_than_market && (
@@ -404,6 +428,14 @@ export default function TeamPage() {
                     : "No squad loaded."}
                 </p>
               )}
+            </section>
+
+            <section className="rail-block">
+              <p className="eyebrow muted">
+                Device data
+              </p>
+              <h2>Export &amp; import</h2>
+              <DataPortability />
             </section>
           </aside>
         </div>

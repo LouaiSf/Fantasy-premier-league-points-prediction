@@ -22,6 +22,9 @@ class FplClientError(Exception):
 class ManagerNotFound(FplClientError):
     pass
 
+class LeagueNotFound(FplClientError):
+    pass
+
 class LineupNotFound(FplClientError):
     pass
 
@@ -66,6 +69,24 @@ class ManagerLineup:
     event_rank: int | None
     active_chip: str | None
     picks: tuple[ManagerPick, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class LeagueStandingsEntry:
+    entry_id: int
+    manager_name: str
+    team_name: str
+    rank: int | None
+    total_points: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class LeagueStandingsPage:
+    league_id: int
+    league_name: str
+    page: int
+    has_next: bool
+    entries: tuple[LeagueStandingsEntry, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,7 +149,9 @@ class FplClient:
     def _url(self, path: str) -> str:
         return f"{self.base_url}/{path.lstrip('/')}"
 
-    def _get_json(self, url: str) -> dict[str, object]:
+    def _get_json(
+        self, url: str, *, not_found_exc: type[FplClientError] = ManagerNotFound,
+    ) -> dict[str, object]:
         now = time.monotonic()
         cached = _CACHE.get(url)
         if cached is not None and cached.expires_at > now:
@@ -147,15 +170,15 @@ class FplClient:
                 if status is None:
                     status = response.getcode()
                 if status == 404:
-                    raise ManagerNotFound("public FPL resource was not found")
+                    raise not_found_exc("public FPL resource was not found")
                 if status < 200 or status >= 300:
                     raise UpstreamUnavailable(f"public FPL API returned HTTP {status}")
                 raw = response.read(MAX_RESPONSE_BYTES + 1)
-        except ManagerNotFound:
+        except FplClientError:
             raise
         except error.HTTPError as exc:
             if exc.code == 404:
-                raise ManagerNotFound("public FPL resource was not found") from exc
+                raise not_found_exc("public FPL resource was not found") from exc
             raise UpstreamUnavailable(f"public FPL API returned HTTP {exc.code}") from exc
         except (error.URLError, TimeoutError, OSError) as exc:
             raise UpstreamUnavailable("public FPL API could not be reached") from exc
@@ -264,4 +287,44 @@ class FplClient:
             raise SearchNotConfigured("text manager search provider URL is invalid")
         raise SearchNotConfigured(
             "text manager search provider contract is not documented; refusing to guess its fields"
+        )
+
+    def get_league_standings(self, league_id: int, page: int = 1) -> LeagueStandingsPage:
+        """One page of a classic league's standings: manager name, team name,
+        entry ID, rank and points for every member on that page.
+
+        There is no FPL endpoint to search all ~11M managers by name -- that
+        would mean crawling every entry ID, which this client deliberately
+        does not do. A classic league's standings are the smallest public
+        surface that actually supports name search: enumerate a league a
+        manager already knows the ID of (their own mini-league, or a public
+        one) and filter it client-side.
+        """
+        if league_id <= 0:
+            raise LeagueNotFound("public FPL league IDs are positive")
+        if page <= 0:
+            raise InvalidUpstreamResponse("page must be a positive number")
+        url = self._url(f"leagues-classic/{league_id}/standings/?page_standings={page}")
+        data = self._get_json(url, not_found_exc=LeagueNotFound)
+        league = _mapping(data.get("league", {}), "league")
+        standings = _mapping(data.get("standings", {}), "standings")
+        raw_results = standings.get("results")
+        if not isinstance(raw_results, list):
+            raise InvalidUpstreamResponse("FPL league standings response has no results list")
+        entries = []
+        for raw in raw_results:
+            row = _mapping(raw, "standings result")
+            entries.append(LeagueStandingsEntry(
+                entry_id=_required_int(row, "entry"),
+                manager_name=str(row.get("player_name") or ""),
+                team_name=str(row.get("entry_name") or ""),
+                rank=_optional_int(row, "rank"),
+                total_points=_optional_int(row, "total"),
+            ))
+        return LeagueStandingsPage(
+            league_id=league_id,
+            league_name=str(league.get("name") or ""),
+            page=page,
+            has_next=_bool(standings.get("has_next")),
+            entries=tuple(entries),
         )

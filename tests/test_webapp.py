@@ -194,6 +194,48 @@ def test_manager_search_numeric_and_text_contract(monkeypatch) -> None:
     assert text.get_json()["code"] == "search_not_configured"
 
 
+def test_league_standings_contract(monkeypatch) -> None:
+    client = app.test_client()
+
+    class Entry:
+        def __init__(self, entry_id, name, team):
+            self.entry_id = entry_id
+            self.manager_name = name
+            self.team_name = team
+            self.rank = 1
+            self.total_points = 500
+
+    class Standings:
+        league_id = 314
+        league_name = "Overall"
+        page = 1
+        has_next = True
+        entries = (Entry(895045, "Jasper Selvaraj", "Jake Crow Sliced Jam"),)
+
+    monkeypatch.setattr(
+        app_module.manager_client, "get_league_standings",
+        lambda _league_id, _page: Standings(),
+    )
+
+    response = client.get("/api/managers/leagues/314/standings")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["league_name"] == "Overall"
+    assert payload["has_next"] is True
+    assert payload["entries"][0]["entry_id"] == 895045
+    assert payload["entries"][0]["manager_name"] == "Jasper Selvaraj"
+
+
+def test_league_standings_rejects_invalid_page(monkeypatch) -> None:
+    client = app.test_client()
+
+    response = client.get("/api/managers/leagues/314/standings?page=0")
+
+    assert response.status_code == 400
+    assert response.get_json()["code"] == "invalid_page"
+
+
 def test_manager_lineup_returns_missing_local_elements(monkeypatch) -> None:
     client = app.test_client()
 

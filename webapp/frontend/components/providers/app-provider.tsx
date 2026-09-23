@@ -18,8 +18,7 @@ import type {
   SquadResult,
   StoredSquad,
 } from "@/lib/types";
-
-const SQUAD_STORAGE_KEY = "fpl-assistant-squad";
+import { SQUAD_STORAGE_KEY } from "@/lib/storage-keys";
 
 interface AppState {
   snapshot: PlatformSnapshot | null;

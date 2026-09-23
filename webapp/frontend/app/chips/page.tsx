@@ -10,8 +10,8 @@ import { EmptyState } from "@/components/empty-state";
 import { ChipIcon } from "@/components/chips/chip-icon";
 import { ChipOpportunityMatrix } from "@/components/chips/chip-opportunity-matrix";
 import { CHIP_IDS, type ChipId, type ChipInventory, type ChipRecommendation, type ChipRow, type ChipsResult, type ChipState } from "@/lib/types";
+import { CHIP_INVENTORY_KEY } from "@/lib/storage-keys";
 
-const CHIP_INVENTORY_KEY = "fpl-assistant-chip-inventory";
 // The last gameweek of each half-season set, per the official 2026/27 chip
 // rules (two sets, split at the GW19 deadline).
 const FIRST_HALF_LAST_GW = 19;
@@ -145,6 +145,106 @@ function readLastFreeHitGameweek(season: string): number | null {
   }
 }
 
+interface PlannedChip {
+  chip: ChipId;
+  gw: number;
+}
+
+function isPlannedChip(value: unknown): value is PlannedChip {
+  return (
+    isRecord(value) &&
+    (CHIP_IDS as readonly string[]).includes(value.chip as string) &&
+    typeof value.gw === "number" &&
+    Number.isFinite(value.gw)
+  );
+}
+
+// A chip a manager has already committed to for a specific future
+// gameweek -- the backend excludes that gameweek from every *other* chip's
+// candidate window too, since only one chip can be played per week.
+function readPlannedChips(season: string): PlannedChip[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = window.localStorage.getItem(CHIP_INVENTORY_KEY);
+    if (!stored) return [];
+    const parsed: unknown = JSON.parse(stored);
+    if (!isRecord(parsed) || parsed.season !== season) return [];
+    const value = parsed.plannedChips;
+    return Array.isArray(value) ? value.filter(isPlannedChip) : [];
+  } catch {
+    return [];
+  }
+}
+
+function PlannedChipsPanel({
+  plannedChips,
+  maxGw,
+  currentGw,
+  onAdd,
+  onRemove,
+}: {
+  plannedChips: PlannedChip[];
+  maxGw: number;
+  currentGw: number;
+  onAdd: (chip: ChipId, gw: number) => void;
+  onRemove: (chip: ChipId, gw: number) => void;
+}) {
+  const [chip, setChip] = React.useState<ChipId>(CHIP_IDS[0]);
+  const [gwInput, setGwInput] = React.useState("");
+
+  function submit(event: React.FormEvent) {
+    event.preventDefault();
+    const gw = Number(gwInput);
+    if (!Number.isInteger(gw) || gw < currentGw || gw > maxGw) return;
+    onAdd(chip, gw);
+    setGwInput("");
+  }
+
+  return (
+    <div className="chip-planned">
+      <span className="kicker">Planned chips</span>
+      <p className="chip-planned-note">
+        A chip you&apos;ve already committed to for a specific future week. Recommendations won&apos;t suggest
+        a different chip for that same gameweek, since only one can be played per week.
+      </p>
+      {plannedChips.length > 0 && (
+        <ul className="chip-planned-list">
+          {plannedChips.map((planned) => (
+            <li key={`${planned.chip}-${planned.gw}`}>
+              <ChipIcon id={planned.chip} />
+              <span>{CHIP_LABELS[planned.chip]} · GW{planned.gw}</span>
+              <button
+                type="button"
+                className="btn ghost sm"
+                onClick={() => onRemove(planned.chip, planned.gw)}
+                aria-label={`Remove planned ${CHIP_LABELS[planned.chip]} for GW${planned.gw}`}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form className="chip-planned-form" onSubmit={submit}>
+        <select value={chip} onChange={(event) => setChip(event.target.value as ChipId)}>
+          {CHIP_IDS.map((id) => (
+            <option key={id} value={id}>{CHIP_LABELS[id]}</option>
+          ))}
+        </select>
+        <input
+          type="number"
+          min={currentGw}
+          max={maxGw}
+          placeholder={`GW${currentGw}-${maxGw}`}
+          value={gwInput}
+          onChange={(event) => setGwInput(event.target.value)}
+        />
+        <button type="submit" className="btn secondary sm">Add</button>
+      </form>
+    </div>
+  );
+}
+
 function WhyThisChoice({ recommendation, data }: { recommendation: ChipRecommendation; data: ChipsResult }) {
   const evidence = recommendation.evidence;
   return (
@@ -210,10 +310,14 @@ export default function ChipsPage() {
   // alongside the inventory rather than hardcoded to null, which silently
   // disabled that rule entirely.
   const [lastFreeHitGameweek, setLastFreeHitGameweek] = React.useState<number | null>(null);
-  // Recommendations don't yet know about a chip the manager has already
-  // mentally earmarked for a specific future week outside this session;
-  // disclosed in the inventory panel rather than silently assumed away.
-  const scheduledGameweeks = React.useMemo<number[]>(() => [], []);
+  // Chips the manager has already committed to for a specific future
+  // gameweek, so a *different* chip isn't freshly recommended for a week
+  // that's already spoken for -- only one chip can be played per gameweek.
+  const [plannedChips, setPlannedChips] = React.useState<PlannedChip[]>([]);
+  const scheduledGameweeks = React.useMemo(
+    () => plannedChips.map((planned) => planned.gw),
+    [plannedChips],
+  );
 
   const maxPossibleHorizon = Math.max(1, 38 - (snapshot?.gameweek ?? 1) + 1);
   const effectiveHorizon = Math.min(horizon, maxPossibleHorizon);
@@ -282,6 +386,7 @@ export default function ChipsPage() {
       const stored = readInventory(season);
       setInventory(stored);
       setLastFreeHitGameweek(readLastFreeHitGameweek(season));
+      setPlannedChips(readPlannedChips(season));
       setInventoryLoaded(true);
     }, 0);
     return () => window.clearTimeout(timer);
@@ -292,24 +397,43 @@ export default function ChipsPage() {
     if (typeof window !== "undefined" && inventory) {
       window.localStorage.setItem(
         CHIP_INVENTORY_KEY,
-        JSON.stringify({ ...inventory, season: snapshot.season, lastFreeHitGameweek }),
+        JSON.stringify({ ...inventory, season: snapshot.season, lastFreeHitGameweek, plannedChips }),
       );
     } else if (typeof window !== "undefined") {
       window.localStorage.removeItem(CHIP_INVENTORY_KEY);
     }
-  }, [inventory, inventoryLoaded, snapshot?.season, lastFreeHitGameweek]);
+  }, [inventory, inventoryLoaded, snapshot?.season, lastFreeHitGameweek, plannedChips]);
+
+  function addPlannedChip(chip: ChipId, gw: number) {
+    setPlannedChips((current) => {
+      const withoutDuplicate = current.filter((planned) => !(planned.chip === chip && planned.gw === gw));
+      return [...withoutDuplicate, { chip, gw }].sort((a, b) => a.gw - b.gw);
+    });
+  }
+
+  function removePlannedChip(chip: ChipId, gw: number) {
+    setPlannedChips((current) => current.filter((planned) => !(planned.chip === chip && planned.gw === gw)));
+  }
 
   function updateChipState(half: "first_half" | "second_half", chip: ChipId) {
     setInventory((current) => {
       if (!current) return current;
+      const nextState = nextInventoryState(current[half][chip]);
       return {
         ...current,
         [half]: {
           ...current[half],
-          [chip]: nextInventoryState(current[half][chip]),
+          [chip]: nextState,
         },
       };
     });
+    // Marking Free Hit used usually happens right around when it's played;
+    // default the GW field to today's rather than leaving it blank and
+    // making the manager type a number they were just implicitly stating.
+    // Still freely editable for a retroactive correction.
+    if (half === "first_half" && chip === "free_hit" && inventory?.first_half.free_hit === "unused") {
+      setLastFreeHitGameweek((current) => current ?? snapshot?.gameweek ?? null);
+    }
   }
 
   if (loading || !snapshot) {
@@ -416,12 +540,6 @@ export default function ChipsPage() {
                 ? "Mark a chip used as you play it. An unused first-half chip is shown Expired automatically once GW19 passes -- no private FPL account data is connected, and this device is the only place this is saved."
                 : "Recommendations are provisional until you mark the two half-season sets as available. No private FPL account data is connected."}
             </p>
-            {inventory && (
-              <p className="chip-inventory-caveat">
-                Recommendations don&apos;t account for a chip you&apos;ve already planned for a specific future
-                week outside this page.
-              </p>
-            )}
           </div>
           <span className={`chip-inventory-state state-${inventory ? "synced" : "not-synced"}`}>
             {inventory ? "Saved" : "Not saved"}
@@ -474,6 +592,15 @@ export default function ChipsPage() {
                 </div>
               ))}
             </div>
+          )}
+          {inventory && (
+            <PlannedChipsPanel
+              plannedChips={plannedChips}
+              maxGw={maxPossibleHorizon + (snapshot.gameweek ?? 1) - 1}
+              currentGw={snapshot.gameweek ?? 1}
+              onAdd={addPlannedChip}
+              onRemove={removePlannedChip}
+            />
           )}
         </section>
 
