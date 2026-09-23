@@ -91,6 +91,10 @@ export interface PlatformSnapshot {
   prediction_error: string | null;
   prediction_timestamp: string | null;
   market_prices_updated_at: string | null;
+  // False when the backend has no usable live prices; budgets, transfers and
+  // chips are refused (503, code "market_prices_unavailable") until it does.
+  market_prices_available?: boolean;
+  market_prices_error?: string | null;
   predictions_older_than_market: boolean;
   model: ModelSummary;
 }
@@ -149,7 +153,11 @@ export interface TransferResult {
 export interface ApiError {
   ok: false;
   error: string;
+  // Machine-readable slug, e.g. "invalid_field", "unknown_player",
+  // "market_prices_unavailable", "refresh_auth_required".
   code?: string;
+  // The request field at fault, when one is.
+  field?: string;
 }
 
 export interface PlayerHistoryRecord {
