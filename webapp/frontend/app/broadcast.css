@@ -1957,6 +1957,9 @@
   .manager-search-mode{display:flex;flex-wrap:wrap;gap:4px;margin-top:var(--space-4)}
   .league-search-filter{display:block;margin-top:var(--space-4);max-width:720px}
   .league-search-filter input{width:100%;background:var(--night-900);border:1px solid rgba(255,255,255,.2);color:var(--white);padding:var(--space-3);font:500 var(--type-body)/1 var(--ui)}
+  .league-search-jump{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2);margin-top:var(--space-3);max-width:720px}
+  .league-search-jump label{color:var(--muted-light);font-size:var(--type-small)}
+  .league-search-jump input{flex:1 1 180px;min-width:0;background:var(--night-900);border:1px solid rgba(255,255,255,.2);color:var(--white);padding:var(--space-3);font:500 var(--type-body)/1 var(--ui)}
   .league-search-note{margin:var(--space-2) 0 0;color:var(--muted-light);font-size:var(--type-small)}
   .manager-preview{margin-top:var(--space-5);border-top:1px solid rgba(255,255,255,.14);padding-top:var(--space-5)}
   .manager-preview-head{display:flex;justify-content:space-between;gap:var(--space-4);align-items:flex-start}
