@@ -79,6 +79,43 @@ It calls `scripts/optimise.py` directly rather than reimplementing anything, so
 the browser and the CLI cannot disagree — the same `solve_squad` produces both.
 Needs `predictions_next_gw.csv` from `scripts/predict_gameweek.py`.
 
+## Keeping predictions fresh
+
+`/api/refresh` only pulls raw FPL data; the predictions are a separate export
+and would otherwise go on serving last week's numbers. `scripts/refresh_pipeline.py`
+runs the whole chain and only swaps the result in once it has checked it:
+
+1. fetch current season data
+2. run `predict_gameweek.py --horizon 12` into a temp file
+3. validate it: required columns, no blank points, the first gameweek matches the
+   freshly fetched fixtures, every week of the horizon present, clubs match
+   `teams.csv`, no collapse in player count
+4. `os.replace()` it onto `predictions_next_gw.csv`
+
+Any failure leaves the previous export untouched. A lock file stops two runs
+overlapping. The web app reloads on the file's mtime, so no restart is needed.
+
+```bash
+python scripts/refresh_pipeline.py              # ~90 s; exit code 0 / 1
+python scripts/refresh_pipeline.py --no-fetch --horizon 8
+```
+
+Schedule it (for example daily, and after each gameweek's deadline) with cron or
+Windows Task Scheduler and alert on a non-zero exit. From the site, the Refresh
+button fetches the data and then runs the same pipeline in the background
+(`POST /api/refresh/predictions`, poll `GET /api/refresh/status`).
+
+If `all_seasons_data_final.csv` lags the fetched data the pipeline runs
+`build_dataset.py --write` first (about 30 s, and it keeps a `.prev` copy), since
+predictions are built from that history; `--no-rebuild-history` skips it. It never
+retrains models.
+
+Every command's exit status is checked, and a failure returns the step, exit
+status and stderr (as JSON from the API, on stderr from the CLI). Refreshes are
+serialised by a lock (`409` if one is running) and rate limited: `429` with
+`Retry-After` for 60 s after a fetch, or 10 s after a failed one. Override with
+`REFRESH_COOLDOWN_SECONDS` / `REFRESH_FAILURE_COOLDOWN_SECONDS`.
+
 ## Quick start
 
 ```bash
