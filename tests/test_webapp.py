@@ -7,6 +7,14 @@ import webapp.app as app_module
 from webapp.app import app
 
 
+@pytest.fixture(autouse=True)
+def _no_refresh_cooldown():
+    # The cooldown is process-wide state; one test's refresh must not throttle the next.
+    app_module.reset_refresh_guards()
+    yield
+    app_module.reset_refresh_guards()
+
+
 def test_platform_api_meta_and_platform() -> None:
     # Given the production Flask API application.
     client = app.test_client()
@@ -37,17 +45,17 @@ def test_reload_predictions_rejects_a_different_league_roster(
     (season / "teams.csv").write_text("id,name\n1,Burnley\n", encoding="utf-8")
     (tmp_path / "predictions_next_gw.csv").write_text("placeholder", encoding="utf-8")
     predictions = pd.DataFrame([{"team": "Hull City"}])
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(app_module, "ROOT", str(tmp_path))
     monkeypatch.setattr(app_module.opt, "PREDICTIONS", "predictions_next_gw.csv")
     monkeypatch.setattr(app_module.opt, "load_predictions", lambda *_args, **_kwargs: predictions)
-    monkeypatch.setattr(app_module.opt, "infer_next_gameweek", lambda _season: 1)
-    app_module._state.clear()
+    monkeypatch.setattr(app_module.opt, "infer_next_gameweek", lambda _season, root=None: 1)
+    app_module.reset_state()
 
     result = app_module.reload_predictions()
 
     assert "does not match local season 2026-27" in result["error"]
     assert result["players"].empty
-    app_module._state.clear()
+    app_module.reset_state()
 
 
 def test_reload_predictions_keeps_current_table_and_stable_horizon_matrix(
@@ -57,6 +65,9 @@ def test_reload_predictions_keeps_current_table_and_stable_horizon_matrix(
     season = tmp_path / "data" / "2026-27"
     season.mkdir(parents=True)
     pd.DataFrame([{"id": 1, "name": "Club"}]).to_csv(season / "teams.csv", index=False)
+    # Prices come from the market file; without one the app refuses to price anything.
+    pd.DataFrame([{"id": 11, "now_cost": 50}, {"id": 12, "now_cost": 50}]).to_csv(
+        season / "players_raw.csv", index=False)
     prediction_path = tmp_path / "predictions.csv"
     pd.DataFrame([
         {"element": 11, "name": "One", "team": "Club", "position": "MID", "value_m": 5.0, "GW": 1, "predicted_points": 2.0},
@@ -64,10 +75,10 @@ def test_reload_predictions_keeps_current_table_and_stable_horizon_matrix(
         {"element": 12, "name": "Two", "team": "Club", "position": "MID", "value_m": 5.0, "GW": 1, "predicted_points": 3.0},
         {"element": 12, "name": "Two", "team": "Club", "position": "MID", "value_m": 5.0, "GW": 2, "predicted_points": 4.0},
     ]).to_csv(prediction_path, index=False)
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(app_module, "ROOT", str(tmp_path))
     monkeypatch.setattr(app_module.opt, "PREDICTIONS", str(prediction_path))
-    monkeypatch.setattr(app_module.opt, "infer_next_gameweek", lambda _season: 1)
-    app_module._state.clear()
+    monkeypatch.setattr(app_module.opt, "infer_next_gameweek", lambda _season, root=None: 1)
+    app_module.reset_state()
 
     state = app_module.reload_predictions()
 
@@ -88,7 +99,7 @@ def test_reload_predictions_keeps_current_table_and_stable_horizon_matrix(
     assert response.status_code == 200
     assert received["future_points"].to_numpy().tolist() == [[3.0, 4.0], [2.0, 8.0]]
     assert response.get_json()["projection_gameweeks"] == [1, 2]
-    app_module._state.clear()
+    app_module.reset_state()
 
 
 def test_player_history_endpoint() -> None:
@@ -433,9 +444,13 @@ def test_chips_accept_valid_selling_prices_tenths() -> None:
     client = app.test_client()
     squad = client.post("/api/squad", json={"budget": 100.0}).get_json()
     names = [player["name"] for player in squad["xi"] + squad["bench"]]
+    # /api/chips takes names, so price the elements those names resolve to. Two
+    # players can share a name (two Martinez), and the optimiser's pick need
+    # not be the one the name lookup returns.
+    resolved = app_module.squad_from_names(names)
     selling_prices_tenths = {
-        str(player["element"]): round(player["value_m"] * 10)
-        for player in squad["xi"] + squad["bench"]
+        str(int(row["element"])): round(row["value_m"] * 10)
+        for _, row in resolved.iterrows()
     }
 
     response = client.post(
