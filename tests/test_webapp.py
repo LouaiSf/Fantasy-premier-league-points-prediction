@@ -275,3 +275,36 @@ def test_transfers_reject_boolean_element_ids() -> None:
 
     assert response.status_code == 400
     assert response.get_json()["error"] == "elements must be a list of numeric FPL element IDs"
+
+
+def test_chips_response_matches_the_frontend_contract() -> None:
+    # Given the generic (no-squad) fixture-signal mode the chip advisor falls back to.
+    client = app.test_client()
+
+    response = client.post("/api/chips", json={"horizon": 4})
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["contract_version"] == app_module.opt.CHIPS_CONTRACT_VERSION
+    required_top_level = {
+        "first_gw", "last_gw", "any_dgw", "any_bgw", "has_squad", "rows",
+        "recommendations", "current_gameweek", "projection_mode",
+        "inventory_status", "inventory_sync_state", "scheduled_gameweeks",
+        "projection_source", "projection_generated_at", "projection_gameweeks",
+        "requested_horizon", "evaluated_horizon", "coverage_warning",
+        "data_quality", "methodology_version", "decision_policy",
+    }
+    assert required_top_level <= data.keys()
+    assert isinstance(data["projection_gameweeks"], list)
+
+    for row in data["rows"]:
+        assert {"gw", "matches", "dgw_teams", "blank_teams", "avg_fdr",
+                "projected_gain", "fixture_signal_index"} <= row.keys()
+
+    for rec in data["recommendations"]:
+        assert {"chip", "label", "status", "candidate_gameweeks", "gw",
+                "candidate_gw", "projected_gain", "fixture_signal_index",
+                "alternatives", "decision_policy", "reasons", "warnings",
+                "confidence"} <= rec.keys()
+        assert {"minimum_projected_gain", "uncertainty_note", "basis"} <= rec["decision_policy"].keys()

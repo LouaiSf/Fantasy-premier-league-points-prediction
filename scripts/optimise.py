@@ -1050,6 +1050,7 @@ CHIP_LABELS = {
     'wildcard': 'Wildcard',
 }
 CHIP_METHOD_VERSION = '1.0'
+CHIPS_CONTRACT_VERSION = 2
 
 
 def _availability_factor(players: pd.DataFrame) -> pd.Series:
@@ -1507,6 +1508,7 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
         else:
             coverage_warning = 'No multi-gameweek projection matrix is available; player point gains are withheld.'
     return {
+        'contract_version': CHIPS_CONTRACT_VERSION,
         'first_gw': first_gw, 'last_gw': first_gw + horizon - 1,
         'current_gameweek': first_gw, 'any_dgw': any_dgw, 'any_bgw': any_bgw,
         'rows': rows, 'recommendations': recommendations,

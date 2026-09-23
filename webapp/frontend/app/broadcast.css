@@ -1483,7 +1483,7 @@
   .chip-advisor-heatmap tr.is-dgw{background:rgba(0,255,135,.05)}
   .chip-advisor-heatmap tr.is-bgw{background:rgba(233,0,82,.05)}
   .chip-squad-notice{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-4);background:rgba(255,215,0,.1);border:1px solid rgba(255,215,0,.3);clip-path:var(--blade-sm);color:var(--gold);font-size:13px;margin-bottom:var(--space-6)}
-  .chip-error{padding:var(--space-4);background:rgba(233,0,82,.1);border:1px solid var(--pink);clip-path:var(--blade-sm);color:var(--pink);margin-bottom:var(--space-6)}
+  .chip-error{display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);padding:var(--space-4);background:rgba(233,0,82,.1);border:1px solid var(--pink);clip-path:var(--blade-sm);color:var(--pink);margin-bottom:var(--space-6)}
   .chip-note-banner{display:flex;align-items:flex-start;gap:var(--space-3);padding:var(--space-4) var(--space-5);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);clip-path:var(--blade);margin-bottom:var(--space-16)}
 
   /* ── Watchlist ──────────────────────────────────────────────────────────── */

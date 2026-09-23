@@ -360,8 +360,11 @@ export interface ChipBenchPlayer {
 }
 
 
+export const CHIPS_CONTRACT_VERSION = 2;
+
 export interface ChipsResult {
   ok: boolean;
+  contract_version: number;
   first_gw: number;
   last_gw: number;
   any_dgw: boolean;

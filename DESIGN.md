@@ -1,7 +1,10 @@
 # FPL Assistant Broadcast Design System
 
-Version 1.2 — the definitive design vision for the 2026/27 match centre.
-Scope: `fpl-assistant-prototype.html`. The production Flask interface (`webapp/`) is untouched.
+Version 1.3 — the definitive design vision for the 2026/27 match centre.
+Scope: `fpl-assistant-prototype.html`, plus the production Next.js components listed in
+§5 "Production components" (`webapp/frontend/`), which consume the same tokens from
+`webapp/frontend/app/broadcast.css`. The rest of the production Flask interface is untouched
+until a component is added to that list.
 
 ## 1. Atmosphere & Identity
 
@@ -154,6 +157,17 @@ Base unit 4px; `--space-1` … `--space-20` (4 → 80px).
   (scroll snap plus previous/next controls), never an auto-moving carousel.
 - **Disclosure** — single-open accordion, ten comparison categories.
 - **VerdictStamp** — rotated circular stamp closing the comparison.
+
+### Production components
+Live in `webapp/frontend/`, styled from the same `--pl-purple`/`--pink`/`--lime`/`--cyan` tokens and
+`PlayerPhoto` fallback as the prototype — no parallel accent palette.
+- **ChipsPage** (`app/chips/page.tsx`) — chip planning desk: inventory tracker, next-decision banner,
+  per-chip advisor cards, fixture heatmap. `.chip-error` is a solid `--pink`-bordered inline banner with
+  a Retry action; it must never be replaced by a silent empty state or an uncaught crash.
+- **My Team** (`app/team/page.tsx`, `components/team/squad-editor.tsx`,
+  `components/team/manager-lineup-preview.tsx`, `components/team/team-plan.tsx`, `components/team/pitch.tsx`)
+  — owned-squad finance and lineup editor. Distinguishes current market value from selling value; never
+  uses `is-over`/red budget styling for a legally appreciated squad.
 
 ## 6. Motion
 

@@ -1,7 +1,6 @@
 import type {
   ApiError,
   ChipInventory,
-  ChipsResult,
   ManagerLineup,
   ManagerSearchCandidate,
   PlatformSnapshot,
@@ -10,6 +9,7 @@ import type {
   TransferResult,
   WatchlistResult,
 } from "./types";
+import { parseChipsResult } from "./chips-contract";
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:5000";
@@ -86,13 +86,12 @@ export const api = {
     requestJson<WatchlistResult>(
       `/api/watchlist?max_ownership=${maxOwnership}&top=${top}`,
     ),
-  chips: (body: {
+  chips: async (body: {
     squad?: string[];
     horizon?: number;
     chip_inventory?: ChipInventory;
     scheduled_gameweeks?: number[];
     last_free_hit_gameweek?: number | null;
-  }) =>
-    postJson<ChipsResult>("/api/chips", body),
+  }) => parseChipsResult(await postJson<unknown>("/api/chips", body)),
 };
 

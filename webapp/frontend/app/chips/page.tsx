@@ -146,9 +146,11 @@ export default function ChipsPage() {
 
   const maxPossibleHorizon = Math.max(1, 38 - (snapshot?.gameweek ?? 1) + 1);
   const effectiveHorizon = Math.min(horizon, maxPossibleHorizon);
+  const requestIdRef = React.useRef(0);
 
   const loadChips = React.useCallback(
     async (squadList: string[], h: number) => {
+      const requestId = ++requestIdRef.current;
       setFetching(true);
       setFetchError(null);
       try {
@@ -159,28 +161,32 @@ export default function ChipsPage() {
           scheduled_gameweeks: scheduledGameweeks,
           last_free_hit_gameweek: lastFreeHitGameweek,
         });
+        if (requestId !== requestIdRef.current) return;
         if (res && res.ok) {
           setData(res);
         } else {
+          setData(null);
           setFetchError("Unable to compute chip optimization recommendations.");
         }
       } catch (err) {
+        if (requestId !== requestIdRef.current) return;
+        setData(null);
         setFetchError((err as Error).message || "Failed to load chip advice.");
       } finally {
-        setFetching(false);
+        if (requestId === requestIdRef.current) setFetching(false);
       }
     },
     [inventory, scheduledGameweeks],
   );
 
   React.useEffect(() => {
-    if (!snapshot?.prediction_available) return;
+    if (!snapshot?.prediction_available || !inventoryLoaded) return;
     const names = useSquad ? squadNames : [];
     const timer = window.setTimeout(() => {
       void loadChips(names, effectiveHorizon);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [snapshot?.prediction_available, useSquad, squadNames, effectiveHorizon, loadChips]);
+  }, [snapshot?.prediction_available, inventoryLoaded, useSquad, squadNames, effectiveHorizon, loadChips]);
 
   React.useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -350,7 +356,16 @@ export default function ChipsPage() {
         {fetching && <Loading label="Calculating schedule matrices and fixture difficulty…" />}
 
         {fetchError && (
-          <div className="chip-error">{fetchError}</div>
+          <div className="chip-error">
+            <span>{fetchError}</span>
+            <button
+              type="button"
+              className="btn sm"
+              onClick={() => void loadChips(useSquad ? squadNames : [], effectiveHorizon)}
+            >
+              Retry
+            </button>
+          </div>
         )}
 
         <section className={`chip-next-decision${nextDecision ? ` status-${nextDecision.status}` : ""}`} aria-live="polite">
