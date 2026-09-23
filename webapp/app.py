@@ -340,27 +340,47 @@ def _build_snapshot() -> dict:
     if season is None:
         return {**snapshot, 'error': 'No season directory found under data/.'}
     if not os.path.exists(path):
-        _state['error'] = (
-            f"{path} not found. Run scripts/predict_gameweek.py first -- "
-            f"the site has nothing to show without it."
-        )
-        _state['players'] = pd.DataFrame()
-        _state['everyone'] = pd.DataFrame()
-        _state['future_points'] = None
-        _state['future_gameweeks'] = []
-        return _state
+        return {**snapshot, 'error': (
+            f"{opt.PREDICTIONS} not found. Run scripts/predict_gameweek.py first -- "
+            f"the site has nothing to show without it.")}
 
-    players = opt.load_predictions(path, drop_unavailable=True)
-    everyone = opt.load_predictions(path, drop_unavailable=False)
-
-    season = sorted(
-        d for d in os.listdir('data')
-        if os.path.isdir(os.path.join('data', d)) and d[:4].isdigit()
-    )[-1]
     market_path = market_prices_path(season)
-    market_mtime = os.path.getmtime(market_path) if os.path.exists(market_path) else None
-    players = join_market_prices(players, season)
-    everyone = join_market_prices(everyone, season)
+    snapshot['mtime'] = os.path.getmtime(path)
+    snapshot['market_mtime'] = os.path.getmtime(market_path) if os.path.exists(market_path) else None
+    snapshot['artifact'] = artifacts.describe(path)
+    try:
+        snapshot['gameweek'] = opt.infer_next_gameweek(season, root=ROOT)
+    except (OSError, ValueError, KeyError):
+        return {**snapshot, 'error': f'Fixture data for {season} is missing or unreadable.'}
+
+    try:
+        players = opt.load_predictions(path, drop_unavailable=True)
+        everyone = opt.load_predictions(path, drop_unavailable=False)
+    except SystemExit as exc:
+        return {**snapshot, 'error': f'{opt.PREDICTIONS} is unusable: {exc.code}'}
+
+    market_error = None
+    try:
+        players = join_market_prices(players, season)
+        everyone = join_market_prices(everyone, season)
+    except MarketDataUnavailable as exc:
+        market_error = str(exc)
+        players = without_prices(players)
+        everyone = without_prices(everyone)
+    snapshot['market_error'] = market_error
+
+    teams_path = project_path('data', season, 'teams.csv')
+    if os.path.exists(teams_path):
+        local_teams = set(pd.read_csv(teams_path)['name'].dropna())
+        prediction_teams = set(everyone['team'].dropna())
+        if local_teams != prediction_teams:
+            only_predictions = ', '.join(sorted(prediction_teams - local_teams))
+            only_local = ', '.join(sorted(local_teams - prediction_teams))
+            return {**snapshot, 'error': (
+                f'{opt.PREDICTIONS} does not match local season {season}. '
+                f'Only in predictions: {only_predictions or "none"}. '
+                f'Only in local data: {only_local or "none"}. '
+                'Refresh the local season data or regenerate predictions.')}
 
     future_points = None
     future_gameweeks = []
@@ -374,53 +394,16 @@ def _build_snapshot() -> dict:
     except SystemExit:
         future_gameweeks = []
 
-    teams_path = os.path.join('data', season, 'teams.csv')
-    if os.path.exists(teams_path):
-        local_teams = set(pd.read_csv(teams_path)['name'].dropna())
-        prediction_teams = set(everyone['team'].dropna())
-        if local_teams != prediction_teams:
-            only_predictions = ', '.join(sorted(prediction_teams - local_teams))
-            only_local = ', '.join(sorted(local_teams - prediction_teams))
-            _state.update({
-                'error': (
-                    f'{path} does not match local season {season}. '
-                    f'Only in predictions: {only_predictions or "none"}. '
-                    f'Only in local data: {only_local or "none"}. '
-                    'Refresh the local season data or regenerate predictions.'
-                ),
-                'players': pd.DataFrame(),
-                'everyone': pd.DataFrame(),
-                'future_points': None,
-                'future_gameweeks': [],
-                'season': season,
-                'gameweek': opt.infer_next_gameweek(season),
-                'mtime': os.path.getmtime(path),
-                'market_mtime': market_mtime,
-                'model': model_summary(),
-            })
-            return _state
-
-    _state.update({
-        'error': None,
-        'players': players,
-        'everyone': everyone,
-        'future_points': future_points,
-        'future_gameweeks': future_gameweeks,
-        'market_mtime': market_mtime,
-        'season': season,
-        'gameweek': opt.infer_next_gameweek(season),
-        'mtime': os.path.getmtime(path),
-        'model': model_summary(),
-    })
-    return _state
+    return {**snapshot, 'players': players, 'everyone': everyone,
+            'future_points': future_points, 'future_gameweeks': future_gameweeks}
 
 
 def model_summary() -> dict:
     """What actually produced these numbers, surfaced rather than assumed."""
     import json
-    meta_path = os.path.join('saved_models', 'direct', 'meta.json')
+    meta_path = project_path('saved_models', 'direct', 'meta.json')
     if not os.path.exists(meta_path):
-        meta_path = os.path.join('fpl_results', 'saved_models', 'direct', 'meta.json')
+        meta_path = project_path('fpl_results', 'saved_models', 'direct', 'meta.json')
     if not os.path.exists(meta_path):
         return {}
     with open(meta_path, encoding='utf-8') as f:
@@ -435,7 +418,7 @@ def model_summary() -> dict:
     }
 
 
-def squad_from_names(names: list) -> pd.DataFrame:
+def squad_from_names(names: list, snapshot: Mapping | None = None) -> pd.DataFrame:
     """Resolve submitted names to squad rows.
 
     Exact match first. optimise.read_squad_file_names does substring matching,
@@ -444,7 +427,7 @@ def squad_from_names(names: list) -> pd.DataFrame:
     different player whose name contains it ("Rodrigo" inside "Rodrigo Gomes").
     Falls back to the CLI resolver only for names that do not match exactly.
     """
-    everyone = state()['everyone']
+    everyone = (snapshot if snapshot is not None else state())['everyone']
     by_name = {n: i for i, n in zip(everyone.index, everyone['name'])}
 
     indices, fuzzy = [], []
@@ -454,52 +437,148 @@ def squad_from_names(names: list) -> pd.DataFrame:
         else:
             fuzzy.append(name)
     if fuzzy:
-        indices += opt.read_squad_file_names(fuzzy, everyone)
+        try:
+            indices += opt.read_squad_file_names(fuzzy, everyone)
+        except SystemExit as exc:
+            # The CLI resolver exits the process on a miss; here it is a bad request.
+            raise RequestError(str(exc.code), 'unknown_player', 'squad') from None
 
     if len(set(indices)) != len(indices):
-        raise ValueError('the same player appears twice in that squad')
+        raise RequestError('the same player appears twice in that squad', 'invalid_squad')
     return everyone.loc[indices]
 
 
-def squad_from_elements(elements: list[int]) -> pd.DataFrame:
-    everyone = state()['everyone']
+def squad_from_elements(elements: list[int], snapshot: Mapping | None = None) -> pd.DataFrame:
+    everyone = (snapshot if snapshot is not None else state())['everyone']
     if len(elements) != opt.SQUAD_SIZE or len(set(elements)) != opt.SQUAD_SIZE:
-        raise ValueError(f'a squad is {opt.SQUAD_SIZE} distinct players; you gave {len(set(elements))}')
+        raise RequestError(
+            f'a squad is {opt.SQUAD_SIZE} distinct players; you gave {len(set(elements))}',
+            'invalid_squad', 'elements')
     current = everyone[everyone['element'].isin(elements)].copy()
     found = set(current['element'])
     missing = [str(element) for element in elements if element not in found]
     if missing:
-        raise ValueError(f"unknown player element(s): {', '.join(missing)}")
+        raise RequestError(f"unknown player element(s): {', '.join(missing)}",
+                           'unknown_player', 'elements')
     order = {element: position for position, element in enumerate(elements)}
     current['_order'] = current['element'].map(order)
     return current.sort_values('_order').drop(columns='_order').reset_index(drop=True)
 
 
-def fail(message: str, code: int = 400):
-    return jsonify({'ok': False, 'error': message}), code
+def fail(message: str, status: int = 400, code: str = 'invalid_request', **extra):
+    return jsonify({'ok': False, 'error': message, 'code': code, **extra}), status
 
 
-def unavailable(message: str):
-    """503 for anything that needs predictions that have not been generated.
+def unavailable(message: str, code: str = 'predictions_unavailable'):
+    """503 for anything that needs data the server does not have.
 
     Distinct from fail()'s 400: the request was fine, the server just has no
-    model output to answer it with yet, and the fix is to run the prediction
-    pipeline rather than to send something different. A caching layer or a
+    model output (or market prices) to answer it with, and the fix is to run
+    the pipeline rather than to send something different. A caching layer or a
     client retry should treat the two completely differently.
     """
-    return fail(message, 503)
+    return fail(message, 503, code)
+
+
+def data_gate(s: dict):
+    """The 503 to return when the data behind a price-dependent route is unusable."""
+    if s.get('error'):
+        return unavailable(s['error'])
+    if s.get('market_error'):
+        return unavailable(s['market_error'], 'market_prices_unavailable')
+    return None
+
+
+@app.errorhandler(RequestError)
+def on_request_error(exc: RequestError):
+    g.error_code = exc.code
+    return jsonify(exc.body()), exc.status
+
+
+_HTTP_CODES = {404: 'not_found', 405: 'method_not_allowed', 413: 'payload_too_large'}
+
+
+@app.errorhandler(HTTPException)
+def on_http_error(exc: HTTPException):
+    # Werkzeug's own 404/405/413 are the client's mistake, not a server fault.
+    status = exc.code or 500
+    return jsonify({'ok': False, 'error': exc.description or exc.name,
+                    'code': _HTTP_CODES.get(status, 'http_error')}), status
 
 
 @app.errorhandler(Exception)
 def on_error(exc):
-    # A stack trace in the terminal, a readable sentence in the browser.
-    traceback.print_exc()
-    return jsonify({'ok': False, 'error': f'{type(exc).__name__}: {exc}'}), 500
+    # The stack trace goes to the log; the caller gets no internals.
+    g.error_code = 'internal_error'
+    obs.log_event(logging.ERROR, 'unhandled_exception', request_id=g.get('request_id'),
+                  method=request.method, path=request.path, exc_type=type(exc).__name__,
+                  error=str(exc), traceback=traceback.format_exc())
+    return jsonify({'ok': False, 'error': 'Internal server error.',
+                    'code': 'internal_error'}), 500
+
+
+@app.before_request
+def start_request():
+    g.request_id = obs.request_id_from(request.headers.get('X-Request-ID'))
+    g.started = time.perf_counter()
+
+
+def _quiet_route() -> bool:
+    return request.path.startswith('/api/health/') or request.path == '/api/metrics'
+
+
+@app.after_request
+def log_request(response):
+    started = g.get('started')
+    if started is not None:
+        seconds = time.perf_counter() - started
+        route = request.url_rule.rule if request.url_rule else 'unmatched'
+        request_metrics.observe(route, request.method, response.status_code, seconds)
+        response.headers['X-Request-ID'] = g.request_id
+        level = logging.DEBUG if _quiet_route() else (
+            logging.ERROR if response.status_code >= 500 else
+            logging.WARNING if response.status_code >= 400 else logging.INFO)
+        fields = {
+            'request_id': g.request_id, 'method': request.method, 'path': request.path,
+            'route': route, 'status': response.status_code,
+            'duration_ms': round(seconds * 1000, 2), 'remote_addr': request.remote_addr,
+            'bytes': response.calculate_content_length(),
+        }
+        if g.get('error_code'):
+            fields['error_code'] = g.error_code
+        obs.log_event(level, 'request', **fields)
+    return response
+
+
+@app.after_request
+def stamp_contract(response):
+    """Version every /api response, in a header and, for JSON objects, the body."""
+    if not request.path.startswith('/api/'):
+        return response
+    response.headers['X-API-Contract-Version'] = str(API_CONTRACT_VERSION)
+    if response.mimetype == 'application/json' and not response.direct_passthrough:
+        try:
+            payload = json.loads(response.get_data(as_text=True))
+        except ValueError:
+            return response
+        if isinstance(payload, dict) and 'api_contract_version' not in payload:
+            payload['api_contract_version'] = API_CONTRACT_VERSION
+            response.set_data(json.dumps(payload) + '\n')
+    return response
 
 
 # ---------------------------------------------------------------------------
 # API
 # ---------------------------------------------------------------------------
+def public_artifact(artifact) -> dict | None:
+    """Which prediction artifact is being served, and which models made it."""
+    if not artifact:
+        return None
+    return {key: artifact.get(key) for key in (
+        'artifact', 'sha256', 'manifest_status', 'generated_at', 'season', 'horizon',
+        'first_gw', 'last_gw', 'model_bundle', 'code_commit')}
+
+
 @app.route('/api/meta')
 def api_meta():
     s = state()
