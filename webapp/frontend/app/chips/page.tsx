@@ -295,7 +295,7 @@ function WhyThisChoice({ recommendation, data }: { recommendation: ChipRecommend
 }
 
 export default function ChipsPage() {
-  const { snapshot, loading, squadNames, squadPlayers, storedSquad, financeSummary } = useApp();
+  const { snapshot, loading, squadElements, squadNames, squadPlayers, storedSquad, financeSummary } = useApp();
   const [data, setData] = React.useState<ChipsResult | null>(null);
   const [fetching, setFetching] = React.useState(false);
   const [fetchError, setFetchError] = React.useState<string | null>(null);
@@ -333,14 +333,14 @@ export default function ChipsPage() {
   const requestIdRef = React.useRef(0);
 
   const loadChips = React.useCallback(
-    async (squadList: string[], h: number) => {
+    async (squadIds: number[], h: number) => {
       const requestId = ++requestIdRef.current;
       setFetching(true);
       setFetchError(null);
-      const hasFullSquad = squadList.length === 15;
+      const hasFullSquad = squadIds.length === 15 && squadPlayers.length === 15;
       try {
         const res = await api.chips({
-          squad: hasFullSquad ? squadList : undefined,
+          elements: hasFullSquad ? squadIds : undefined,
           horizon: h,
           chip_inventory: inventory ? effectiveInventory(inventory, snapshot?.gameweek ?? null) : undefined,
           scheduled_gameweeks: scheduledGameweeks,
@@ -372,12 +372,12 @@ export default function ChipsPage() {
 
   React.useEffect(() => {
     if (!snapshot?.prediction_available || !inventoryLoaded) return;
-    const names = useSquad ? squadNames : [];
+    const elements = useSquad ? squadElements : [];
     const timer = window.setTimeout(() => {
-      void loadChips(names, effectiveHorizon);
+      void loadChips(elements, effectiveHorizon);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [snapshot?.prediction_available, inventoryLoaded, useSquad, squadNames, effectiveHorizon, loadChips]);
+  }, [snapshot?.prediction_available, inventoryLoaded, useSquad, squadElements, effectiveHorizon, loadChips]);
 
   React.useEffect(() => {
     if (!snapshot?.season) return;
@@ -612,7 +612,7 @@ export default function ChipsPage() {
             <button
               type="button"
               className="btn sm"
-              onClick={() => void loadChips(useSquad ? squadNames : [], effectiveHorizon)}
+              onClick={() => void loadChips(useSquad ? squadElements : [], effectiveHorizon)}
             >
               Retry
             </button>

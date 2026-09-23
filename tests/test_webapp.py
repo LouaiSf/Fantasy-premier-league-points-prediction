@@ -465,6 +465,30 @@ def test_chips_accept_valid_selling_prices_tenths() -> None:
     assert response.get_json()["ok"] is True
 
 
+def test_chips_use_owned_element_ids_for_selling_prices() -> None:
+    client = app.test_client()
+    squad = client.post("/api/squad", json={"budget": 100.0}).get_json()
+    players = squad["xi"] + squad["bench"]
+    elements = [int(player["element"]) for player in players]
+    selling_prices_tenths = {
+        str(element): round(player["value_m"] * 10)
+        for element, player in zip(elements, players)
+    }
+
+    response = client.post(
+        "/api/chips",
+        json={
+            "horizon": 2,
+            "elements": elements,
+            "bank": 0.0,
+            "selling_prices_tenths": selling_prices_tenths,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["ok"] is True
+
+
 def test_chips_reject_incomplete_selling_prices_tenths() -> None:
     client = app.test_client()
     squad = client.post("/api/squad", json={"budget": 100.0}).get_json()

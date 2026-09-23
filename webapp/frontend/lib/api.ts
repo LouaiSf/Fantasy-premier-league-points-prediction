@@ -223,6 +223,7 @@ export const api = {
       `/api/watchlist?max_ownership=${maxOwnership}&top=${top}`,
     ),
   chips: async (body: {
+    elements?: number[];
     squad?: string[];
     horizon?: number;
     chip_inventory?: ChipInventory;

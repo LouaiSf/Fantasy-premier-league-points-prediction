@@ -976,9 +976,13 @@ def api_chips():
         return gate
 
     body = contracts.read_json_object(request)
+    elements = contracts.int_list(
+        body, 'elements', message='elements must be a list of numeric FPL element IDs')
     names = contracts.name_list(body, 'squad')
     squad = None
-    if names:
+    if elements:
+        squad = squad_from_elements(elements, s)
+    elif names:
         if len(names) != opt.SQUAD_SIZE:
             return fail(f'a squad is {opt.SQUAD_SIZE} players; you gave {len(names)}',
                         code='invalid_squad')
@@ -998,9 +1002,6 @@ def api_chips():
     bank = contracts.number(body, 'bank', None, lo=0, hi=100,
                             range_message='bank must be between 0.0m and 100.0m')
 
-    # Free Hit / Wildcard candidate squads are priced from real ownership
-    # cost when it's available, same as /api/transfers; a squad request has
-    # no elements to key this against, so it's only accepted alongside one.
     owned = (None if squad is None or 'element' not in squad.columns
              else {int(element) for element in squad['element']})
     selling_prices = contracts.selling_prices(body, owned)
