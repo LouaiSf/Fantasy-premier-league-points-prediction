@@ -116,6 +116,56 @@ serialised by a lock (`409` if one is running) and rate limited: `429` with
 `Retry-After` for 60 s after a fetch, or 10 s after a failed one. Override with
 `REFRESH_COOLDOWN_SECONDS` / `REFRESH_FAILURE_COOLDOWN_SECONDS`.
 
+## Securing the API
+
+| Variable | Effect |
+|---|---|
+| `APP_ENV=production` | Fail closed: no CORS unless `ALLOWED_ORIGINS` is set, and `*` is refused at startup. |
+| `ALLOWED_ORIGINS` | Comma-separated browser origins allowed to call the API. Unset in development = `http://localhost:3000` and `http://127.0.0.1:3000`. |
+| `REFRESH_TOKEN` | Bearer token required by `/api/refresh`, `/api/refresh/predictions`, `/api/refresh/status` and `/api/reload`. **Unset = those endpoints accept only direct local requests** (a proxied request, one carrying `X-Forwarded-For`, counts as remote and gets `403 refresh_disabled`). |
+| `REFRESH_RATE_LIMIT_PER_MINUTE` | Calls per minute per client to the refresh endpoints, wrong tokens included (default 12). Status polling has its own, larger limit. |
+| `REFRESH_COOLDOWN_SECONDS` | Minimum gap after a successful fetch (default 60). |
+
+CORS only constrains browsers; the token is what stops `curl`. The site's Refresh
+button asks for the token once per tab and keeps it in `sessionStorage`; it is
+never built into the frontend bundle. Rate limits and the cooldown are held in
+memory, so they are per server process (run one worker, as `render.yaml` does).
+
+**Market prices fail closed.** Prices come only from `data/<season>/players_raw.csv`.
+If that file is missing, unreadable, or prices under half the predicted players,
+`/api/players`, `/api/squad`, `/api/lineup`, `/api/transfers`, `/api/chips` and
+`/api/watchlist` return `503` with `code: "market_prices_unavailable"`, and
+`/api/meta` / `/api/platform` report `market_prices_available: false`. The prediction
+export's own prices are never used as a fallback.
+
+**Request contract.** Every route reads input through `webapp/contracts.py`. Bodies
+must be JSON objects; numbers are real JSON numbers (never strings, booleans, NaN or
+infinity); lists and names are type- and size-checked; unknown player IDs are
+rejected. Errors are always `{ok: false, error, code, field?}` with a stable `code`
+(listed in that module), and every response carries `api_contract_version` and an
+`X-API-Contract-Version` header. Unexpected failures are a generic `500
+internal_error`; details go to the server log, not the response.
+
+## Reproducibility: what a deployment consumes
+
+The site never trains or predicts. It serves one **immutable prediction artifact**,
+`predictions_next_gw.csv`, and its manifest `predictions_next_gw.manifest.json`
+(sha256 of the CSV, when it was generated, season, gameweek range, the git commit,
+and a fingerprint of the model bundle that produced it). Commit both together.
+
+The models themselves (`saved_models/**/*.joblib`, ~13 MB) are gitignored, so a
+fresh clone **cannot regenerate predictions**, and that is deliberate: training and
+prediction are a separate job, run wherever the models live (a Colab/GPU session, or
+`scripts/refresh_pipeline.py` on a machine that has them), and their output is
+published as the artifact. `scripts/refresh_pipeline.py` writes the manifest with every
+run; `python scripts/artifacts.py write` makes one for a CSV produced by hand, and
+`python scripts/artifacts.py verify` exits non-zero unless the manifest matches.
+
+In production (`APP_ENV=production`, or `REQUIRE_ARTIFACT_MANIFEST=1`) the server
+reports **not ready** unless the manifest verifies, so an unversioned or hand-edited
+artifact cannot go live unnoticed. `/api/meta` returns the artifact hash, generation
+time and model-bundle hash, so any served number can be traced to the exact models.
+
 ## Quick start
 
 ```bash
