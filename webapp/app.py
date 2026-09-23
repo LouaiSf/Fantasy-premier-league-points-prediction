@@ -1180,58 +1180,195 @@ def api_reload():
     if s.get('error'):
         return unavailable(s['error'])
     return jsonify({'ok': True, 'players': len(s['players']),
-                    'gameweek': s['gameweek']})
+                    'gameweek': s['gameweek'], 'market_prices_available': not s.get('market_error')})
+
+
+def require_manifest() -> bool:
+    """Production must serve only verified artifacts; development may serve any."""
+    flag = os.environ.get('REQUIRE_ARTIFACT_MANIFEST', '').strip().lower()
+    return flag in ('1', 'true', 'yes') if flag else is_production()
+
+
+def health_report():
+    s = state()
+    fresh = obs.freshness(s, project_path('data', s['season'], 'fixtures.csv') if s.get('season')
+                          else project_path('data', 'none', 'fixtures.csv'))
+    alerts = obs.evaluate_alerts(s, fresh, require_manifest=require_manifest())
+    if _rebuild_failure:
+        alerts.append({'name': 'predictions_rebuild_failing', 'severity': 'warning', 'blocking': False,
+                       'message': 'A changed source file could not be read; the previous data is being served.'})
+    obs.log_alert_changes(alerts)
+    return s, fresh, alerts
+
+
+@app.route('/api/health/live')
+def api_health_live():
+    # Liveness must not touch data: a bad export should fail readiness, not restart the process.
+    return jsonify({'ok': True, 'status': 'live'})
+
+
+@app.route('/api/health/ready')
+def api_health_ready():
+    s, fresh, alerts = health_report()
+    report = obs.readiness(s, fresh, alerts)
+    report['artifact'] = public_artifact(s.get('artifact'))
+    return jsonify(report), (200 if report['ok'] else 503)
+
+
+@app.route('/api/metrics')
+@refresh_guard(status_limiter)
+def api_metrics():
+    s, fresh, alerts = health_report()
+    ready = not any(a['blocking'] for a in alerts)
+    body = obs.prometheus(s, fresh, alerts, ready, request_metrics,
+                          refresh_running=_refresh_job.get('state') == 'running')
+    return Response(body, mimetype='text/plain; version=0.0.4')
+
+
+def too_soon(remaining: int):
+    response = jsonify({
+        'ok': False,
+        'code': 'refresh_cooldown',
+        'error': f'Data was refreshed moments ago; try again in {remaining}s.',
+        'retry_after_seconds': remaining,
+    })
+    response.status_code = 429
+    response.headers['Retry-After'] = str(remaining)
+    return response
+
+
+def step_failure(exc, status: int = 502):
+    """A failed subprocess step, with its exit status and stderr for the caller."""
+    body = {'ok': False, 'code': f'{exc.step}_failed', 'step': exc.step, 'error': str(exc)}
+    for key in ('returncode', 'stderr', 'stdout'):
+        if key in exc.details:
+            body[key] = exc.details[key]
+    return jsonify(body), status
 
 
 @app.route('/api/refresh', methods=['POST'])
+@refresh_guard(refresh_limiter)
 def api_refresh():
     s = state()
     season = s.get('season') or latest_local_season(Path(ROOT))
     if not season:
-        return fail('No local season configured.')
+        return fail('No local season configured.', 503, 'no_season')
+
+    remaining = fetch_cooldown.remaining()
+    if remaining:
+        return too_soon(remaining)
 
     try:
-        # olbauday, and forced. vaastav is the archive of finished seasons and
-        # does not carry one in progress, so the default source refreshed a
-        # live season from a repository that has nothing to say about it. And
-        # without --force every file that already exists is skipped, which for
-        # a season already on disk is every file: the button refreshed nothing
-        # and reported success. A forced olbauday pull takes about 26 seconds.
-        res = subprocess.run(
-            [sys.executable, os.path.join(ROOT, 'scripts', 'fetch_data.py'),
-             '--season', season, '--source', 'olbauday', '--force'],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        _state.clear()
-        new_state = state()
-        if new_state.get('error'):
-            return jsonify({'ok': False, 'error': new_state['error'], 'output': res.stdout}), 500
-        # A refresh moves the data and leaves the predictions where they
-        # were. Running the model is minutes of work and does not belong in a
-        # request, so say so rather than serving numbers built on last week's
-        # squad prices and availability as though they were current.
-        players_raw = os.path.join(ROOT, 'data', season, 'players_raw.csv')
-        predictions_stale = (
-            os.path.exists(players_raw) and new_state.get('mtime') is not None
-            and os.path.getmtime(players_raw) > new_state['mtime'])
-        message = f'Season {season} data refreshed successfully.'
-        if predictions_stale:
-            message += (' The predictions are now older than the data -- '
-                        'rerun scripts/predict_gameweek.py to match them.')
-        return jsonify({
-            'ok': True,
-            'message': message,
-            'predictions_stale': predictions_stale,
-            'season': new_state['season'],
-            'gameweek': new_state['gameweek'],
-            'players': len(new_state['players']),
-        })
+        # One refresh at a time, across processes and across this endpoint and
+        # the prediction pipeline, which fetches too. A busy lock is not an
+        # attempt, so it does not start a cooldown.
+        with pipeline.exclusive_run():
+            try:
+                with maintenance():
+                    pipeline.fetch_season(season, log=lambda _line: None, runner=subprocess.run)
+            except pipeline.PipelineError as exc:
+                fetch_cooldown.record(False)
+                return step_failure(exc)
+            fetch_cooldown.record(True)
+
+            new_state = reload_predictions()
+            if new_state.get('error'):
+                return jsonify({'ok': False, 'error': new_state['error']}), 500
+            # A refresh moves the data and leaves the predictions where they
+            # were. Running the model is minutes of work and does not belong in
+            # a request, so say so rather than serving numbers built on last
+            # week's squad prices and availability as though they were current.
+            players_raw = market_prices_path(season)
+            predictions_stale = (
+                os.path.exists(players_raw) and new_state.get('mtime') is not None
+                and os.path.getmtime(players_raw) > new_state['mtime'])
+            message = f'Season {season} data refreshed successfully.'
+            if predictions_stale:
+                message += (' The predictions are now older than the data -- '
+                            'regenerate them with POST /api/refresh/predictions '
+                            'or scripts/refresh_pipeline.py.')
+            return jsonify({
+                'ok': True,
+                'message': message,
+                'predictions_stale': predictions_stale,
+                'season': new_state['season'],
+                'gameweek': new_state['gameweek'],
+                'players': len(new_state['players']),
+            })
+    except pipeline.PipelineBusy:
+        return jsonify({'ok': False, 'code': 'refresh_in_progress',
+                        'error': 'Another refresh is already running.'}), 409
     except Exception as exc:
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(exc)}), 500
+
+
+# Regenerating predictions is minutes of model work, so it runs as a background
+# job: POST starts it, GET reports on it. The pipeline itself validates the new
+# export and swaps it in atomically; state() then reloads on the file's mtime.
+_refresh_job: dict = {'state': 'idle'}
+_refresh_job_lock = threading.Lock()
+
+
+def _now() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def _run_refresh_job(season: str, horizon: int, fetch: bool, rebuild: bool) -> None:
+    def on_step(step: str) -> None:
+        _refresh_job['step'] = step
+
+    try:
+        with maintenance():
+            report = pipeline.run_pipeline(
+                season, horizon, fetch=fetch, rebuild=rebuild,
+                log=lambda _line: None, on_step=on_step)
+        outcome = {'state': 'succeeded', 'report': report, 'error': None}
+    except pipeline.PipelineError as exc:
+        outcome = {'state': 'failed', 'failed_step': exc.step, 'error': str(exc), **exc.details}
+    except Exception as exc:
+        traceback.print_exc()
+        outcome = {'state': 'failed', 'error': f'{type(exc).__name__}: {exc}'}
+    if fetch and outcome.get('failed_step') not in ('lock', 'setup'):
+        fetch_cooldown.record(outcome['state'] == 'succeeded' or outcome.get('failed_step') != 'fetch')
+    with _refresh_job_lock:
+        _refresh_job.update(outcome, finished_at=_now(), step=None)
+
+
+@app.route('/api/refresh/predictions', methods=['POST'])
+@refresh_guard(refresh_limiter)
+def api_refresh_predictions():
+    body = contracts.read_json_object(request)
+    horizon = contracts.number(
+        body, 'horizon', pipeline.DEFAULT_HORIZON, lo=1, hi=pipeline.LAST_GAMEWEEK, integer=True,
+        range_message=f'horizon must be between 1 and {pipeline.LAST_GAMEWEEK} gameweeks')
+    fetch = contracts.boolean(body, 'fetch', True)
+    rebuild = contracts.boolean(body, 'rebuild_history', True)
+    season = latest_local_season(Path(ROOT))
+    if not season:
+        return fail('No local season configured.', 503, 'no_season')
+
+    with _refresh_job_lock:
+        if _refresh_job.get('state') == 'running':
+            return jsonify({'ok': False, 'code': 'refresh_in_progress',
+                            'error': 'A prediction refresh is already running.',
+                            'job': dict(_refresh_job)}), 409
+        if fetch and fetch_cooldown.remaining():
+            return too_soon(fetch_cooldown.remaining())
+        _refresh_job.clear()
+        _refresh_job.update({'state': 'running', 'step': 'starting', 'season': season,
+                             'horizon': horizon, 'fetch': fetch, 'started_at': _now()})
+        threading.Thread(target=_run_refresh_job, args=(season, horizon, fetch, rebuild),
+                         daemon=True).start()
+        return jsonify({'ok': True, 'job': dict(_refresh_job)}), 202
+
+
+@app.route('/api/refresh/status')
+@refresh_guard(status_limiter)
+def api_refresh_status():
+    # Guarded like the POSTs: a failed job carries stderr, which can name paths.
+    with _refresh_job_lock:
+        return jsonify({'ok': True, 'job': dict(_refresh_job)})
 
 
 @app.route('/api/player/<int:element_id>/history')
