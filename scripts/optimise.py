@@ -1355,15 +1355,16 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
                   future_points: pd.DataFrame | None = None,
                   projection_generated_at: str | None = None,
                   bank: float | None = None,
-                  selling_prices: dict | None = None) -> dict:
+                  selling_prices: dict | None = None,
+                  root: str | None = None) -> dict:
     players = players.copy()
     if not players.index.is_unique:
         players = players.reset_index(drop=True)
     if squad is not None:
         squad = _align_squad_to_players(players, squad)
-    teams = pd.read_csv(os.path.join('data', season, 'teams.csv'))
+    teams = pd.read_csv(os.path.join(season_dir(season, root), 'teams.csv'))
     name_to_id = dict(zip(teams['name'], teams['id']))
-    calendar = fixture_calendar(season, first_gw, horizon)
+    calendar = fixture_calendar(season, first_gw, horizon, root)
     gameweeks = list(range(first_gw, first_gw + horizon))
     counts = calendar.pivot_table(index='event', columns='team', values='fixtures', fill_value=0)
     counts = counts.reindex(index=gameweeks, columns=teams['id'].tolist(), fill_value=0)
@@ -1907,9 +1908,9 @@ def read_squad_file_names(names, players: pd.DataFrame):
     return out
 
 
-def infer_next_gameweek(season: str) -> int:
+def infer_next_gameweek(season: str, root: str | None = None) -> int:
     """First gameweek with no result yet."""
-    path = os.path.join('data', season, 'fixtures.csv')
+    path = os.path.join(season_dir(season, root), 'fixtures.csv')
     fixtures = pd.read_csv(path)
     unplayed = fixtures[~fixtures['finished'].astype(bool)]
     if unplayed.empty:
