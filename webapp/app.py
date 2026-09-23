@@ -595,6 +595,9 @@ def api_meta():
         'ok': True,
         'predictions_available': not s.get('error'),
         'predictions_error': s.get('error'),
+        'market_prices_available': not s.get('market_error'),
+        'market_prices_error': s.get('market_error'),
+        'artifact': public_artifact(s.get('artifact')),
         'season': s.get('season'),
         'gameweek': s.get('gameweek'),
         # players is a DataFrame, so it cannot be truth-tested with `or`.
@@ -608,29 +611,46 @@ def api_meta():
     })
 
 
+_platform_cache: tuple | None = None    # (key, payload)
+
+
 @app.route('/api/platform')
 def api_platform():
+    global _platform_cache
     s = state()
     season = s.get('season') or latest_local_season(Path(ROOT))
     if season is None:
-        return fail('no local FPL season data is available')
+        return fail('no local FPL season data is available', 503, 'no_season')
+
+    # Assembling this reads three CSVs and joins ~800 players, and every page
+    # asks for it. The result only changes when a source file or the loaded
+    # predictions do, so it is keyed on their modification times. While a
+    # refresh is rewriting files the last good payload is served as-is.
+    key = (season, s.get('loaded_at'),
+           _mtime_ns(project_path('data', season, 'teams.csv')),
+           _mtime_ns(project_path('data', season, 'fixtures.csv')),
+           _mtime_ns(market_prices_path(season)),
+           _mtime_ns(project_path('data', 'fpl_regions.json')))
+    cached = _platform_cache
+    if cached is not None and (cached[0] == key or _maintenance):
+        return jsonify(cached[1])
 
     snapshot = build_local_snapshot(Path(ROOT), season)
     prediction_available = not bool(s.get('error'))
     if prediction_available:
         predictions = {
             player['element']: player
-            for player in enriched_players()
+            for player in enriched_players(s)
             if player.get('element') is not None
         }
         for player in snapshot['players']:
             prediction = predictions.get(player.get('element'))
             if prediction is None:
                 continue
-            for key in ('predicted_points', 'points_per_million', 'opponent_team',
-                        'was_home', 'has_prior_history'):
-                if key in prediction:
-                    player[key] = prediction[key]
+            for key_name in ('predicted_points', 'points_per_million', 'opponent_team',
+                             'was_home', 'has_prior_history'):
+                if key_name in prediction:
+                    player[key_name] = prediction[key_name]
 
     mtime = s.get('mtime')
     prediction_timestamp = (
@@ -643,8 +663,7 @@ def api_platform():
     # refreshed at different times. My Team and Transfer Studio need to know
     # when the price they're showing was last observed, and whether the point
     # projections predate a since-changed market.
-    raw_path = os.path.join('data', season, 'players_raw.csv')
-    market_mtime = os.path.getmtime(raw_path) if os.path.exists(raw_path) else None
+    market_mtime = s.get('market_mtime')
     market_prices_updated_at = (
         datetime.datetime.fromtimestamp(market_mtime, tz=datetime.timezone.utc).isoformat()
         if market_mtime else None
@@ -659,9 +678,12 @@ def api_platform():
         'prediction_error': s.get('error'),
         'prediction_timestamp': prediction_timestamp,
         'model': s.get('model') or model_summary(),
+        'market_prices_available': not s.get('market_error') and market_mtime is not None,
+        'market_prices_error': s.get('market_error'),
         'market_prices_updated_at': market_prices_updated_at,
         'predictions_older_than_market': predictions_older_than_market,
     })
+    _platform_cache = (key, snapshot)
     return jsonify(snapshot)
 
 
@@ -701,14 +723,36 @@ def flag_for(iso: str | None) -> str:
 
 def load_regions() -> dict:
     import json
-    path = os.path.join('data', 'fpl_regions.json')
+    path = project_path('data', 'fpl_regions.json')
     if not os.path.exists(path):
         return {}
     with open(path, encoding='utf-8') as f:
         return json.load(f)
 
 
-def enriched_players() -> list:
+_enriched_cache: tuple | None = None    # (snapshot, file signature, records)
+
+
+def enriched_players(snapshot: Mapping | None = None) -> list:
+    """enriched records for a snapshot, computed once per snapshot and data files.
+
+    Building them reads players_raw.csv and joins ~800 rows, and one request can
+    ask several times (XI, bench, captain, vice). The list is shared: read only.
+    """
+    global _enriched_cache
+    s = snapshot if snapshot is not None else state()
+    signature = (_mtime_ns(project_path('data', s['season'], 'players_raw.csv')) if s.get('season') else None,
+                 _mtime_ns(project_path('data', s['season'], 'teams.csv')) if s.get('season') else None,
+                 _mtime_ns(project_path('data', 'fpl_regions.json')))
+    cached = _enriched_cache
+    if cached is not None and cached[0] is s and cached[1] == signature:
+        return cached[2]
+    records = _build_enriched(s)
+    _enriched_cache = (s, signature, records)
+    return records
+
+
+def _build_enriched(s: Mapping) -> list:
     """Predictions joined to FPL's own player metadata.
 
     Joins on `element`, the FPL player id, rather than on the display name.
@@ -716,10 +760,9 @@ def enriched_players() -> list:
     web_name and FPL renames them when that happens -- and a mis-joined row
     would attach the wrong photo and the wrong stats to a prediction.
     """
-    s = state()
     base = opt.squad_records(s['everyone'])
 
-    raw_path = os.path.join('data', s['season'], 'players_raw.csv')
+    raw_path = project_path('data', s['season'], 'players_raw.csv')
     if not os.path.exists(raw_path):
         return base
 
@@ -727,7 +770,7 @@ def enriched_players() -> list:
     regions = load_regions()
     team_rows = {
         int(row['id']): row['short_name']
-        for row in pd.read_csv(os.path.join('data', s['season'], 'teams.csv')).to_dict('records')
+        for row in pd.read_csv(project_path('data', s['season'], 'teams.csv')).to_dict('records')
     }
 
     keep = ['id'] + [c for c in PROFILE_NUMERIC + PROFILE_TEXT if c in raw.columns]
@@ -783,11 +826,11 @@ def enriched_players() -> list:
     return out
 
 
-def enriched_squad_records(frame: pd.DataFrame) -> list:
+def enriched_squad_records(frame: pd.DataFrame, snapshot: Mapping | None = None) -> list:
     records = opt.squad_records(frame)
     by_element = {
         player['element']: player
-        for player in enriched_players()
+        for player in enriched_players(snapshot)
         if player.get('element') is not None
     }
     return [
@@ -800,28 +843,24 @@ def enriched_squad_records(frame: pd.DataFrame) -> list:
 def api_players():
     """Everyone, for the pickers. Includes the unavailable, flagged as such."""
     s = state()
-    if s.get('error'):
-        return unavailable(s['error'])
-    return jsonify({'ok': True, 'players': enriched_players()})
+    if gate := data_gate(s):
+        return gate
+    return jsonify({'ok': True, 'players': enriched_players(s)})
 
 
 @app.route('/api/squad', methods=['POST'])
 def api_squad():
     s = state()
-    if s.get('error'):
-        return unavailable(s['error'])
+    if gate := data_gate(s):
+        return gate
 
-    body = request.get_json(force=True) or {}
-    try:
-        budget = float(body.get('budget', DEFAULT_BUDGET))
-    except (TypeError, ValueError):
-        return fail('budget must be a number')
-    if not 20 <= budget <= 200:
-        return fail('budget must be between 20.0m and 200.0m')
+    body = contracts.read_json_object(request)
+    budget = contracts.number(body, 'budget', DEFAULT_BUDGET, lo=20, hi=200,
+                              range_message='budget must be between 20.0m and 200.0m')
 
     players = s['players']
-    lock = [n for n in body.get('lock', []) if n]
-    ban = [n for n in body.get('ban', []) if n]
+    lock = contracts.name_list(body, 'lock')
+    ban = contracts.name_list(body, 'ban')
 
     # solve_squad takes row indices, so names are resolved here rather than
     # filtering the frame -- dropping banned rows would renumber the index the
@@ -832,35 +871,35 @@ def api_squad():
         missing = sorted(set(lock) - set(matched['name']))
         if missing:
             return fail(f"could not lock (not in the prediction set, or "
-                        f"unavailable): {', '.join(missing)}")
+                        f"unavailable): {', '.join(missing)}", code='unknown_player')
         if len(matched) > opt.SQUAD_SIZE:
-            return fail(f'cannot lock more than {opt.SQUAD_SIZE} players')
+            return fail(f'cannot lock more than {opt.SQUAD_SIZE} players', code='invalid_squad')
         lock_idx = list(matched.index)
     if ban:
         ban_idx = list(players[players['name'].isin(ban)].index)
         if set(lock) & set(ban):
             return fail(f"cannot both lock and exclude: "
-                        f"{', '.join(sorted(set(lock) & set(ban)))}")
+                        f"{', '.join(sorted(set(lock) & set(ban)))}", code='invalid_squad')
 
     result, status = opt.solve_squad(players, budget,
                                      locked=lock_idx or None,
                                      banned=ban_idx or None)
     if result is None:
         return fail(f'no legal squad at £{budget:.1f}m ({status}). '
-                    f'Try raising the budget or removing some locks.')
+                    f'Try raising the budget or removing some locks.', code='invalid_squad')
 
-    return jsonify(lineup_response(result, budget))
+    return jsonify(lineup_response(result, budget, s))
 
 
-def lineup_response(result: dict, budget: float) -> dict:
+def lineup_response(result: dict, budget: float, snapshot: Mapping | None = None) -> dict:
     """Serialize a solved squad with its complete matchday lineup."""
     payload = opt.lineup_payload(result, budget)
-    payload['xi'] = enriched_squad_records(result['xi'])
-    payload['bench'] = enriched_squad_records(result['bench'])
+    payload['xi'] = enriched_squad_records(result['xi'], snapshot)
+    payload['bench'] = enriched_squad_records(result['bench'], snapshot)
     for key in ('captain', 'vice_captain'):
         selected = result.get(key)
         payload[key] = (None if selected is None else
-                        enriched_squad_records(pd.DataFrame([selected]))[0])
+                        enriched_squad_records(pd.DataFrame([selected]), snapshot)[0])
     return payload
 
 
@@ -868,98 +907,64 @@ def lineup_response(result: dict, budget: float) -> dict:
 def api_lineup():
     """Choose XI, bench order, captain and vice from an owned 15."""
     s = state()
-    if s.get('error'):
-        return unavailable(s['error'])
+    if gate := data_gate(s):
+        return gate
 
-    body = request.get_json(force=True) or {}
-    elements = [element for element in body.get('elements', []) if element is not None]
-    names = [name for name in body.get('squad', []) if name]
+    body = contracts.read_json_object(request)
+    elements = contracts.int_list(
+        body, 'elements', message='elements must be a list of numeric FPL element IDs')
+    names = contracts.name_list(body, 'squad')
     if elements:
-        if len(elements) != opt.SQUAD_SIZE or len(set(elements)) != opt.SQUAD_SIZE:
-            return fail(f'a squad is {opt.SQUAD_SIZE} distinct players; you gave {len(set(elements))}')
-        everyone = s['everyone']
-        current = everyone[everyone['element'].isin(elements)].copy()
-        if len(current) != opt.SQUAD_SIZE:
-            found = set(current['element'])
-            missing = [str(element) for element in elements if element not in found]
-            return fail(f"unknown player element(s): {', '.join(missing)}")
-        order = {element: position for position, element in enumerate(elements)}
-        current['_order'] = current['element'].map(order)
-        current = current.sort_values('_order').drop(columns='_order').reset_index(drop=True)
+        current = squad_from_elements(elements, s)
     else:
         if len(names) != opt.SQUAD_SIZE:
-            return fail(f'a squad is {opt.SQUAD_SIZE} players; you gave {len(names)}')
+            return fail(f'a squad is {opt.SQUAD_SIZE} players; you gave {len(names)}',
+                        code='invalid_squad')
         try:
-            current = squad_from_names(names).reset_index(drop=True)
+            current = squad_from_names(names, s).reset_index(drop=True)
         except (ValueError, KeyError) as exc:
-            return fail(str(exc))
+            return fail(str(exc), code='invalid_squad')
 
     budget = float(current['value_m'].sum())
     result, status = opt.solve_squad(current, budget)
     if result is None:
-        return fail(f'the supplied 15 is not a legal FPL squad ({status})')
-    return jsonify(lineup_response(result, budget))
+        return fail(f'the supplied 15 is not a legal FPL squad ({status})', code='invalid_squad')
+    return jsonify(lineup_response(result, budget, s))
 
 
 @app.route('/api/transfers', methods=['POST'])
 def api_transfers():
     s = state()
-    if s.get('error'):
-        return unavailable(s['error'])
+    if gate := data_gate(s):
+        return gate
 
-    body = request.get_json(force=True) or {}
-    raw_elements = body.get('elements')
-    if not isinstance(raw_elements, list) or any(
-            isinstance(element, bool) or not isinstance(element, int)
-            for element in raw_elements):
-        return fail('elements must be a list of numeric FPL element IDs')
-    try:
-        if len(raw_elements) != opt.SQUAD_SIZE or len(set(raw_elements)) != opt.SQUAD_SIZE:
-            return fail('elements must contain 15 distinct numeric FPL element IDs')
-        current = squad_from_elements(raw_elements)
-    except (ValueError, KeyError) as exc:
-        return fail(str(exc))
+    body = contracts.read_json_object(request)
+    raw_elements = contracts.int_list(
+        body, 'elements', required=True,
+        message='elements must be a list of numeric FPL element IDs')
+    if len(raw_elements) != opt.SQUAD_SIZE or len(set(raw_elements)) != opt.SQUAD_SIZE:
+        return fail('elements must contain 15 distinct numeric FPL element IDs',
+                    code='invalid_squad', field='elements')
+    current = squad_from_elements(raw_elements, s)
 
-    try:
-        free = int(body.get('free', 1))
-        bank = float(body.get('bank', 0.0))
-        max_transfers = int(body.get('max', 3))
-    except (TypeError, ValueError):
-        return fail('free, bank and max must be numbers')
-    if not 0 <= max_transfers <= 5:
-        return fail('max transfers must be between 0 and 5')
-    if not 0 <= free <= 5:
-        return fail('free transfers must be between 0 and 5')
-    if not 0 <= bank <= 100:
-        return fail('bank must be between 0.0m and 100.0m')
+    free = contracts.number(body, 'free', 1, lo=0, hi=5, integer=True,
+                            range_message='free transfers must be between 0 and 5')
+    bank = contracts.number(body, 'bank', 0.0, lo=0, hi=100,
+                            range_message='bank must be between 0.0m and 100.0m')
+    max_transfers = contracts.number(body, 'max', 3, lo=0, hi=5, integer=True,
+                                     range_message='max transfers must be between 0 and 5')
 
     # Optional, but when present must price every owned element -- a partial
     # map would silently fall back to market value for whichever players it
     # left out, understating what selling them actually returns.
-    raw_selling_prices = body.get('selling_prices_tenths')
-    selling_prices = None
-    if raw_selling_prices is not None:
-        if not isinstance(raw_selling_prices, dict):
-            return fail('selling_prices_tenths must be an object of element ID to tenths of a million')
-        try:
-            parsed = {int(key): value for key, value in raw_selling_prices.items()}
-        except (TypeError, ValueError):
-            return fail('selling_prices_tenths keys must be numeric FPL element IDs')
-        if any(
-                isinstance(value, bool) or not isinstance(value, (int, float))
-                or not math.isfinite(value) or value < 0
-                for value in parsed.values()):
-            return fail('selling_prices_tenths values must be finite nonnegative numbers')
-        if set(parsed.keys()) != set(raw_elements):
-            return fail('selling_prices_tenths must have exactly one entry per owned element')
-        selling_prices = {element: tenths / 10.0 for element, tenths in parsed.items()}
+    selling_prices = contracts.selling_prices(body, set(raw_elements))
 
     try:
         data = opt.compute_transfers(
             current, s['players'], free, bank, max_transfers,
             selling_prices=selling_prices)
     except ValueError as exc:
-        return fail(str(exc))
+        return fail(str(exc), code='invalid_squad')
     data['ok'] = True
     return jsonify(data)
 
@@ -967,76 +972,43 @@ def api_transfers():
 @app.route('/api/chips', methods=['POST'])
 def api_chips():
     s = state()
-    if s.get('error'):
-        return unavailable(s['error'])
+    if gate := data_gate(s):
+        return gate
 
-    body = request.get_json(force=True) or {}
-    names = [n for n in body.get('squad', []) if n]
+    body = contracts.read_json_object(request)
+    names = contracts.name_list(body, 'squad')
     squad = None
     if names:
         if len(names) != opt.SQUAD_SIZE:
-            return fail(f'a squad is {opt.SQUAD_SIZE} players; you gave {len(names)}')
+            return fail(f'a squad is {opt.SQUAD_SIZE} players; you gave {len(names)}',
+                        code='invalid_squad')
         try:
-            squad = squad_from_names(names)
+            squad = squad_from_names(names, s)
         except (ValueError, KeyError) as exc:
-            return fail(str(exc))
+            return fail(str(exc), code='invalid_squad')
 
-    try:
-        horizon = int(body.get('horizon', 8))
-    except (TypeError, ValueError):
-        return fail('horizon must be a number')
-    if not 1 <= horizon <= 38:
-        return fail('horizon must be between 1 and 38 gameweeks')
-
-    inventory = body.get('chip_inventory')
-    scheduled = body.get('scheduled_gameweeks', [])
-    if scheduled is None:
-        scheduled = []
-    if not isinstance(scheduled, list) or any(
-            not isinstance(gameweek, (int, float)) for gameweek in scheduled):
-        return fail('scheduled_gameweeks must be a list of numbers')
-    try:
-        last_free_hit = body.get('last_free_hit_gameweek')
-        if last_free_hit is not None:
-            last_free_hit = int(last_free_hit)
-    except (TypeError, ValueError):
-        return fail('last_free_hit_gameweek must be a number')
-
-    try:
-        raw_bank = body.get('bank')
-        bank = None if raw_bank is None else float(raw_bank)
-    except (TypeError, ValueError):
-        return fail('bank must be a number')
-    if bank is not None and not 0 <= bank <= 100:
-        return fail('bank must be between 0.0m and 100.0m')
+    horizon = contracts.number(body, 'horizon', 8, lo=1, hi=38, integer=True,
+                               range_message='horizon must be between 1 and 38 gameweeks')
+    inventory = contracts.chip_inventory(body)
+    scheduled = contracts.int_list(
+        body, 'scheduled_gameweeks', maximum=38,
+        message='scheduled_gameweeks must be a list of gameweek numbers (1-38)') or []
+    last_free_hit = contracts.number(body, 'last_free_hit_gameweek', None,
+                                     lo=1, hi=38, integer=True)
+    bank = contracts.number(body, 'bank', None, lo=0, hi=100,
+                            range_message='bank must be between 0.0m and 100.0m')
 
     # Free Hit / Wildcard candidate squads are priced from real ownership
     # cost when it's available, same as /api/transfers; a squad request has
     # no elements to key this against, so it's only accepted alongside one.
-    raw_selling_prices = body.get('selling_prices_tenths')
-    selling_prices = None
-    if raw_selling_prices is not None:
-        if not isinstance(raw_selling_prices, dict):
-            return fail('selling_prices_tenths must be an object of element ID to tenths of a million')
-        try:
-            parsed = {int(key): value for key, value in raw_selling_prices.items()}
-        except (TypeError, ValueError):
-            return fail('selling_prices_tenths keys must be numeric FPL element IDs')
-        if any(
-                isinstance(value, bool) or not isinstance(value, (int, float))
-                or not math.isfinite(value) or value < 0
-                for value in parsed.values()):
-            return fail('selling_prices_tenths values must be finite nonnegative numbers')
-        if squad is None or 'element' not in squad.columns:
-            return fail('selling_prices_tenths requires a 15-player squad in this request')
-        if set(parsed.keys()) != {int(element) for element in squad['element']}:
-            return fail('selling_prices_tenths must have exactly one entry per owned element')
-        selling_prices = {element: tenths / 10.0 for element, tenths in parsed.items()}
+    owned = (None if squad is None or 'element' not in squad.columns
+             else {int(element) for element in squad['element']})
+    selling_prices = contracts.selling_prices(body, owned)
 
     data = opt.compute_chips(
         squad, s['season'], s['gameweek'], horizon, s['players'],
         inventory=inventory,
-        scheduled_gameweeks=[int(gameweek) for gameweek in scheduled],
+        scheduled_gameweeks=scheduled,
         last_free_hit_gameweek=last_free_hit,
         future_points=s.get('future_points'),
         projection_generated_at=(
@@ -1045,6 +1017,7 @@ def api_chips():
         ),
         bank=bank,
         selling_prices=selling_prices,
+        root=ROOT,
     )
     data['ok'] = True
     return jsonify(data)
@@ -1053,13 +1026,10 @@ def api_chips():
 @app.route('/api/watchlist')
 def api_watchlist():
     s = state()
-    if s.get('error'):
-        return unavailable(s['error'])
-    try:
-        max_ownership = float(request.args.get('max_ownership', 10))
-        top = int(request.args.get('top', 12))
-    except (TypeError, ValueError):
-        return fail('max_ownership and top must be numbers')
+    if gate := data_gate(s):
+        return gate
+    max_ownership = contracts.query_number(request.args, 'max_ownership', 10, lo=0, hi=100)
+    top = contracts.query_number(request.args, 'top', 12, lo=1, hi=200, integer=True)
 
     data = opt.compute_watchlist(s['players'], max_ownership, top)
     data['ok'] = True
