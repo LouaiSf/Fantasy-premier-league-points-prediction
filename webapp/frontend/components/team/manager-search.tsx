@@ -5,6 +5,8 @@ import { api, ApiRequestError } from "@/lib/api";
 import type { LeagueStandingsEntry, ManagerLineup, ManagerSearchCandidate, PlatformSnapshot } from "@/lib/types";
 import { ManagerLineupPreview } from "@/components/team/manager-lineup-preview";
 
+// FPL classic league standings are served 50 entries per page.
+const PAGE_SIZE = 50;
 const NAME_SEARCH_UNAVAILABLE = "Name search is not configured; enter a numeric FPL entry ID.";
 
 function describeSearchError(err: unknown, fallback: string): string {
@@ -42,14 +44,20 @@ function LeagueSearchPanel({
   const [page, setPage] = React.useState(1);
   const [hasNext, setHasNext] = React.useState(false);
   const [nameFilter, setNameFilter] = React.useState("");
+  const [jumpInput, setJumpInput] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  async function loadPage(id: number, targetPage: number, append: boolean) {
+  async function loadPage(id: number, targetPage: number, append: boolean, jump = false) {
     setLoading(true);
     setError(null);
     try {
       const res = await api.leagueStandings(id, targetPage);
+      if (jump && res.entries.length === 0) {
+        // Past the end of the standings: keep what's already loaded.
+        setError(`Page ${targetPage} is past the end of this league.`);
+        return;
+      }
       setLeagueName(res.league_name);
       setEntries((prev) => (append ? [...prev, ...res.entries] : res.entries));
       setPage(res.page);
@@ -73,7 +81,19 @@ function LeagueSearchPanel({
       return;
     }
     setLeagueId(parsed);
+    setJumpInput("");
     void loadPage(parsed, 1, false);
+  }
+
+  function submitJump(event: React.FormEvent) {
+    event.preventDefault();
+    const parsed = Number(jumpInput.trim());
+    if (leagueId == null) return;
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      setError("Enter a page number of 1 or more.");
+      return;
+    }
+    void loadPage(leagueId, parsed, false, true);
   }
 
   const filtered = nameFilter.trim()
@@ -112,9 +132,21 @@ function LeagueSearchPanel({
               autoComplete="off"
             />
           </label>
+          <form className="league-search-jump" onSubmit={submitJump}>
+            <label htmlFor="league-jump-input">Jump to page</label>
+            <input
+              id="league-jump-input"
+              value={jumpInput}
+              onChange={(event) => setJumpInput(event.target.value)}
+              placeholder={`e.g. 200 (page ≈ rank ÷ ${PAGE_SIZE})`}
+              inputMode="numeric"
+              autoComplete="off"
+            />
+            <button className="btn secondary sm" type="submit" disabled={loading}>Go</button>
+          </form>
           <p className="league-search-note">
-            Showing {entries.length} loaded member{entries.length === 1 ? "" : "s"} of {leagueName}.
-            {hasNext ? " Load more to search further down the standings." : " That's everyone."}
+            Showing {entries.length} loaded member{entries.length === 1 ? "" : "s"} of {leagueName} (page {page}).
+            {hasNext ? " Load more, or jump to a page, to search further down the standings." : " That's the end of the standings."}
           </p>
           <div className="manager-search-results" role="listbox" aria-label="League members">
             {filtered.map((entry) => (
