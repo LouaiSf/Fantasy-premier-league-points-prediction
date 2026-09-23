@@ -255,6 +255,69 @@ def test_transfers_accept_element_ids_and_return_current_lineup() -> None:
     }
 
 
+def test_transfers_accept_valid_selling_prices_tenths() -> None:
+    client = app.test_client()
+    squad = client.post("/api/squad", json={"budget": 100.0}).get_json()
+    elements = [player["element"] for player in squad["xi"] + squad["bench"]]
+    selling_prices_tenths = {
+        str(player["element"]): round(player["value_m"] * 10)
+        for player in squad["xi"] + squad["bench"]
+    }
+
+    response = client.post(
+        "/api/transfers",
+        json={
+            "elements": elements, "free": 0, "bank": 0.0, "max": 0,
+            "selling_prices_tenths": selling_prices_tenths,
+        },
+    )
+
+    assert response.status_code == 200
+    row = response.get_json()["rows"][0]
+    assert row["bank_after"] == 0.0
+    assert "selling_value" in row and "market_value" in row
+
+
+def test_transfers_reject_incomplete_selling_prices_tenths() -> None:
+    client = app.test_client()
+    squad = client.post("/api/squad", json={"budget": 100.0}).get_json()
+    elements = [player["element"] for player in squad["xi"] + squad["bench"]]
+    incomplete = {str(elements[0]): 50}  # only one of the 15 owned elements
+
+    response = client.post(
+        "/api/transfers",
+        json={
+            "elements": elements, "free": 0, "bank": 0.0, "max": 0,
+            "selling_prices_tenths": incomplete,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == (
+        "selling_prices_tenths must have exactly one entry per owned element"
+    )
+
+
+def test_transfers_reject_negative_selling_prices_tenths() -> None:
+    client = app.test_client()
+    squad = client.post("/api/squad", json={"budget": 100.0}).get_json()
+    elements = [player["element"] for player in squad["xi"] + squad["bench"]]
+    bad = {str(element): -10 for element in elements}
+
+    response = client.post(
+        "/api/transfers",
+        json={
+            "elements": elements, "free": 0, "bank": 0.0, "max": 0,
+            "selling_prices_tenths": bad,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == (
+        "selling_prices_tenths values must be finite nonnegative numbers"
+    )
+
+
 def test_transfers_reject_legacy_name_identity() -> None:
     client = app.test_client()
     squad = client.post("/api/squad", json={"budget": 100.0}).get_json()
@@ -322,3 +385,58 @@ def test_chips_response_matches_the_frontend_contract() -> None:
                 "alternatives", "decision_policy", "reasons", "warnings",
                 "confidence"} <= rec.keys()
         assert {"minimum_projected_gain", "uncertainty_note", "basis"} <= rec["decision_policy"].keys()
+
+
+def test_chips_accept_valid_selling_prices_tenths() -> None:
+    client = app.test_client()
+    squad = client.post("/api/squad", json={"budget": 100.0}).get_json()
+    names = [player["name"] for player in squad["xi"] + squad["bench"]]
+    selling_prices_tenths = {
+        str(player["element"]): round(player["value_m"] * 10)
+        for player in squad["xi"] + squad["bench"]
+    }
+
+    response = client.post(
+        "/api/chips",
+        json={
+            "horizon": 2, "squad": names, "bank": 0.0,
+            "selling_prices_tenths": selling_prices_tenths,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["ok"] is True
+
+
+def test_chips_reject_incomplete_selling_prices_tenths() -> None:
+    client = app.test_client()
+    squad = client.post("/api/squad", json={"budget": 100.0}).get_json()
+    names = [player["name"] for player in squad["xi"] + squad["bench"]]
+    incomplete = {str(squad["xi"][0]["element"]): 50}
+
+    response = client.post(
+        "/api/chips",
+        json={
+            "horizon": 2, "squad": names, "bank": 0.0,
+            "selling_prices_tenths": incomplete,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == (
+        "selling_prices_tenths must have exactly one entry per owned element"
+    )
+
+
+def test_chips_reject_selling_prices_tenths_without_a_squad() -> None:
+    client = app.test_client()
+
+    response = client.post(
+        "/api/chips",
+        json={"horizon": 2, "selling_prices_tenths": {"1": 50}},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == (
+        "selling_prices_tenths requires a 15-player squad in this request"
+    )

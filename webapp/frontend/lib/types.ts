@@ -117,6 +117,8 @@ export interface TransferRow extends SquadResult {
   out: string[];
   in: string[];
   squad: PlayerRecord[];
+  market_value: number;
+  selling_value: number;
   bank_after: number;
   captained_total: number;
 }
@@ -129,6 +131,7 @@ export interface TransferFailure {
 export interface TransferResult {
   ok: true;
   squad_value: number;
+  selling_value: number;
   bank: number;
   budget: number;
   free: number;

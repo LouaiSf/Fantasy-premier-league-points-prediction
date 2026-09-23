@@ -4,7 +4,7 @@ import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
 import { api } from "@/lib/api";
 import { money, num } from "@/lib/format";
-import { fromTenths } from "@/lib/finance";
+import { fromTenths, sellingPricesTenthsForSquad } from "@/lib/finance";
 import { previewSquad } from "@/lib/squad";
 import { Pitch } from "@/components/team/pitch";
 import { SquadEditor } from "@/components/team/squad-editor";
@@ -50,6 +50,7 @@ export default function TeamPage() {
     if (!snapshot?.prediction_available || squadElements.length !== 15) return;
 
     let active = true;
+    const sellingPrices = sellingPricesTenthsForSquad(squadPlayers, storedSquad?.finance ?? null);
     void Promise.resolve().then(() => {
       if (!active) return null;
       setTransferPlanLoading(true);
@@ -59,6 +60,7 @@ export default function TeamPage() {
         free: freeTransfers,
         bank: plannerBankValue,
         max: freeTransfers,
+        selling_prices_tenths: sellingPrices,
       });
     }).then((result) => {
       if (!result) return;
@@ -75,7 +77,7 @@ export default function TeamPage() {
     return () => {
       active = false;
     };
-  }, [snapshot, squadElements, freeTransfers, plannerBankValue]);
+  }, [snapshot, squadElements, squadPlayers, storedSquad, freeTransfers, plannerBankValue]);
 
   if (loading) {
     return (

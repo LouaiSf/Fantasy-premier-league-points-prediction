@@ -268,7 +268,7 @@ def solve_squad(players: pd.DataFrame, budget: float, *, squad_size: int = SQUAD
                 locked=None, banned=None, must_transfer_out=None,
                 bench_weight: float = BENCH_WEIGHT, captain: bool = True,
                 apart_from=None, ownership_penalty: float = 0.0, seed=None,
-                seed_scale: float = TIEBREAK_SCALE):
+                seed_scale: float = TIEBREAK_SCALE, cost_overrides: dict | None = None):
     """Best legal squad, XI, bench order and armband picks -- one program.
 
     Picking fifteen and then picking eleven separately gives a worse answer
@@ -283,6 +283,12 @@ def solve_squad(players: pd.DataFrame, budget: float, *, squad_size: int = SQUAD
     must respect, which is how compute_squad_alternatives() walks the plateau.
     `ownership_penalty` docks a squad that many points per percent of ownership
     per player owned. `seed` breaks ties reproducibly per user.
+
+    `cost_overrides` (keyed by `players.index`) replaces `value_m` in the
+    budget constraint only, for players whose real cost to select isn't their
+    market price -- an owned player being kept costs his selling price, not
+    what he'd fetch on the open market. `value_m` itself, and therefore every
+    display/record field derived from `players`, is never touched.
     """
     import pulp
 
@@ -295,6 +301,8 @@ def solve_squad(players: pd.DataFrame, budget: float, *, squad_size: int = SQUAD
 
     points = players['predicted_points'].to_dict()
     cost = players['value_m'].to_dict()
+    if cost_overrides:
+        cost.update(cost_overrides)
     position = players['position'].to_dict()
     club = players['team'].to_dict()
 
@@ -402,7 +410,7 @@ def solve_squad(players: pd.DataFrame, budget: float, *, squad_size: int = SQUAD
 
 def solve_squad_horizon(players: pd.DataFrame, points: pd.DataFrame, budget: float,
                         weights: dict, *, bench_weight: float = BENCH_WEIGHT,
-                        locked=None, banned=None):
+                        locked=None, banned=None, cost_overrides: dict | None = None):
     """The best fifteen to own across several gameweeks, not just the next one.
 
     One squad is bought once and kept for the whole horizon; the XI and the
@@ -415,12 +423,19 @@ def solve_squad_horizon(players: pd.DataFrame, points: pd.DataFrame, budget: flo
     Transfers are deliberately not modelled. The horizon says which squad is
     worth holding; scripts/optimise.py transfers answers how to get there from
     the squad you own.
+
+    `cost_overrides` (keyed by `players.index`) is the same selling-price
+    substitution `solve_squad` takes: a Wildcard that ends up keeping an
+    owned player never actually transacts him, so his effective cost is what
+    he'd sell for, not his market price.
     """
     import pulp
 
     idx = list(players.index)
     gameweeks = list(points.columns)
     cost = players['value_m'].to_dict()
+    if cost_overrides:
+        cost.update(cost_overrides)
     position = players['position'].to_dict()
     club = players['team'].to_dict()
 
@@ -794,7 +809,8 @@ def annotate_marginals(rows: list) -> None:
 
 
 def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
-                      free: int, bank: float, max_transfers: int) -> dict:
+                      free: int, bank: float, max_transfers: int,
+                      selling_prices: dict | None = None) -> dict:
     """Jointly optimise every transfer count, net of the points hit.
 
     Each count is one integer program over the complete squad. This is
@@ -805,24 +821,53 @@ def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
     returned so a marginal second or third transfer is visible rather than
     assumed.
 
+    `selling_prices` (identity -> £m) is what each of the 15 *currently
+    owned* players would actually sell for today, per the official half-rise
+    rule -- not their market value. A manager who bought at 5.0 and is
+    sitting on 5.3 banks 5.1 on a sale, not 5.3. Without it (a CLI caller
+    with no purchase-price history), selling value falls back to market
+    value, which is only correct for a player who hasn't moved in price.
+
     Returns data only. suggest_transfers() prints it; the web layer renders the
     same structure, so the two can never drift.
     """
-    budget = current['value_m'].sum() + bank
-
     # The available market has a fresh RangeIndex, while the current squad can
     # include unavailable players and therefore have different row numbers.
     # Transfer constraints must use stable identity, never DataFrame indices.
     identity = ('element' if 'element' in players.columns and
                 'element' in current.columns else 'name')
     current_ids = set(current[identity])
+    current_market_value = current.set_index(identity)['value_m']
+
+    def sell_value(pid) -> float:
+        if selling_prices is not None and pid in selling_prices:
+            return float(selling_prices[pid])
+        return float(current_market_value.get(pid, 0.0))
+
+    # What selling the whole owned 15 would put in the bank, which is the
+    # real spending power a transfer has -- never the market value of a
+    # squad that mostly isn't being sold.
+    total_selling_value = sum(sell_value(pid) for pid in current_ids)
+    budget = total_selling_value + bank
+
     keep_idx = list(players.index[players[identity].isin(current_ids)])
     available_current_ids = set(players.loc[keep_idx, identity])
     forced_out = len(current_ids - available_current_ids)
 
+    # A retained player's effective cost is his selling price: budget already
+    # counted him as sold once, so "buying him back" must charge the same
+    # amount to net to zero. A newly bought player keeps the market-price
+    # default set in solve_squad. This is the only place selling price
+    # substitutes for market price -- squad/xi/bench records below still
+    # carry each player's real value_m.
+    cost_overrides = {i: sell_value(players.loc[i, identity]) for i in keep_idx}
+
     # Score standing pat independently. Count zero may be infeasible when an
     # owned player is unavailable, but gains still need the actual current
     # squad as their reference rather than the first feasible transfer plan.
+    # This solves over exactly the owned 15 (squad_size forces all of them
+    # in), so market value is the right, and only sensible, budget here --
+    # no money actually changes hands by fielding your own squad.
     baseline_result, _ = solve_squad(
         current.reset_index(drop=True), float(current['value_m'].sum()))
     if baseline_result is None:
@@ -843,7 +888,8 @@ def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
             continue
         result, status = solve_squad(
             players, budget,
-            must_transfer_out=(keep_idx, SQUAD_SIZE - count))
+            must_transfer_out=(keep_idx, SQUAD_SIZE - count),
+            cost_overrides=cost_overrides)
         if result is None:
             failures.append({'transfers': count, 'status': status})
             continue
@@ -856,6 +902,18 @@ def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
         result_ids = set(result['squad'][identity])
         out = current[~current[identity].isin(result_ids)]
         into = result['squad'][~result['squad'][identity].isin(current_ids)]
+
+        # The resulting squad's effective cost equals what it would sell for
+        # right now: a retained player at his selling price, a freshly
+        # bought one at the purchase price he was just bought at (no gain or
+        # loss yet). bank_after is what's left of `budget` -- selling
+        # everyone, then buying this squad back -- which is exactly
+        # bank + sales - purchases.
+        effective_cost_total = sum(
+            cost_overrides.get(i, float(players.loc[i, 'value_m']))
+            for i in result['squad'].index
+        )
+        market_value_total = float(result['squad']['value_m'].sum())
         rows.append({
             'transfers': count,
             'gross': round(float(gross), 2),
@@ -866,7 +924,9 @@ def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
             'in': list(into['name']),
             'squad': squad_records(result['squad']),
             **lineup_payload(result, budget),
-            'bank_after': round(float(budget - result['squad']['value_m'].sum()), 1),
+            'market_value': round(market_value_total, 1),
+            'selling_value': round(effective_cost_total, 1),
+            'bank_after': round(float(budget - effective_cost_total), 1),
             'captained_total': round(float(gross), 2),
         })
 
@@ -875,6 +935,7 @@ def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
     best, recommended = choose_transfer_recommendation(rows)
     return {
         'squad_value': round(float(current['value_m'].sum()), 1),
+        'selling_value': round(total_selling_value, 1),
         'bank': round(float(bank), 1),
         'budget': round(float(budget), 1),
         'free': int(free),
@@ -933,6 +994,10 @@ def lineup_payload(result: dict, budget: float) -> dict:
     return {
         'ok': True,
         'budget': float(budget),
+        # Current market value of the squad, not cash spent on it -- a
+        # transfer-plan row's real cash accounting is its own
+        # `market_value`/`selling_value`/`bank_after` fields, since a
+        # retained player never actually changes hands.
         'spend': round(float(result['squad']['value_m'].sum()), 1),
         'xi': squad_records(xi),
         'bench': squad_records(result['bench']),
@@ -1157,13 +1222,15 @@ def _recommendation(chip: str, scores: dict, breakdowns: dict,
                     fixture_indexes: dict, candidate_gameweeks: list,
                     inventory: dict, has_squad: bool, half: str,
                     expires: str, projection_mode: str, current_gameweek: int,
-                    policy: ChipDecisionPolicy) -> dict:
+                    policy: ChipDecisionPolicy, finance_warning: str | None = None) -> dict:
     label = CHIP_LABELS[chip]
     state = inventory.get(half, {}).get(chip, 'unknown')
     warnings = []
     inventory_synced = inventory.get('_synced') is True
     if not inventory_synced:
         warnings.append('Chip history is not synced; confirm this chip is still available.')
+    if finance_warning:
+        warnings.append(finance_warning)
 
     base = {
         'chip': chip, 'label': label, 'projection_mode': projection_mode,
@@ -1276,7 +1343,9 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
                   scheduled_gameweeks: list | None = None,
                   last_free_hit_gameweek: int | None = None,
                   future_points: pd.DataFrame | None = None,
-                  projection_generated_at: str | None = None) -> dict:
+                  projection_generated_at: str | None = None,
+                  bank: float | None = None,
+                  selling_prices: dict | None = None) -> dict:
     players = players.copy()
     if not players.index.is_unique:
         players = players.reset_index(drop=True)
@@ -1348,7 +1417,29 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
     breakdowns = {chip: {} for chip in CHIP_IDS}
     fixture_indexes = {chip: {} for chip in CHIP_IDS}
     current_totals = {}
-    squad_budget = float(squad['value_m'].sum()) if has_squad else None
+
+    # Free Hit and Wildcard both mean "sell the whole owned squad, buy any
+    # legal fifteen" -- a player who ends up kept was never actually
+    # transacted, so his effective cost is his selling price, not his market
+    # price, exactly as in compute_transfers. Without a real ownership-price
+    # basis this falls back to market value, which is only exact for a squad
+    # that hasn't moved in price since it was bought.
+    cost_overrides = {}
+    if has_squad:
+        for idx, row in squad.iterrows():
+            key = _player_key(row)
+            price = (
+                float(selling_prices[key])
+                if selling_prices is not None and key in selling_prices
+                else float(row['value_m'])
+            )
+            cost_overrides[idx] = price
+    total_selling_value = sum(cost_overrides.values()) if has_squad else None
+    finance_available = has_squad and bank is not None and selling_prices is not None
+    chip_budget = (
+        float(bank) + total_selling_value if finance_available
+        else float(squad['value_m'].sum()) if has_squad else None
+    )
     policy = ChipDecisionPolicy(
         minimum_projected_gain=DECISION_MARGIN,
         uncertainty_note='Player point projections have model error; the decision margin is a conservative product policy.',
@@ -1416,8 +1507,8 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
 
         optimized = solve_squad(
             players.assign(predicted_points=point_matrix[gw]),
-            current_budget + 0.01, squad_size=SQUAD_SIZE,
-            bench_weight=0.0, captain=True)[0]
+            chip_budget + 0.01, squad_size=SQUAD_SIZE,
+            bench_weight=0.0, captain=True, cost_overrides=cost_overrides)[0]
         optimized_xi = None if optimized is None else float(
             optimized['xi']['predicted_points'].sum())
         optimized_total = None if optimized is None else _result_total(optimized)
@@ -1445,13 +1536,14 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
             'changed_player_count': changed_count,
         }
 
-    if has_squad and squad_budget is not None and projection_mode == 'model_projection':
+    if has_squad and chip_budget is not None and projection_mode == 'model_projection':
         for gw in gameweeks:
             remaining = [future_gw for future_gw in gameweeks if future_gw >= gw]
             current_cumulative = sum(current_totals.get(future_gw, 0.0) for future_gw in remaining)
             wildcard_result, _status = solve_squad_horizon(
-                players, point_matrix.loc[:, remaining], squad_budget,
-                horizon_weights(remaining, 1.0), bench_weight=0.0)
+                players, point_matrix.loc[:, remaining], chip_budget,
+                horizon_weights(remaining, 1.0), bench_weight=0.0,
+                cost_overrides=cost_overrides)
             if wildcard_result is None:
                 continue
             optimized_cumulative = sum(
@@ -1476,13 +1568,20 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
                 'changed_player_count': len(current_elements - optimized_elements),
             }
 
+    finance_warning = (
+        'Budget estimated from current market value, not real sale proceeds; '
+        'import or price your squad to get an exact figure.'
+        if has_squad and projection_mode == 'model_projection' and not finance_available
+        else None
+    )
     recommendations = []
     for chip in CHIP_IDS:
         eligible, half, expires = candidate_windows[chip]
         recommendation = _recommendation(
             chip, scores[chip], breakdowns[chip], fixture_indexes[chip],
             eligible, normalized_inventory, has_squad, half, expires,
-            projection_mode, first_gw, policy)
+            projection_mode, first_gw, policy,
+            finance_warning=finance_warning if chip in ('free_hit', 'wildcard') else None)
         recommendations.append(recommendation)
 
     for row in rows:

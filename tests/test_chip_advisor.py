@@ -343,6 +343,81 @@ def test_wildcard_reoptimizes_for_each_remaining_horizon(monkeypatch, tmp_path):
     assert wildcard['projected_gain'] > 8.0
 
 
+def _priced_market_with_reach_candidate():
+    """A squad where one owned player has risen in price, plus one very
+    high-scoring, moderately-priced market candidate that's only affordable
+    if the risen player's real selling price (not his market value) funds it.
+
+    The market's own 'Alt' candidates (7pts each) are neutralised to 1pt so
+    the only reason the solver would touch the squad at all is 'Reach'
+    -- otherwise their own attractiveness muddies the comparison.
+    """
+    players = market()
+    players.loc[players['name'].str.startswith('Alt'), 'predicted_points'] = 1.0
+    # 'MID 4' (element 24) was bought at 5.0 and is now worth 8.0; the real
+    # 2026/27 selling-price rule banks 6.5 (5.0 + half the 3.0 rise), not the
+    # full 8.0 market value.
+    players.loc[players['element'] == 24, 'value_m'] = 8.0
+    squad = players.iloc[:15].copy()
+    with_target = pd.concat([
+        players,
+        pd.DataFrame([player(200, 'Reach', 'Club 20', 'MID', 50.0)]),
+    ], ignore_index=True)
+    with_target.loc[with_target['element'] == 200, 'value_m'] = 7.0
+    return squad, with_target
+
+
+def test_free_hit_budget_uses_real_selling_price_not_market_value(monkeypatch, tmp_path):
+    write_season(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    squad, players = _priced_market_with_reach_candidate()
+    # Free Hit is never eligible in GW1, so this needs first_gw >= 2.
+    points = horizon_points(players, [2])
+
+    # No ownership-price basis: budget defaults to market value, under which
+    # dropping the 8.0-priced 'MID 4' comfortably affords the 7.0 'Reach',
+    # whose 50 points dominate the resulting XI total.
+    no_finance = compute_chips(squad, 'test-season', 2, 1, players,
+                               inventory=synced_inventory(), future_points=points)
+    free_hit_no_finance = next(
+        rec for rec in no_finance['recommendations'] if rec['chip'] == 'free_hit')
+    assert free_hit_no_finance['evidence']['optimized_xi_total'] >= 90
+
+    # Real ownership prices: selling 'MID 4' only raises 6.5, £0.5m short of
+    # 'Reach' -- the same swap is not affordable and 'Reach' is left out.
+    with_finance = compute_chips(squad, 'test-season', 2, 1, players,
+                                 inventory=synced_inventory(), future_points=points,
+                                 bank=0.0, selling_prices={24: 6.5})
+    free_hit_with_finance = next(
+        rec for rec in with_finance['recommendations'] if rec['chip'] == 'free_hit')
+    assert free_hit_with_finance['evidence']['optimized_xi_total'] < 90
+    assert free_hit_with_finance['warnings'] == []
+
+    assert any('Budget estimated from current market value' in warning
+               for warning in free_hit_no_finance['warnings'])
+
+
+def test_wildcard_budget_uses_real_selling_price_not_market_value(monkeypatch, tmp_path):
+    write_season(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    squad, players = _priced_market_with_reach_candidate()
+    points = horizon_points(players, [2])
+
+    no_finance = compute_chips(squad, 'test-season', 2, 1, players,
+                               inventory=synced_inventory(), future_points=points)
+    wildcard_no_finance = next(
+        rec for rec in no_finance['recommendations'] if rec['chip'] == 'wildcard')
+    # Reach at 50 points, captained (doubled), dwarfs the rest of the squad.
+    assert wildcard_no_finance['evidence']['optimized_cumulative_total'] >= 90
+
+    with_finance = compute_chips(squad, 'test-season', 2, 1, players,
+                                 inventory=synced_inventory(), future_points=points,
+                                 bank=0.0, selling_prices={24: 6.5})
+    wildcard_with_finance = next(
+        rec for rec in with_finance['recommendations'] if rec['chip'] == 'wildcard')
+    assert wildcard_with_finance['evidence']['optimized_cumulative_total'] < 90
+
+
 def test_horizon_changes_candidate_matrix(monkeypatch, tmp_path):
     write_season(tmp_path)
     monkeypatch.chdir(tmp_path)

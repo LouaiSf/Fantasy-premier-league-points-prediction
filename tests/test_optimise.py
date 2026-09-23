@@ -110,6 +110,56 @@ def test_transfer_constraints_match_players_by_element_not_dataframe_index() -> 
     assert result['best']['in'] == ['Replacement GK']
 
 
+def test_selling_prices_override_market_value_in_budget_and_bank_after() -> None:
+    current = current_squad()
+    # A riser (bought 8.0, now worth the fixture's 10.0, real sale nets 9.0)
+    # and someone already priced at their floor after a fall (5.0, unchanged
+    # by the half-rise rule since there's nothing to halve on the way down).
+    # Neither equals a naive "market value" read, so this only passes if the
+    # solver used the supplied selling prices rather than re-deriving or
+    # ignoring them.
+    selling_prices = {int(e): float(v) for e, v in zip(current['element'], current['value_m'])}
+    selling_prices[20] = 9.0   # 'Useful premium': market 10.0, real sale 9.0
+    expected_selling_value = sum(selling_prices.values())
+
+    result = compute_transfers(current, current, free=0, bank=1.5, max_transfers=0,
+                                selling_prices=selling_prices)
+
+    hold = result['rows'][0]
+    assert result['selling_value'] == round(expected_selling_value, 1)
+    assert result['budget'] == round(expected_selling_value + 1.5, 1)
+    assert hold['selling_value'] == round(expected_selling_value, 1)
+    assert hold['market_value'] == round(float(current['value_m'].sum()), 1)
+    assert hold['bank_after'] == 1.5
+
+
+def test_two_transfer_downgrade_upgrade_uses_real_selling_proceeds() -> None:
+    current = current_squad()
+    market = pd.concat([
+        current,
+        pd.DataFrame([
+            player(100, 'Cheap enabler', 'P', 'MID', 4.0, 7.0),
+            player(101, 'Elite upgrade', 'Q', 'MID', 11.0, 14.0),
+        ]),
+    ], ignore_index=True)
+    # Without a selling-price override this exact combination is feasible
+    # with zero bank (dropped market value 10.0 + 5.0 == bought market value
+    # 4.0 + 11.0). Pricing 'Useful premium' at half a million below his
+    # market value must eat directly into that budget: the same combination
+    # now needs the matching 0.5 of bank to still be legal.
+    selling_prices = {int(e): float(v) for e, v in zip(current['element'], current['value_m'])}
+    selling_prices[20] = 9.5  # 'Useful premium': market 10.0, real sale 9.5
+
+    result = compute_transfers(current, market, free=2, bank=0.5, max_transfers=2,
+                                selling_prices=selling_prices)
+    two_moves = next(row for row in result['rows'] if row['transfers'] == 2)
+
+    assert set(two_moves['out']) == {'Useful premium', 'Weak budget'}
+    assert set(two_moves['in']) == {'Cheap enabler', 'Elite upgrade'}
+    assert two_moves['bank_after'] == 0.0
+    assert two_moves['bank_after'] >= 0
+
+
 def test_transfer_plan_counts_zero_one_and_two_are_returned_without_extra_hits() -> None:
     current = current_squad()
     market = pd.concat([

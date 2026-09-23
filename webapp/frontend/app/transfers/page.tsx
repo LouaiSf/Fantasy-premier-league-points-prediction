@@ -8,7 +8,7 @@ import { PlayerPhoto } from "@/components/player-photo";
 import { ClubCrest } from "@/components/club-crest";
 import { clubStyle } from "@/lib/club-colors";
 import { money, num, signed } from "@/lib/format";
-import { fromTenths } from "@/lib/finance";
+import { fromTenths, sellingPricesTenthsForSquad } from "@/lib/finance";
 import type { PlayerRecord, TransferResult } from "@/lib/types";
 import { Loading } from "@/components/loading";
 import { ModelInfo } from "@/components/model-info";
@@ -89,7 +89,7 @@ function DeskRow({
 }
 
 export default function TransfersPage() {
-  const { snapshot, loading, squadPlayers, squadElements, financeSummary, toast } = useApp();
+  const { snapshot, loading, squadPlayers, squadElements, storedSquad, financeSummary, toast } = useApp();
   const [outQuery, setOutQuery] = React.useState("");
   const [inQuery, setInQuery] = React.useState("");
   const [outFilter, setOutFilter] = React.useState<(typeof OUT_FILTERS)[number]>("ALL");
@@ -209,7 +209,13 @@ export default function TransfersPage() {
     setAnalysing(true);
     setAnalysisError(null);
     try {
-      const result = await api.transfers({ elements: squadElements, free, bank, max: maxTransfers });
+      const result = await api.transfers({
+        elements: squadElements,
+        free,
+        bank,
+        max: maxTransfers,
+        selling_prices_tenths: sellingPricesTenthsForSquad(squadPlayers, storedSquad?.finance ?? null),
+      });
       setAnalysis(result);
     } catch (err) {
       setAnalysisError((err as Error).message);

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import sys
+import math
 import traceback
 import datetime
 import subprocess
@@ -76,7 +77,39 @@ def state() -> dict:
         return reload_predictions()
     if os.path.exists(path) and ('mtime' in _state and os.path.getmtime(path) != _state['mtime']):
         return reload_predictions()
+    season = _state.get('season')
+    if season:
+        market_path = market_prices_path(season)
+        if os.path.exists(market_path) and os.path.getmtime(market_path) != _state.get('market_mtime'):
+            return reload_predictions()
     return _state
+
+
+def market_prices_path(season: str) -> str:
+    return os.path.join('data', season, 'players_raw.csv')
+
+
+def join_market_prices(df: pd.DataFrame, season: str) -> pd.DataFrame:
+    """Overwrite `value_m` with players_raw.csv's `now_cost` -- the live price.
+
+    predictions_next_gw.csv is a point-in-time export; players_raw.csv is
+    refreshed independently and routinely moves after that export was
+    written. /api/platform, /api/transfers and chip optimisation all need
+    the price a manager would actually pay today, not the price the model
+    saw at export time. A player missing from the current market file
+    cannot be legally bought at any price, so he is dropped here rather
+    than silently priced from the stale export.
+    """
+    if df.empty or 'element' not in df.columns:
+        return df
+    raw_path = market_prices_path(season)
+    if not os.path.exists(raw_path):
+        return df
+    raw = pd.read_csv(raw_path, usecols=['id', 'now_cost'], low_memory=False)
+    market_price = raw.set_index('id')['now_cost'] / 10.0
+    df = df.copy()
+    df['value_m'] = df['element'].map(market_price)
+    return df.dropna(subset=['value_m']).reset_index(drop=True)
 
 
 def local_element_ids() -> set[int]:
@@ -104,6 +137,16 @@ def reload_predictions() -> dict:
 
     players = opt.load_predictions(path, drop_unavailable=True)
     everyone = opt.load_predictions(path, drop_unavailable=False)
+
+    season = sorted(
+        d for d in os.listdir('data')
+        if os.path.isdir(os.path.join('data', d)) and d[:4].isdigit()
+    )[-1]
+    market_path = market_prices_path(season)
+    market_mtime = os.path.getmtime(market_path) if os.path.exists(market_path) else None
+    players = join_market_prices(players, season)
+    everyone = join_market_prices(everyone, season)
+
     future_points = None
     future_gameweeks = []
     try:
@@ -116,10 +159,6 @@ def reload_predictions() -> dict:
     except SystemExit:
         future_gameweeks = []
 
-    season = sorted(
-        d for d in os.listdir('data')
-        if os.path.isdir(os.path.join('data', d)) and d[:4].isdigit()
-    )[-1]
     teams_path = os.path.join('data', season, 'teams.csv')
     if os.path.exists(teams_path):
         local_teams = set(pd.read_csv(teams_path)['name'].dropna())
@@ -141,6 +180,7 @@ def reload_predictions() -> dict:
                 'season': season,
                 'gameweek': opt.infer_next_gameweek(season),
                 'mtime': os.path.getmtime(path),
+                'market_mtime': market_mtime,
                 'model': model_summary(),
             })
             return _state
@@ -151,6 +191,7 @@ def reload_predictions() -> dict:
         'everyone': everyone,
         'future_points': future_points,
         'future_gameweeks': future_gameweeks,
+        'market_mtime': market_mtime,
         'season': season,
         'gameweek': opt.infer_next_gameweek(season),
         'mtime': os.path.getmtime(path),
@@ -598,8 +639,31 @@ def api_transfers():
     if not 0 <= bank <= 100:
         return fail('bank must be between 0.0m and 100.0m')
 
+    # Optional, but when present must price every owned element -- a partial
+    # map would silently fall back to market value for whichever players it
+    # left out, understating what selling them actually returns.
+    raw_selling_prices = body.get('selling_prices_tenths')
+    selling_prices = None
+    if raw_selling_prices is not None:
+        if not isinstance(raw_selling_prices, dict):
+            return fail('selling_prices_tenths must be an object of element ID to tenths of a million')
+        try:
+            parsed = {int(key): value for key, value in raw_selling_prices.items()}
+        except (TypeError, ValueError):
+            return fail('selling_prices_tenths keys must be numeric FPL element IDs')
+        if any(
+                isinstance(value, bool) or not isinstance(value, (int, float))
+                or not math.isfinite(value) or value < 0
+                for value in parsed.values()):
+            return fail('selling_prices_tenths values must be finite nonnegative numbers')
+        if set(parsed.keys()) != set(raw_elements):
+            return fail('selling_prices_tenths must have exactly one entry per owned element')
+        selling_prices = {element: tenths / 10.0 for element, tenths in parsed.items()}
+
     try:
-        data = opt.compute_transfers(current, s['players'], free, bank, max_transfers)
+        data = opt.compute_transfers(
+            current, s['players'], free, bank, max_transfers,
+            selling_prices=selling_prices)
     except ValueError as exc:
         return fail(str(exc))
     data['ok'] = True
@@ -643,6 +707,38 @@ def api_chips():
             last_free_hit = int(last_free_hit)
     except (TypeError, ValueError):
         return fail('last_free_hit_gameweek must be a number')
+
+    try:
+        raw_bank = body.get('bank')
+        bank = None if raw_bank is None else float(raw_bank)
+    except (TypeError, ValueError):
+        return fail('bank must be a number')
+    if bank is not None and not 0 <= bank <= 100:
+        return fail('bank must be between 0.0m and 100.0m')
+
+    # Free Hit / Wildcard candidate squads are priced from real ownership
+    # cost when it's available, same as /api/transfers; a squad request has
+    # no elements to key this against, so it's only accepted alongside one.
+    raw_selling_prices = body.get('selling_prices_tenths')
+    selling_prices = None
+    if raw_selling_prices is not None:
+        if not isinstance(raw_selling_prices, dict):
+            return fail('selling_prices_tenths must be an object of element ID to tenths of a million')
+        try:
+            parsed = {int(key): value for key, value in raw_selling_prices.items()}
+        except (TypeError, ValueError):
+            return fail('selling_prices_tenths keys must be numeric FPL element IDs')
+        if any(
+                isinstance(value, bool) or not isinstance(value, (int, float))
+                or not math.isfinite(value) or value < 0
+                for value in parsed.values()):
+            return fail('selling_prices_tenths values must be finite nonnegative numbers')
+        if squad is None or 'element' not in squad.columns:
+            return fail('selling_prices_tenths requires a 15-player squad in this request')
+        if set(parsed.keys()) != {int(element) for element in squad['element']}:
+            return fail('selling_prices_tenths must have exactly one entry per owned element')
+        selling_prices = {element: tenths / 10.0 for element, tenths in parsed.items()}
+
     data = opt.compute_chips(
         squad, s['season'], s['gameweek'], horizon, s['players'],
         inventory=inventory,
@@ -653,6 +749,8 @@ def api_chips():
             datetime.datetime.fromtimestamp(s['mtime'], tz=datetime.timezone.utc).isoformat()
             if s.get('mtime') else None
         ),
+        bank=bank,
+        selling_prices=selling_prices,
     )
     data['ok'] = True
     return jsonify(data)

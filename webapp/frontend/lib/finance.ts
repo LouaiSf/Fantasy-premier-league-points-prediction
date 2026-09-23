@@ -122,6 +122,25 @@ export function applyOwnershipDiff(
   };
 }
 
+// What the backend needs to price a transfer/chip candidate the same way
+// the owner's real account would: each currently-owned player's real
+// selling price today, keyed by element ID. A player with no tracked
+// purchase price sells at his current market value (the "estimated" basis).
+export function sellingPricesTenthsForSquad(
+  players: PlayerRecord[],
+  finance: SquadFinance | null,
+): Record<number, number> {
+  const result: Record<number, number> = {};
+  for (const player of players) {
+    const currentTenths = toTenths(player.value_m);
+    const owned = finance?.ownedPrices[player.element];
+    result[player.element] = owned
+      ? sellingPriceTenths(owned.purchaseTenths, currentTenths)
+      : currentTenths;
+  }
+  return result;
+}
+
 export interface AffordabilityCheck {
   affordable: boolean;
   shortfallTenths: number;

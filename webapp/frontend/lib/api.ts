@@ -80,8 +80,13 @@ export const api = {
     postJson<SquadResult>("/api/squad", body),
   lineup: (body: { elements: number[] }) =>
     postJson<SquadResult>("/api/lineup", body),
-  transfers: (body: { elements: number[]; free?: number; bank?: number; max?: number }) =>
-    postJson<TransferResult>("/api/transfers", body),
+  transfers: (body: {
+    elements: number[];
+    free?: number;
+    bank?: number;
+    max?: number;
+    selling_prices_tenths?: Record<number, number>;
+  }) => postJson<TransferResult>("/api/transfers", body),
   watchlist: (maxOwnership = 10, top = 12) =>
     requestJson<WatchlistResult>(
       `/api/watchlist?max_ownership=${maxOwnership}&top=${top}`,
@@ -92,6 +97,8 @@ export const api = {
     chip_inventory?: ChipInventory;
     scheduled_gameweeks?: number[];
     last_free_hit_gameweek?: number | null;
+    bank?: number;
+    selling_prices_tenths?: Record<number, number>;
   }) => parseChipsResult(await postJson<unknown>("/api/chips", body)),
 };
 

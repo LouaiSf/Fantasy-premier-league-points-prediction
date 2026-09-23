@@ -4,6 +4,7 @@ import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
 import { api } from "@/lib/api";
 import { num } from "@/lib/format";
+import { fromTenths, sellingPricesTenthsForSquad } from "@/lib/finance";
 import { Loading } from "@/components/loading";
 import { EmptyState } from "@/components/empty-state";
 import { ChipIcon } from "@/components/chips/chip-icon";
@@ -133,7 +134,7 @@ function WhyThisChoice({ recommendation, data }: { recommendation: ChipRecommend
 }
 
 export default function ChipsPage() {
-  const { snapshot, loading, squadNames } = useApp();
+  const { snapshot, loading, squadNames, squadPlayers, storedSquad, financeSummary } = useApp();
   const [data, setData] = React.useState<ChipsResult | null>(null);
   const [fetching, setFetching] = React.useState(false);
   const [fetchError, setFetchError] = React.useState<string | null>(null);
@@ -153,13 +154,20 @@ export default function ChipsPage() {
       const requestId = ++requestIdRef.current;
       setFetching(true);
       setFetchError(null);
+      const hasFullSquad = squadList.length === 15;
       try {
         const res = await api.chips({
-          squad: squadList.length === 15 ? squadList : undefined,
+          squad: hasFullSquad ? squadList : undefined,
           horizon: h,
           chip_inventory: inventory ?? undefined,
           scheduled_gameweeks: scheduledGameweeks,
           last_free_hit_gameweek: lastFreeHitGameweek,
+          // Free Hit/Wildcard candidate squads are only priced from real
+          // ownership cost when there's a full squad to key it against.
+          bank: hasFullSquad ? Math.max(0, fromTenths(financeSummary.bankTenths)) : undefined,
+          selling_prices_tenths: hasFullSquad
+            ? sellingPricesTenthsForSquad(squadPlayers, storedSquad?.finance ?? null)
+            : undefined,
         });
         if (requestId !== requestIdRef.current) return;
         if (res && res.ok) {
@@ -176,7 +184,7 @@ export default function ChipsPage() {
         if (requestId === requestIdRef.current) setFetching(false);
       }
     },
-    [inventory, scheduledGameweeks],
+    [inventory, scheduledGameweeks, squadPlayers, storedSquad, financeSummary],
   );
 
   React.useEffect(() => {
