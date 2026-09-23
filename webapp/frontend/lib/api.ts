@@ -192,10 +192,21 @@ export const api = {
     postJson<{
       ok: boolean;
       message: string;
+      predictions_stale?: boolean;
       season: string;
       gameweek: number;
       players: number;
-    }>("/api/refresh", {}),
+    }>("/api/refresh", {}, refreshAuthHeaders()),
+  startPredictionRefresh: (body: { horizon?: number; fetch?: boolean } = {}) =>
+    postJson<{ ok: boolean; job: PredictionRefreshJob }>(
+      "/api/refresh/predictions",
+      body,
+      refreshAuthHeaders(),
+    ),
+  predictionRefreshStatus: () =>
+    requestJson<{ ok: boolean; job: PredictionRefreshJob }>("/api/refresh/status", {
+      headers: refreshAuthHeaders(),
+    }),
   squad: (body: { budget: number; lock?: string[]; ban?: string[] }) =>
     postJson<SquadResult>("/api/squad", body),
   lineup: (body: { elements: number[] }) =>
