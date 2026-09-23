@@ -9,7 +9,13 @@ import { Loading } from "@/components/loading";
 import { EmptyState } from "@/components/empty-state";
 import { ChipIcon } from "@/components/chips/chip-icon";
 import { ChipOpportunityMatrix } from "@/components/chips/chip-opportunity-matrix";
-import { CHIP_IDS, type ChipId, type ChipInventory, type ChipRecommendation, type ChipRow, type ChipsResult } from "@/lib/types";
+import { CHIP_IDS, type ChipId, type ChipInventory, type ChipRecommendation, type ChipRow, type ChipsResult, type ChipState } from "@/lib/types";
+
+const CHIP_INVENTORY_KEY = "fpl-assistant-chip-inventory";
+// The last gameweek of each half-season set, per the official 2026/27 chip
+// rules (two sets, split at the GW19 deadline).
+const FIRST_HALF_LAST_GW = 19;
+const SECOND_HALF_LAST_GW = 38;
 
 const CHIP_LABELS: Record<ChipId, string> = {
   triple_captain: "Triple Captain",
@@ -42,16 +48,44 @@ function blankInventory(): ChipInventory {
   };
 }
 
-function inventoryStatusLabel(state: ChipInventory["first_half"][ChipId]): string {
+function inventoryStatusLabel(state: ChipState): string {
   if (state === "used") return "Used";
   if (state === "expired") return "Expired";
   return "Available";
 }
 
-function nextInventoryState(state: ChipInventory["first_half"][ChipId]): ChipInventory["first_half"][ChipId] {
-  if (state === "unused") return "used";
-  if (state === "used") return "expired";
+// Stored state is only ever "unused" or "used" -- expiry isn't something a
+// manager declares, it's a fact of the calendar. A first-half chip that was
+// never used becomes "Expired" the moment GW19 passes, worked out fresh on
+// every render rather than requiring a click to "mark it expired".
+function effectiveChipState(
+  stored: ChipState,
+  half: "first_half" | "second_half",
+  gameweek: number | null,
+): ChipState {
+  if (stored === "used") return "used";
+  const boundary = half === "first_half" ? FIRST_HALF_LAST_GW : SECOND_HALF_LAST_GW;
+  if (gameweek != null && gameweek > boundary) return "expired";
   return "unused";
+}
+
+function effectiveInventory(inventory: ChipInventory, gameweek: number | null): ChipInventory {
+  const map = (half: "first_half" | "second_half") =>
+    Object.fromEntries(
+      CHIP_IDS.map((chip) => [chip, effectiveChipState(inventory[half][chip], half, gameweek)]),
+    ) as ChipInventory["first_half"];
+  return { first_half: map("first_half"), second_half: map("second_half") };
+}
+
+// A stale "expired" value from before expiry was calendar-derived is
+// welcomed back as "unused" and re-evaluated against the current gameweek,
+// rather than being permanently frozen from a previous session's clicking.
+function normalizeStoredState(state: ChipState): ChipState {
+  return state === "expired" ? "unused" : state;
+}
+
+function nextInventoryState(state: ChipState): ChipState {
+  return state === "unused" ? "used" : "unused";
 }
 
 function captainFixtureLabel(fixtures: number): string {
@@ -63,7 +97,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isChipState(value: unknown): value is ChipInventory["first_half"][ChipId] {
+function isChipState(value: unknown): value is ChipState {
   return value === "unused" || value === "used" || value === "expired";
 }
 
@@ -71,14 +105,41 @@ function isInventoryHalf(value: unknown): value is ChipInventory["first_half"] {
   return isRecord(value) && CHIP_IDS.every((chip) => isChipState(value[chip]));
 }
 
-function readInventory(): ChipInventory | null {
+function normalizeInventoryHalf(half: ChipInventory["first_half"]): ChipInventory["first_half"] {
+  return Object.fromEntries(
+    CHIP_IDS.map((chip) => [chip, normalizeStoredState(half[chip])]),
+  ) as ChipInventory["first_half"];
+}
+
+// Scoped to the season it was saved under: a chip "used" in 2025-26 says
+// nothing about a manager's 2026-27 inventory, so a season mismatch is
+// treated the same as no saved inventory at all rather than reused.
+function readInventory(season: string): ChipInventory | null {
   if (typeof window === "undefined") return null;
   try {
-    const stored = window.localStorage.getItem("fpl-assistant-chip-inventory");
+    const stored = window.localStorage.getItem(CHIP_INVENTORY_KEY);
     if (!stored) return null;
     const parsed: unknown = JSON.parse(stored);
-    if (!isRecord(parsed) || !isInventoryHalf(parsed.first_half) || !isInventoryHalf(parsed.second_half)) return null;
-    return { first_half: parsed.first_half, second_half: parsed.second_half };
+    if (!isRecord(parsed) || parsed.season !== season) return null;
+    if (!isInventoryHalf(parsed.first_half) || !isInventoryHalf(parsed.second_half)) return null;
+    return {
+      first_half: normalizeInventoryHalf(parsed.first_half),
+      second_half: normalizeInventoryHalf(parsed.second_half),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function readLastFreeHitGameweek(season: string): number | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = window.localStorage.getItem(CHIP_INVENTORY_KEY);
+    if (!stored) return null;
+    const parsed: unknown = JSON.parse(stored);
+    if (!isRecord(parsed) || parsed.season !== season) return null;
+    const value = parsed.lastFreeHitGameweek;
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
   } catch {
     return null;
   }
@@ -127,7 +188,7 @@ function WhyThisChoice({ recommendation, data }: { recommendation: ChipRecommend
             : ""}
         </p>
       )}
-      <p>Source: {data.projection_source}; coverage: {data.projection_gameweeks.length ? data.projection_gameweeks.map((gw) => "GW" + gw).join(", ") : "none"}. Inventory: {data.inventory_sync_state}. {recommendation.decision_policy.uncertainty_note}</p>
+      <p>Source: {data.projection_source}; coverage: {data.projection_gameweeks.length ? data.projection_gameweeks.map((gw) => "GW" + gw).join(", ") : "none"}. Inventory: {data.inventory_sync_state === "synced" ? "saved on this device" : "not saved"}. {recommendation.decision_policy.uncertainty_note}</p>
       {recommendation.warnings.map((warning) => <p key={warning}>{warning}</p>)}
     </details>
   );
@@ -142,11 +203,29 @@ export default function ChipsPage() {
   const [useSquad, setUseSquad] = React.useState<boolean>(true);
   const [inventory, setInventory] = React.useState<ChipInventory | null>(null);
   const [inventoryLoaded, setInventoryLoaded] = React.useState(false);
+  // The only per-gameweek planning input the backend contract actually
+  // takes: which gameweek the manager's most recent Free Hit was played in,
+  // needed to enforce "can't play the second Free Hit the week right after
+  // the first" across the GW19/GW20 half-season boundary. Persisted
+  // alongside the inventory rather than hardcoded to null, which silently
+  // disabled that rule entirely.
+  const [lastFreeHitGameweek, setLastFreeHitGameweek] = React.useState<number | null>(null);
+  // Recommendations don't yet know about a chip the manager has already
+  // mentally earmarked for a specific future week outside this session;
+  // disclosed in the inventory panel rather than silently assumed away.
   const scheduledGameweeks = React.useMemo<number[]>(() => [], []);
-  const lastFreeHitGameweek: number | null = null;
 
   const maxPossibleHorizon = Math.max(1, 38 - (snapshot?.gameweek ?? 1) + 1);
   const effectiveHorizon = Math.min(horizon, maxPossibleHorizon);
+  // The preset options plus whatever's left of the season, so a horizon
+  // near GW38 (where maxPossibleHorizon can be smaller than every preset)
+  // still has a matching <option> instead of leaving the select's value
+  // -- and effectiveHorizon -- with nothing to bind to.
+  const horizonOptions = React.useMemo(() => {
+    const presets = [4, 6, 8, 10, 12, 16].filter((h) => h <= maxPossibleHorizon);
+    if (!presets.includes(maxPossibleHorizon)) presets.push(maxPossibleHorizon);
+    return presets;
+  }, [maxPossibleHorizon]);
   const requestIdRef = React.useRef(0);
 
   const loadChips = React.useCallback(
@@ -159,7 +238,7 @@ export default function ChipsPage() {
         const res = await api.chips({
           squad: hasFullSquad ? squadList : undefined,
           horizon: h,
-          chip_inventory: inventory ?? undefined,
+          chip_inventory: inventory ? effectiveInventory(inventory, snapshot?.gameweek ?? null) : undefined,
           scheduled_gameweeks: scheduledGameweeks,
           last_free_hit_gameweek: lastFreeHitGameweek,
           // Free Hit/Wildcard candidate squads are only priced from real
@@ -184,7 +263,7 @@ export default function ChipsPage() {
         if (requestId === requestIdRef.current) setFetching(false);
       }
     },
-    [inventory, scheduledGameweeks, squadPlayers, storedSquad, financeSummary],
+    [inventory, snapshot, scheduledGameweeks, lastFreeHitGameweek, squadPlayers, storedSquad, financeSummary],
   );
 
   React.useEffect(() => {
@@ -197,21 +276,28 @@ export default function ChipsPage() {
   }, [snapshot?.prediction_available, inventoryLoaded, useSquad, squadNames, effectiveHorizon, loadChips]);
 
   React.useEffect(() => {
+    if (!snapshot?.season) return;
+    const season = snapshot.season;
     const timer = window.setTimeout(() => {
-      setInventory(readInventory());
+      const stored = readInventory(season);
+      setInventory(stored);
+      setLastFreeHitGameweek(readLastFreeHitGameweek(season));
       setInventoryLoaded(true);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [snapshot?.season]);
 
   React.useEffect(() => {
-    if (!inventoryLoaded) return;
+    if (!inventoryLoaded || !snapshot?.season) return;
     if (typeof window !== "undefined" && inventory) {
-      window.localStorage.setItem("fpl-assistant-chip-inventory", JSON.stringify(inventory));
+      window.localStorage.setItem(
+        CHIP_INVENTORY_KEY,
+        JSON.stringify({ ...inventory, season: snapshot.season, lastFreeHitGameweek }),
+      );
     } else if (typeof window !== "undefined") {
-      window.localStorage.removeItem("fpl-assistant-chip-inventory");
+      window.localStorage.removeItem(CHIP_INVENTORY_KEY);
     }
-  }, [inventory, inventoryLoaded]);
+  }, [inventory, inventoryLoaded, snapshot?.season, lastFreeHitGameweek]);
 
   function updateChipState(half: "first_half" | "second_half", chip: ChipId) {
     setInventory((current) => {
@@ -270,7 +356,9 @@ export default function ChipsPage() {
             <span className="badge lime">Chip planning desk</span>
             <h1>Chip Advisor</h1>
             <p>
-              Player-level projected gains with candidate weeks, inventory state, and supporting evidence.
+              {data && data.projection_mode === "model_projection" && data.data_quality === "complete_horizon"
+                ? "Player projections with candidate weeks, inventory state, and supporting evidence."
+                : "Fixture signals only; projected point gains unavailable."}
             </p>
           </div>
 
@@ -287,7 +375,7 @@ export default function ChipsPage() {
                   onChange={(e) => setHorizon(Number(e.target.value))}
                   className="ctrl-select"
                 >
-                  {[4, 6, 8, 10, 12, 16].filter((h) => h <= maxPossibleHorizon).map((h) => (
+                  {horizonOptions.map((h) => (
                     <option key={h} value={h}>{h} Gameweeks</option>
                   ))}
                 </select>
@@ -322,18 +410,24 @@ export default function ChipsPage() {
         <section className={`chip-inventory inventory-${inventory ? "synced" : "not-synced"}`} aria-label="Chip inventory">
           <div>
             <span className="kicker">Manager inventory</span>
-            <h2>{inventory ? "Local chip history synced" : "Chip history not synced"}</h2>
+            <h2>{inventory ? "Saved on this device" : "Chip history not saved"}</h2>
             <p>
               {inventory
-                ? "Cycle a chip through available, used, and expired to keep recommendations within the correct half-season set."
+                ? "Mark a chip used as you play it. An unused first-half chip is shown Expired automatically once GW19 passes -- no private FPL account data is connected, and this device is the only place this is saved."
                 : "Recommendations are provisional until you mark the two half-season sets as available. No private FPL account data is connected."}
             </p>
+            {inventory && (
+              <p className="chip-inventory-caveat">
+                Recommendations don&apos;t account for a chip you&apos;ve already planned for a specific future
+                week outside this page.
+              </p>
+            )}
           </div>
           <span className={`chip-inventory-state state-${inventory ? "synced" : "not-synced"}`}>
-            {inventory ? "Synced" : "Not synced"}
+            {inventory ? "Saved" : "Not saved"}
           </span>
           <button type="button" className="btn secondary sm" onClick={() => setInventory(inventory ? null : blankInventory())}>
-            {inventory ? "Reset to not synced" : "Mark chips available"}
+            {inventory ? "Reset to not saved" : "Mark chips available"}
           </button>
           {inventory && (
             <div className="chip-inventory-grid">
@@ -341,20 +435,42 @@ export default function ChipsPage() {
                 <div className="chip-inventory-set" key={half}>
                   <span className="kicker">{half === "first_half" ? "Set 1 · through GW19" : "Set 2 · GW20 onward"}</span>
                   <div className="chip-inventory-items">
-                    {CHIP_IDS.map((chip) => (
-                      <button
-                        type="button"
-                        className={`chip-inventory-item state-${inventory[half][chip]}`}
-                        key={`${half}-${chip}`}
-                        onClick={() => updateChipState(half, chip)}
-                        aria-label={`${CHIP_LABELS[chip]} ${half} status: ${inventoryStatusLabel(inventory[half][chip])}. Change status.`}
-                      >
-                        <ChipIcon id={chip} />
-                        <span>{CHIP_LABELS[chip]}</span>
-                        <b>{inventoryStatusLabel(inventory[half][chip])}</b>
-                      </button>
-                    ))}
+                    {CHIP_IDS.map((chip) => {
+                      const effective = effectiveChipState(inventory[half][chip], half, snapshot.gameweek ?? null);
+                      const expired = effective === "expired";
+                      return (
+                        <button
+                          type="button"
+                          className={`chip-inventory-item state-${effective}`}
+                          key={`${half}-${chip}`}
+                          onClick={() => updateChipState(half, chip)}
+                          disabled={expired}
+                          aria-label={`${CHIP_LABELS[chip]} ${half} status: ${inventoryStatusLabel(effective)}.${expired ? "" : " Change status."}`}
+                        >
+                          <ChipIcon id={chip} />
+                          <span>{CHIP_LABELS[chip]}</span>
+                          <b>{inventoryStatusLabel(effective)}</b>
+                        </button>
+                      );
+                    })}
                   </div>
+                  {half === "first_half" && inventory.first_half.free_hit === "used" && (
+                    <label className="chip-inventory-gw-input" htmlFor="chip-free-hit-gw">
+                      <span className="kicker">Free Hit played in GW</span>
+                      <input
+                        id="chip-free-hit-gw"
+                        type="number"
+                        min={2}
+                        max={19}
+                        placeholder="e.g. 12"
+                        value={lastFreeHitGameweek ?? ""}
+                        onChange={(event) => {
+                          const parsed = Number(event.target.value);
+                          setLastFreeHitGameweek(event.target.value === "" || Number.isNaN(parsed) ? null : parsed);
+                        }}
+                      />
+                    </label>
+                  )}
                 </div>
               ))}
             </div>
@@ -385,7 +501,7 @@ export default function ChipsPage() {
             </p>
             {nextDecision && data && (
               <small className="chip-decision-context">
-                {data.projection_mode === "fixture_signal" || !data.has_squad ? "Fixture signal" : "Player projections"} · {data.inventory_sync_state === "synced" ? "inventory synced" : "inventory not synced"}
+                {data.projection_mode === "fixture_signal" || !data.has_squad ? "Fixture signal" : "Player projections"} · {data.inventory_sync_state === "synced" ? "inventory saved" : "inventory not saved"}
               </small>
             )}
             {nextDecision?.warnings.map((warning) => <small key={warning}>{warning}</small>)}

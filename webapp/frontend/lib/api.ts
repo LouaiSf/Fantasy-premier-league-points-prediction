@@ -25,6 +25,18 @@ if (
   );
 }
 
+// Carries the backend's machine-readable `code` (e.g. "search_not_configured")
+// alongside the human-readable message, so a caller can branch on the
+// specific failure instead of pattern-matching text meant for display.
+export class ApiRequestError extends Error {
+  readonly code?: string;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.code = code;
+  }
+}
+
 async function requestJson<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, options);
   const payload = (await response.json().catch(() => ({
@@ -32,7 +44,11 @@ async function requestJson<T>(path: string, options?: RequestInit): Promise<T> {
     error: "The server returned an unreadable response.",
   }))) as T | ApiError;
   if (!response.ok || (payload as ApiError).ok === false) {
-    throw new Error((payload as ApiError).error || `Request failed with status ${response.status}.`);
+    const apiError = payload as ApiError;
+    throw new ApiRequestError(
+      apiError.error || `Request failed with status ${response.status}.`,
+      apiError.code,
+    );
   }
   return payload as T;
 }

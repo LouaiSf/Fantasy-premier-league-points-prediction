@@ -418,6 +418,31 @@ def test_wildcard_budget_uses_real_selling_price_not_market_value(monkeypatch, t
     assert wildcard_with_finance['evidence']['optimized_cumulative_total'] < 90
 
 
+def test_simultaneous_play_verdicts_warn_about_the_one_chip_per_gw_rule(monkeypatch, tmp_path):
+    write_season(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    players = market()
+    squad = players.iloc[:15].copy()
+    points = horizon_points(players, [1])
+
+    data = compute_chips(squad, 'test-season', 1, 1, players,
+                         inventory=synced_inventory(), future_points=points)
+    by_chip = {rec['chip']: rec for rec in data['recommendations']}
+
+    playing = [chip for chip, rec in by_chip.items() if rec['status'] == 'play' and rec['gw'] == 1]
+    assert len(playing) >= 2, 'fixture must actually exercise the conflict'
+    chip_labels = {
+        'triple_captain': 'Triple Captain', 'bench_boost': 'Bench Boost',
+        'free_hit': 'Free Hit', 'wildcard': 'Wildcard',
+    }
+    for chip in playing:
+        others = [c for c in playing if c != chip]
+        warning_text = ' '.join(by_chip[chip]['warnings'])
+        assert 'Only one chip can be played per gameweek' in warning_text
+        for other in others:
+            assert chip_labels[other] in warning_text
+
+
 def test_horizon_changes_candidate_matrix(monkeypatch, tmp_path):
     write_season(tmp_path)
     monkeypatch.chdir(tmp_path)

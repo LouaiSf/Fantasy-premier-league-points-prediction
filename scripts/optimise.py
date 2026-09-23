@@ -1584,6 +1584,25 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
             finance_warning=finance_warning if chip in ('free_hit', 'wildcard') else None)
         recommendations.append(recommendation)
 
+    # Official 2026/27 rule: only one chip may be played in a gameweek. Two
+    # independently-scored "play" verdicts landing on the same week are not
+    # a joint recommendation -- flag the conflict rather than silently
+    # picking a winner, since which one a manager actually wants is a call
+    # this tool has no basis to make for them.
+    play_gameweeks: dict[int, list[str]] = {}
+    for rec in recommendations:
+        if rec['status'] == 'play' and rec.get('gw') is not None:
+            play_gameweeks.setdefault(rec['gw'], []).append(rec['chip'])
+    for rec in recommendations:
+        if rec['status'] != 'play' or rec.get('gw') is None:
+            continue
+        others = [chip for chip in play_gameweeks[rec['gw']] if chip != rec['chip']]
+        if others:
+            other_labels = ', '.join(CHIP_LABELS[chip] for chip in others)
+            rec['warnings'].append(
+                f'Only one chip can be played per gameweek; {other_labels} also '
+                f'qualifies for GW{rec["gw"]}.')
+
     for row in rows:
         gw = row['gw']
         row['projected_gain'] = {

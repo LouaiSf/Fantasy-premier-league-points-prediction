@@ -149,6 +149,7 @@ export interface TransferResult {
 export interface ApiError {
   ok: false;
   error: string;
+  code?: string;
 }
 
 export interface PlayerHistoryRecord {

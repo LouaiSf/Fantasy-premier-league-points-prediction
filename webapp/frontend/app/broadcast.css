@@ -1761,6 +1761,7 @@
   .chip-inventory{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--space-4);align-items:start;margin-bottom:var(--space-6);padding:var(--space-5);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.14);clip-path:var(--blade)}
   .chip-inventory h2{margin:5px 0;font:900 clamp(1.1rem,2vw,1.6rem)/1 var(--display);text-transform:uppercase}
   .chip-inventory p{max-width:62ch;margin:0;color:var(--muted-light);font-size:12px}
+  .chip-inventory-caveat{margin-top:var(--space-2)!important;color:var(--muted-mid)!important;font-style:italic}
   .chip-inventory-grid{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-4);width:100%}
   .chip-inventory-set{display:grid;gap:var(--space-2);min-width:0}
   .chip-inventory-items{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
@@ -1771,6 +1772,10 @@
   .chip-inventory-item.state-unused b{color:var(--lime)}
   .chip-inventory-item.state-used b{color:var(--gold)}
   .chip-inventory-item.state-expired{opacity:.5}
+  .chip-inventory-item:disabled{cursor:not-allowed}
+  .chip-inventory-gw-input{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+  .chip-inventory-gw-input .kicker{font-size:10px}
+  .chip-inventory-gw-input input{width:100%;background:var(--night-900);border:1px solid rgba(255,255,255,.2);color:var(--white);padding:6px 8px;font:700 12px/1 var(--data)}
   .chip-next-decision{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--space-6);align-items:center;margin-bottom:var(--space-5);padding:var(--space-6);background:linear-gradient(120deg,rgba(0,255,135,.14),rgba(4,245,255,.06));border-left:4px solid var(--lime);clip-path:var(--blade)}
   .chip-next-decision-copy h2{margin:5px 0;font:900 clamp(1.55rem,3vw,2.6rem)/.95 var(--display);text-transform:uppercase}
   .chip-next-decision-copy p{max-width:62ch;margin:0;color:var(--muted-light);font-size:13px}

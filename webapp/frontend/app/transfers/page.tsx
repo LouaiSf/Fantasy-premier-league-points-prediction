@@ -110,6 +110,21 @@ export default function TransfersPage() {
   const [analysisError, setAnalysisError] = React.useState<string | null>(null);
   const [analysing, setAnalysing] = React.useState(false);
 
+  // A completed analysis answers "what should I do with these free
+  // transfers/this bank/this squad" -- once any of those actually change,
+  // the old answer is for a question that's no longer being asked, so it's
+  // cleared rather than left on screen looking current. Skips the first
+  // render so mounting the page doesn't immediately wipe a fresh result.
+  const mounted = React.useRef(false);
+  React.useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    setAnalysis(null);
+    setAnalysisError(null);
+  }, [free, bank, maxTransfers, squadElements, snapshot?.market_prices_updated_at]);
+
   if (loading || !snapshot) {
     return (
       <section className="page">
@@ -191,7 +206,15 @@ export default function TransfersPage() {
     setAnalysisError(null);
   }
 
-  const priceDelta = outgoing && incoming ? outgoing.value_m - incoming.value_m : null;
+  // The outgoing player is always a currently-owned squad player: what he
+  // nets is his real selling price (the half-rise rule), not his current
+  // market value, which is what My Team and the backend solver both use.
+  const outgoingSellValue = outgoing
+    ? fromTenths(
+        sellingPricesTenthsForSquad(squadPlayers, storedSquad?.finance ?? null)[outgoing.element] ?? 0,
+      )
+    : null;
+  const priceDelta = outgoingSellValue != null && incoming ? outgoingSellValue - incoming.value_m : null;
   const pointsDelta =
     outgoing && incoming && predictionAvailable
       ? Number(incoming.predicted_points ?? 0) - Number(outgoing.predicted_points ?? 0)
@@ -391,7 +414,7 @@ export default function TransfersPage() {
                   <div className="slot-id">
                     <span className="kicker">{outgoing.position}</span>
                     <b>{outgoing.web_name}</b>
-                    <span>{money(outgoing.value_m)}</span>
+                    <span>Sell {money(outgoingSellValue ?? outgoing.value_m)}</span>
                   </div>
                   <div className="slot-photo">
                     <PlayerPhoto
@@ -466,11 +489,23 @@ export default function TransfersPage() {
               </h3>
               <p>
                 {outgoing && incoming
-                  ? `${outgoing.web_name} (${money(outgoing.value_m)}) makes way for ${incoming.web_name} (${money(incoming.value_m)}). Run the full analysis to see how this ranks against every transfer count.`
+                  ? `Sell ${outgoing.web_name} (${money(outgoingSellValue ?? outgoing.value_m)}), buy ${incoming.web_name} (${money(incoming.value_m)}). Run the full analysis to see how this ranks against every transfer count.`
                   : outgoing
                     ? `${inRows.length} ${outgoing.position} options match the current filters.`
                     : "Pick a player to sell from the desk on the left to start staging a move."}
               </p>
+              {(financeSummary.priceBasis !== "imported" || snapshot.market_prices_updated_at) && (
+                <p className="finance-basis-note">
+                  {financeSummary.priceBasis === "estimated"
+                    ? "Selling prices are estimated (no tracked purchase history)."
+                    : financeSummary.priceBasis === "manual"
+                      ? "Selling prices are from your own squad selections."
+                      : "Selling prices are from your imported FPL account."}
+                  {snapshot.market_prices_updated_at && (
+                    <> Market prices as of {new Date(snapshot.market_prices_updated_at).toLocaleString()}.</>
+                  )}
+                </p>
+              )}
               <div className="decision-bugs">
                 <div className="bug">
                   <span>Bank after</span>

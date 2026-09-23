@@ -1,9 +1,18 @@
 "use client";
 
 import * as React from "react";
-import { api } from "@/lib/api";
+import { api, ApiRequestError } from "@/lib/api";
 import type { ManagerLineup, ManagerSearchCandidate, PlatformSnapshot } from "@/lib/types";
 import { ManagerLineupPreview } from "@/components/team/manager-lineup-preview";
+
+const NAME_SEARCH_UNAVAILABLE = "Name search is not configured; enter a numeric FPL entry ID.";
+
+function describeSearchError(err: unknown, fallback: string): string {
+  if (err instanceof ApiRequestError && err.code === "search_not_configured") {
+    return NAME_SEARCH_UNAVAILABLE;
+  }
+  return err instanceof Error ? err.message : fallback;
+}
 
 interface ManagerSearchProps {
   readonly snapshot: PlatformSnapshot;
@@ -50,7 +59,7 @@ export function ManagerSearch({ snapshot, onImport }: ManagerSearchProps) {
       if (sequence.current !== currentSequence) return;
       setResults([]);
       setStatus("ready");
-      setError(err instanceof Error ? err.message : "Manager search failed.");
+      setError(describeSearchError(err, "Manager search failed."));
     }
   }, []);
 
@@ -105,13 +114,14 @@ export function ManagerSearch({ snapshot, onImport }: ManagerSearchProps) {
         <span className="manager-search-source">FPL public API</span>
       </div>
       <form className="manager-search-form" onSubmit={(event) => { event.preventDefault(); void runSearch(query); }}>
-        <label htmlFor="manager-search-input">Entry ID or manager name</label>
+        <label htmlFor="manager-search-input">FPL entry ID</label>
         <div className="manager-search-input-row">
           <input
             id="manager-search-input"
             value={query}
             onChange={(event) => updateQuery(event.target.value)}
             placeholder="e.g. 123456"
+            inputMode="numeric"
             autoComplete="off"
           />
           <button className="btn sm" type="submit" disabled={status === "searching" || status === "loading"}>
