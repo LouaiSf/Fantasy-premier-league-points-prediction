@@ -1036,9 +1036,146 @@ def api_watchlist():
     return jsonify(data)
 
 
+class Cooldown:
+    """Minimum gap between attempts to hit the upstream data sources.
+
+    Every refresh is a forced pull of ~40 files from a public repository, so a
+    stuck client or an impatient double-click must not be able to hammer it.
+    A failed attempt cools down for less time than a successful one: the person
+    should be able to retry a transient error, just not in a tight loop.
+    """
+
+    def __init__(self, after_success: float, after_failure: float, clock=time.monotonic):
+        self.after_success = after_success
+        self.after_failure = after_failure
+        self._clock = clock
+        self._until = 0.0
+
+    def remaining(self) -> int:
+        return max(0, math.ceil(self._until - self._clock()))
+
+    def record(self, ok: bool) -> None:
+        self._until = self._clock() + (self.after_success if ok else self.after_failure)
+
+    def reset(self) -> None:
+        self._until = 0.0
+
+
+def _seconds_from_env(name: str, default: float) -> float:
+    try:
+        return max(0.0, float(os.environ.get(name, default)))
+    except ValueError:
+        return default
+
+
+# Shared by /api/refresh and any prediction refresh that fetches, since both
+# pull the same files. A prediction refresh with fetch=false only reads local
+# data, so it is not throttled.
+fetch_cooldown = Cooldown(
+    after_success=_seconds_from_env('REFRESH_COOLDOWN_SECONDS', 60),
+    after_failure=_seconds_from_env('REFRESH_FAILURE_COOLDOWN_SECONDS', 10),
+)
+
+
+# ---------------------------------------------------------------------------
+# Refresh guard: token, rate limit
+# ---------------------------------------------------------------------------
+class RateLimiter:
+    """At most `limit` calls per `window` seconds for each key (sliding window)."""
+
+    def __init__(self, limit: int, window: float = 60.0, clock=time.monotonic):
+        self.limit = limit
+        self.window = window
+        self._clock = clock
+        self._hits: dict[str, list[float]] = {}
+        self._lock = threading.Lock()
+
+    def check(self, key: str) -> int:
+        """0 if the call is allowed (and counted), else seconds until it would be."""
+        now = self._clock()
+        with self._lock:
+            hits = [t for t in self._hits.get(key, []) if now - t < self.window]
+            if len(hits) >= self.limit:
+                self._hits[key] = hits
+                return max(1, math.ceil(self.window - (now - hits[0])))
+            hits.append(now)
+            self._hits[key] = hits
+            # Keys that have gone quiet would otherwise accumulate forever.
+            if len(self._hits) > 1024:
+                self._hits = {k: v for k, v in self._hits.items()
+                              if v and now - v[-1] < self.window}
+            return 0
+
+    def reset(self) -> None:
+        with self._lock:
+            self._hits.clear()
+
+
+# Sized for one person clicking Refresh; polling a running job is much chattier.
+refresh_limiter = RateLimiter(int(_seconds_from_env('REFRESH_RATE_LIMIT_PER_MINUTE', 12)))
+status_limiter = RateLimiter(int(_seconds_from_env('REFRESH_STATUS_RATE_LIMIT_PER_MINUTE', 120)))
+FORWARDING_HEADERS = ('X-Forwarded-For', 'Forwarded', 'X-Real-IP')
+
+
+def refresh_token() -> str:
+    return os.environ.get('REFRESH_TOKEN', '').strip()
+
+
+def is_direct_loopback() -> bool:
+    """A request straight from this machine, not relayed by a proxy.
+
+    A reverse proxy on the same host also arrives from 127.0.0.1, so any
+    forwarding header means "not direct" and is treated as remote.
+    """
+    return (request.remote_addr in ('127.0.0.1', '::1')
+            and not any(header in request.headers for header in FORWARDING_HEADERS))
+
+
+def refresh_guard(limiter: RateLimiter):
+    """Protect an endpoint that fetches, rewrites data or reveals job output.
+
+    Rate limited first, so wrong guesses at the token are throttled too. Then:
+    with REFRESH_TOKEN set, the caller must send `Authorization: Bearer <token>`;
+    with it unset, only a direct local request is accepted, so a deployment that
+    forgot to configure a token has the endpoint switched off rather than open.
+    """
+    def decorator(view):
+        @functools.wraps(view)
+        def wrapper(*args, **kwargs):
+            wait = limiter.check(request.remote_addr or 'unknown')
+            if wait:
+                response = fail(f'Too many requests; try again in {wait}s.', 429, 'rate_limited',
+                                retry_after_seconds=wait)
+                response[0].headers['Retry-After'] = str(wait)
+                return response
+            token = refresh_token()
+            if token:
+                header = request.headers.get('Authorization', '')
+                supplied = header[7:].strip() if header[:7].lower() == 'bearer ' else ''
+                if not supplied or not hmac.compare_digest(supplied.encode(), token.encode()):
+                    response = fail('A valid refresh token is required.', 401,
+                                    'refresh_auth_required')
+                    response[0].headers['WWW-Authenticate'] = 'Bearer'
+                    return response
+            elif not is_direct_loopback():
+                return fail('Refresh is disabled for remote callers: set REFRESH_TOKEN on the '
+                            'server and send it as a bearer token.', 403, 'refresh_disabled')
+            return view(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def reset_refresh_guards() -> None:
+    """Clear rate-limit and cooldown state (tests, and an operator-facing reset)."""
+    refresh_limiter.reset()
+    status_limiter.reset()
+    fetch_cooldown.reset()
+
+
 @app.route('/api/reload', methods=['POST'])
+@refresh_guard(refresh_limiter)
 def api_reload():
-    _state.clear()
+    reset_state()
     s = state()
     if s.get('error'):
         return unavailable(s['error'])
