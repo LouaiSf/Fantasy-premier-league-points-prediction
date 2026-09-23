@@ -27,6 +27,10 @@
     --focus:0 0 0 3px var(--night-900),0 0 0 6px var(--cyan);
     --focus-light:0 0 0 3px var(--white),0 0 0 6px var(--pl-purple);
     --rail:clamp(16px,3vw,40px);
+    /* Transfer-plan lane/bench portraits and the compact suggested-XI pitch. */
+    --plan-lane-photo:56px; --plan-bench-photo:40px;
+    --plan-row-min-h:48px;
+    --plan-pitch-min-h:640px; --plan-pitch-min-h-mobile:560px;
   }
 
   /* --- 2. RESET + UTILITY ------------------------------------------------- */
@@ -1955,7 +1959,7 @@
   .team-source-note strong{font:700 var(--type-small)/1.1 var(--ui)}
   .team-source-note small{color:var(--muted-mid);font:600 var(--type-caption)/1 var(--data)}
   .finance-basis-note{margin-top:var(--space-2);color:var(--muted-mid);font:550 var(--type-caption)/1.4 var(--ui)}
-  .team-plan-wrap{grid-column:1/-1}
+  .team-plan-shell{margin-top:var(--space-8)}
   .team-plan{background:var(--night-850);border:1px solid rgba(255,255,255,.14);padding:var(--space-5);clip-path:var(--blade)}
   .team-plan-head{display:flex;justify-content:space-between;gap:var(--space-5);align-items:flex-start}
   .team-plan-head h2{margin:var(--space-1) 0 0;font:800 var(--type-h2)/1 var(--display);letter-spacing:-.03em}
@@ -1965,20 +1969,54 @@
   .team-plan-control input{width:100%;background:var(--night-900);border:1px solid rgba(255,255,255,.2);color:var(--white);padding:var(--space-2);font:700 var(--type-body)/1 var(--data)}
   .team-plan-status{margin:var(--space-4) 0 0;color:var(--muted-light);font-size:var(--type-small)}
   .team-plan-status.is-error{color:var(--pink)}
-  .team-plan-verdict{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--space-5);align-items:end;margin-top:var(--space-5);padding:var(--space-4);background:var(--gradient-matchday);color:var(--white)}
-  .team-plan-verdict strong{display:block;margin-top:var(--space-1);font:900 clamp(1.8rem,4vw,3rem)/.95 var(--display)}
-  .team-plan-verdict p{margin:var(--space-2) 0 0;font-size:var(--type-small)}
-  .team-plan-score{text-align:right}
-  .team-plan-score strong{font-size:clamp(1.8rem,3vw,2.8rem);color:var(--lime)}
-  .team-plan-score strong.is-negative{color:var(--pink)}
-  .team-plan-score small{display:block;margin-top:var(--space-1);font:700 var(--type-caption)/1 var(--data);text-transform:uppercase;letter-spacing:.06em}
-  .team-plan-evidence{display:grid;grid-template-columns:1.2fr 1fr .8fr;gap:var(--space-5);margin-top:var(--space-5)}
-  .team-plan-player-group ul{list-style:none;margin:var(--space-2) 0 0;padding:0;display:grid;gap:1px}
-  .team-plan-player-group li{display:grid;grid-template-columns:32px 1fr auto;gap:var(--space-2);align-items:center;background:var(--night-900);padding:var(--space-2)}
-  .team-plan-player-group li span{color:var(--cyan);font:700 var(--type-caption)/1 var(--data)}
-  .team-plan-player-group li strong{font:600 var(--type-small)/1.1 var(--ui)}
-  .team-plan-player-group li em{color:var(--muted-light);font:700 var(--type-caption)/1 var(--data)}
-  .team-plan-armbands{background:var(--night-900);padding:var(--space-3);display:flex;flex-direction:column;gap:var(--space-2)}
+
+  /* Result strip: transfer count left, net gain + bank after right. */
+  .team-plan-result-strip{display:flex;justify-content:space-between;align-items:center;gap:var(--space-5);
+    margin-top:var(--space-5);padding:var(--space-4);background:var(--night-900);border:1px solid rgba(255,255,255,.12)}
+  .team-plan-result-strip strong{display:block;margin-top:var(--space-1);font:900 clamp(1.4rem,3vw,2.2rem)/1 var(--display)}
+  .team-plan-result-score{text-align:right}
+  .team-plan-result-score span{font:900 clamp(1.4rem,3vw,2.2rem)/1 var(--display);color:var(--lime)}
+  .team-plan-result-score span.is-negative{color:var(--pink)}
+  .team-plan-result-score small{display:block;margin-top:var(--space-1);font:700 var(--type-caption)/1 var(--data);
+    text-transform:uppercase;letter-spacing:.06em;color:var(--muted-light)}
+
+  .team-plan-hold{margin-top:var(--space-5);padding:var(--space-5);text-align:center;background:var(--night-900);
+    border:1px dashed rgba(255,255,255,.24);font:800 var(--type-h3)/1.3 var(--display);letter-spacing:.02em;color:var(--muted-light)}
+
+  /* OUT/IN lane: a solid label bar per column, stacked portrait rows. */
+  .team-plan-lane{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--space-4);margin-top:var(--space-5)}
+  .team-plan-lane-col{display:flex;flex-direction:column;gap:1px;min-width:0}
+  .team-plan-lane-label{padding:var(--space-2) var(--space-3);font:800 var(--type-caption)/1 var(--data);
+    text-transform:uppercase;letter-spacing:.08em}
+  .team-plan-lane-col.is-out .team-plan-lane-label{background:var(--pink);color:var(--white)}
+  .team-plan-lane-col.is-in .team-plan-lane-label{background:var(--lime);color:var(--ink)}
+  .team-plan-lane-row{display:grid;grid-template-columns:var(--plan-lane-photo) minmax(0,1fr) auto;align-items:center;
+    gap:var(--space-3);min-height:var(--plan-row-min-h);padding:var(--space-2) var(--space-3);background:var(--night-900)}
+  .team-plan-lane-photo{width:var(--plan-lane-photo);height:var(--plan-lane-photo);border-radius:50%;overflow:hidden;flex:none}
+  .team-plan-lane-photo img{width:100%;height:100%;object-fit:cover;object-position:top}
+  .team-plan-lane-id{min-width:0;display:flex;flex-direction:column}
+  .team-plan-lane-id strong{font:700 var(--type-small)/1.15 var(--ui);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .team-plan-lane-id small{color:var(--muted-mid);font:700 var(--type-caption)/1 var(--data)}
+  .team-plan-lane-price{font:700 var(--type-small)/1 var(--data);white-space:nowrap}
+
+  /* Suggested XI: a compact pitch beside a bench + armband rail. */
+  .team-plan-suggested{margin-top:var(--space-6)}
+  .team-plan-suggested-head{display:flex;justify-content:space-between;align-items:baseline;gap:var(--space-3);margin-bottom:var(--space-3)}
+  .team-plan-suggested-head h3{margin:0;font:800 var(--type-h3)/1 var(--display);text-transform:uppercase;letter-spacing:-.01em}
+  .team-plan-suggested-body{display:grid;grid-template-columns:minmax(0,2fr) minmax(240px,1fr);gap:var(--space-5);align-items:start}
+  .pitch--plan{min-height:var(--plan-pitch-min-h)}
+
+  .team-plan-bench-block{background:var(--night-900);padding:var(--space-4)}
+  .team-plan-bench{display:grid;gap:var(--space-2);margin-top:var(--space-3)}
+  .team-plan-bench-player{display:grid;grid-template-columns:var(--plan-bench-photo) minmax(0,1fr) auto;align-items:center;gap:var(--space-2)}
+  .team-plan-bench-photo{width:var(--plan-bench-photo);height:var(--plan-bench-photo);border-radius:50%;overflow:hidden;flex:none}
+  .team-plan-bench-photo img{width:100%;height:100%;object-fit:cover;object-position:top}
+  .team-plan-bench-id{min-width:0;display:flex;flex-direction:column}
+  .team-plan-bench-id strong{font:700 12px/1.15 var(--ui);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .team-plan-bench-id small{color:var(--muted-mid);font:700 var(--type-caption)/1 var(--data)}
+  .team-plan-bench-player em{font:700 var(--type-caption)/1 var(--data);font-style:normal;color:var(--muted-light)}
+
+  .team-plan-armbands{background:var(--night-900);padding:var(--space-3);display:flex;flex-direction:column;gap:var(--space-2);margin-top:var(--space-4)}
   .team-plan-armbands p{margin:0;color:var(--muted-light);font-size:var(--type-small)}
   .team-plan-armbands strong{display:block;color:var(--white);font:700 var(--type-body)/1.1 var(--ui)}
   .team-plan-foot{display:flex;justify-content:space-between;align-items:center;gap:var(--space-4);margin-top:var(--space-5);padding-top:var(--space-4);border-top:1px solid rgba(255,255,255,.12)}
@@ -1996,10 +2034,22 @@
     .manager-preview-actions .btn{width:100%}
     .team-plan{padding:var(--space-4)}
     .team-plan-head{display:block}
-    .team-plan-control{margin-top:var(--space-4)}
-    .team-plan-verdict{grid-template-columns:1fr}
-    .team-plan-score{text-align:left}
-    .team-plan-evidence{grid-template-columns:1fr;gap:var(--space-4)}
+    .team-plan-control{width:100%;margin-top:var(--space-4)}
+    .team-plan-control select{width:100%}
+    .team-plan-result-strip{display:block}
+    .team-plan-result-score{text-align:left;margin-top:var(--space-3)}
+    .team-plan-lane{grid-template-columns:1fr}
+    .team-plan-suggested-body{grid-template-columns:1fr}
+    .pitch--plan{min-height:var(--plan-pitch-min-h-mobile)}
+    .pitch--plan .player-line{gap:0}
+    .pitch--plan .pm{width:min(56px,20%);min-width:0}
+    .pitch--plan .pm-name{max-width:100%}
     .team-plan-foot{display:block}
     .team-plan-foot .btn{width:100%;margin-top:var(--space-3)}
+  }
+  /* Evidence panel (pitch vs. bench/armband rail) stacks a breakpoint
+     earlier than the OUT/IN lane, which stays two columns until phone
+     width -- the lane's rows are already narrow; the pitch needs the room. */
+  @media (max-width:1080px) and (min-width:561px){
+    .team-plan-suggested-body{grid-template-columns:1fr}
   }

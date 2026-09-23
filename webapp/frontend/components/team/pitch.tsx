@@ -7,13 +7,29 @@ import type { PlayerRecord } from "@/lib/types";
 
 const LINES: PlayerRecord["position"][] = ["GK", "DEF", "MID", "FWD"];
 
-export function Pitch() {
+interface PitchResult {
+  readonly xi: PlayerRecord[];
+  readonly captain: PlayerRecord | null;
+  readonly vice_captain: PlayerRecord | null;
+}
+
+interface PitchProps {
+  /** A presentational result to render instead of the saved team's own
+   * (e.g. a transfer plan's suggested XI). Applying it to My Team is the
+   * caller's decision, never this component's. */
+  readonly result?: PitchResult | null;
+  /** The smaller variant used inside the transfer plan's evidence panel. */
+  readonly compact?: boolean;
+}
+
+export function Pitch({ result: resultProp, compact }: PitchProps = {}) {
   const { squadPlayers, teamResult } = useApp();
-  const result = teamResult ?? previewSquad(squadPlayers);
+  const result = resultProp !== undefined ? resultProp : (teamResult ?? previewSquad(squadPlayers));
+  const pitchClassName = `pitch${compact ? " pitch--plan" : ""}`;
 
   if (!result) {
     return (
-      <div className="pitch" aria-label="Starting eleven">
+      <div className={pitchClassName} aria-label="Starting eleven">
         <div className="pitch-lines" aria-hidden="true">
           <div className="half" />
           <div className="circle" />
@@ -38,12 +54,12 @@ export function Pitch() {
   // Keyed on the element, not the name: two current players can share a
   // surname (there are two Palmers and two Palacios in the 2026-27 export),
   // and matching on the name gives both of them the armband.
-  const captainId = "captain" in result ? result.captain?.element : undefined;
-  const viceCaptainId = "vice_captain" in result ? result.vice_captain?.element : undefined;
-  const xi = "xi" in result ? result.xi : [];
+  const captainId = result.captain?.element;
+  const viceCaptainId = result.vice_captain?.element;
+  const xi = result.xi;
 
   return (
-    <div className="pitch" aria-label="Starting eleven">
+    <div className={pitchClassName} aria-label="Starting eleven">
       <div className="pitch-lines" aria-hidden="true">
         <div className="half" />
         <div className="circle" />

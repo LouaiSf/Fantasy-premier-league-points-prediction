@@ -168,6 +168,24 @@ Live in `webapp/frontend/`, styled from the same `--pl-purple`/`--pink`/`--lime`
   `components/team/manager-lineup-preview.tsx`, `components/team/team-plan.tsx`, `components/team/pitch.tsx`)
   — owned-squad finance and lineup editor. Distinguishes current market value from selling value; never
   uses `is-over`/red budget styling for a legally appreciated squad.
+- **TeamPlan** (`components/team/team-plan.tsx`) — the combined transfer-and-lineup recommendation. Lives
+  in its own `.team-plan-shell` section in normal document flow after the pitch/rail grid, not inside it,
+  so the sticky rail can never paint over it. A result strip (transfer count left, net gain and bank
+  after right) is followed by either one `HOLD` statement or a two-column OUT/IN lane — solid `--pink`
+  "Out" / `--lime` "In" label bars over stacked portrait rows, each a 56×56 photo, name, `POS · CLUB`, and
+  a `Sell`/`Buy` price line using the same selling-price basis as the finance summary, never raw market
+  value for an outgoing player. `outPlayers`/`inPlayers` are derived by element-set difference against
+  the owned 15, never by pairing the API's `out`/`in` name arrays, which are not in matching order for a
+  multi-player move. Below that, `Pitch` takes an optional presentational `result` prop and a `compact`
+  (`.pitch--plan`) class to show the suggested XI without ever touching the user's saved team, alongside a
+  bench strip (40×40 photos) and a captain/vice summary. Transfer-row players carry sparse
+  `squad_records` (no photo or `web_name`), so every row is joined back to `snapshot.players` by
+  `element` before rendering.
+  Sizing tokens (`--plan-lane-photo:56px`, `--plan-bench-photo:40px`, `--plan-row-min-h:48px`,
+  `--plan-pitch-min-h:640px`, `--plan-pitch-min-h-mobile:560px`) are declared in §1's `:root` block.
+  Responsive: the OUT/IN lane is two columns from full width down through 561px, stacking only at
+  ≤560px; the pitch-vs-bench/armband evidence panel stacks a breakpoint earlier, at ≤1080px, since the
+  pitch needs the width the lane doesn't.
 
 ## 6. Motion
 

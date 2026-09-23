@@ -406,18 +406,19 @@ export default function TeamPage() {
               )}
             </section>
           </aside>
-          <div className="team-plan-wrap">
-            <TeamPlan
-              analysis={transferPlan}
-              freeTransfers={freeTransfers}
-              onFreeTransfersChange={setFreeTransfers}
-              bank={plannerBankValue}
-              onBankChange={(value) => setPlannerBank(Math.max(0, Math.min(100, Math.round(value * 10) / 10)))}
-              loading={transferPlanLoading}
-              error={planError}
-              onApply={applyTransferPlan}
-            />
-          </div>
+        </div>
+
+        <div className="shell team-plan-shell">
+          <TeamPlan
+            analysis={transferPlan}
+            freeTransfers={freeTransfers}
+            onFreeTransfersChange={setFreeTransfers}
+            bank={plannerBankValue}
+            onBankChange={(value) => setPlannerBank(Math.max(0, Math.min(100, Math.round(value * 10) / 10)))}
+            loading={transferPlanLoading}
+            error={planError}
+            onApply={applyTransferPlan}
+          />
         </div>
       </div>
     </section>
