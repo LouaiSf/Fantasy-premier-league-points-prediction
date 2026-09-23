@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useApp } from "@/components/providers/app-provider";
 import { DeadlineClock } from "./deadline-clock";
-import { api } from "@/lib/api";
+import { refreshDataAndPredictions } from "@/lib/api";
 
 const TABS = [
   { href: "/team", label: "My Team" },
@@ -29,8 +29,7 @@ export function MainNav() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      const res = await api.refresh();
-      toast(res.message || "Season data refreshed!");
+      toast(await refreshDataAndPredictions() || "Season data refreshed!");
       reload();
     } catch (err) {
       toast(`Refresh failed: ${(err as Error).message}`);
@@ -130,7 +129,7 @@ export function MainNav() {
             className="btn ghost sm"
             onClick={handleRefresh}
             disabled={refreshing}
-            title="Fetch latest season fixtures, odds, and predictions from backend"
+            title="Fetch the latest season data and regenerate predictions (takes a few minutes)"
             aria-label="Refresh season data"
           >
             <span className={`refresh-icon${refreshing ? " is-spinning" : ""}`} aria-hidden="true">

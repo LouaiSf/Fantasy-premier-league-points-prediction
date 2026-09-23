@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
-import { api } from "@/lib/api";
+import { api, refreshDataAndPredictions } from "@/lib/api";
 import { money, num } from "@/lib/format";
 import { fromTenths, sellingPricesTenthsForSquad } from "@/lib/finance";
 import { previewSquad } from "@/lib/squad";
@@ -135,8 +135,7 @@ export default function TeamPage() {
   async function refreshPrices() {
     setRefreshingPrices(true);
     try {
-      const res = await api.refresh();
-      toast(res.message || "Season data refreshed.");
+      toast(await refreshDataAndPredictions() || "Season data refreshed.");
       reload();
     } catch (err) {
       toast(`Refresh failed: ${(err as Error).message}`);
