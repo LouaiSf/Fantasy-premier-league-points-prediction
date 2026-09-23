@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import threading
 from pathlib import Path
 from typing import Final, TypedDict
 
@@ -99,6 +100,34 @@ def _decimal(value: str | None, default: float = 0.0) -> float:
 def _read_rows(path: Path) -> list[dict[str, str]]:
     with path.open(encoding="utf-8-sig", newline="") as handle:
         return [dict(row) for row in csv.DictReader(handle)]
+
+
+_ROW_CACHE: dict[tuple[str, int, int], list[dict[str, str]]] = {}
+_ROW_CACHE_LOCK = threading.Lock()
+_ROW_CACHE_MAX = 4
+
+
+def _read_rows_cached(path: Path) -> list[dict[str, str]]:
+    """_read_rows, remembered until the file's modification time or size changes.
+
+    merged_gw.csv is tens of thousands of rows and player history parses it on
+    every request. The returned list is shared between requests: read only.
+    """
+    stat = path.stat()
+    key = (str(path), stat.st_mtime_ns, stat.st_size)
+    with _ROW_CACHE_LOCK:
+        rows = _ROW_CACHE.get(key)
+    if rows is not None:
+        return rows
+    rows = _read_rows(path)
+    with _ROW_CACHE_LOCK:
+        # A newer version of the same file replaces the older one; the cap bounds memory.
+        for stale in [k for k in _ROW_CACHE if k[0] == key[0]]:
+            del _ROW_CACHE[stale]
+        while len(_ROW_CACHE) >= _ROW_CACHE_MAX:
+            _ROW_CACHE.pop(next(iter(_ROW_CACHE)))
+        _ROW_CACHE[key] = rows
+    return rows
 
 
 def latest_local_season(root: Path) -> str | None:
@@ -303,7 +332,7 @@ def player_history(
 
     player_name: str | None = None
     if merged_path.exists():
-        rows = _read_rows(merged_path)
+        rows = _read_rows_cached(merged_path)
         player_rows = [r for r in rows if _integer(r.get("element")) == element_id]
         if player_rows:
             player_name = player_rows[0].get("name")
@@ -342,7 +371,7 @@ def player_history(
                     if full_name:
                         prev_by_name[full_name.casefold()] = (short_name, full_name)
             if prev_merged.exists():
-                prev_rows = _read_rows(prev_merged)
+                prev_rows = _read_rows_cached(prev_merged)
                 matched_prev = [r for r in prev_rows if (player_name and r.get("name") == player_name)]
                 for r in reversed(matched_prev):
                     if len(history) >= limit:
