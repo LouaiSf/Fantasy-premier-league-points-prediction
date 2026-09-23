@@ -9,6 +9,21 @@ import { ManagerLineupPreview } from "@/components/team/manager-lineup-preview";
 const PAGE_SIZE = 50;
 const NAME_SEARCH_UNAVAILABLE = "Name search is not configured; enter a numeric FPL entry ID.";
 
+function normalizeSearchText(value: string): string {
+  return value.normalize("NFKD").replace(/\p{M}/gu, "").toLocaleLowerCase();
+}
+
+function matchesSearch(entry: LeagueStandingsEntry, terms: string[]): boolean {
+  const searchable = normalizeSearchText(`${entry.manager_name} ${entry.team_name} ${entry.entry_id}`);
+  return terms.every((term) => searchable.includes(term));
+}
+
+function uniqueEntries(entries: LeagueStandingsEntry[]): LeagueStandingsEntry[] {
+  const byId = new Map<number, LeagueStandingsEntry>();
+  for (const entry of entries) byId.set(entry.entry_id, entry);
+  return [...byId.values()];
+}
+
 function describeSearchError(err: unknown, fallback: string): string {
   if (err instanceof ApiRequestError && err.code === "search_not_configured") {
     return NAME_SEARCH_UNAVAILABLE;
@@ -59,7 +74,7 @@ function LeagueSearchPanel({
         return;
       }
       setLeagueName(res.league_name);
-      setEntries((prev) => (append ? [...prev, ...res.entries] : res.entries));
+      setEntries((prev) => uniqueEntries(append ? [...prev, ...res.entries] : res.entries));
       setPage(res.page);
       setHasNext(res.has_next);
     } catch (err) {
@@ -96,10 +111,37 @@ function LeagueSearchPanel({
     void loadPage(leagueId, parsed, false, true);
   }
 
-  const filtered = nameFilter.trim()
-    ? entries.filter((entry) =>
-        `${entry.manager_name} ${entry.team_name}`.toLowerCase().includes(nameFilter.trim().toLowerCase()))
+  const terms = normalizeSearchText(nameFilter.trim()).split(/\s+/).filter(Boolean);
+  const filtered = terms.length
+    ? entries.filter((entry) => matchesSearch(entry, terms))
     : entries;
+
+  async function searchNextPages() {
+    if (leagueId == null || !hasNext) return;
+    setLoading(true);
+    setError(null);
+    let nextPage = page;
+    let morePages: boolean = hasNext;
+    const found: LeagueStandingsEntry[] = [];
+    try {
+      for (let checked = 0; checked < 5 && morePages; checked += 1) {
+        const res = await api.leagueStandings(leagueId, nextPage + 1);
+        found.push(...res.entries);
+        nextPage = res.page;
+        morePages = res.has_next;
+        if (res.entries.some((entry) => matchesSearch(entry, terms))) break;
+      }
+      setEntries((prev) => uniqueEntries([...prev, ...found]));
+      setPage(nextPage);
+      setHasNext(morePages);
+    } catch (err) {
+      setEntries((prev) => uniqueEntries([...prev, ...found]));
+      setPage(nextPage);
+      setError(err instanceof Error ? err.message : "League lookup failed.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="league-search">
@@ -163,7 +205,7 @@ function LeagueSearchPanel({
               </button>
             ))}
             {filtered.length === 0 && (
-              <p className="manager-search-empty">No loaded member matches that filter.</p>
+              <p className="manager-search-empty">No loaded member matches yet. Search more pages or jump to another page.</p>
             )}
           </div>
           {hasNext && (
@@ -171,9 +213,15 @@ function LeagueSearchPanel({
               type="button"
               className="btn secondary sm"
               disabled={loading}
-              onClick={() => leagueId != null && void loadPage(leagueId, page + 1, true)}
+              onClick={() => {
+                if (terms.length && filtered.length === 0) {
+                  void searchNextPages();
+                } else if (leagueId != null) {
+                  void loadPage(leagueId, page + 1, true);
+                }
+              }}
             >
-              {loading ? "Loading…" : "Load more"}
+              {loading ? "Loading…" : terms.length && filtered.length === 0 ? "Search next 5 pages" : "Load more"}
             </button>
           )}
         </>
