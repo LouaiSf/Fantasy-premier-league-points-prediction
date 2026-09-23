@@ -1,0 +1,19 @@
+{
+  "artifact": "predictions_next_gw.csv",
+  "bytes": 1027627,
+  "code_commit": "23ae0f40551e093e4f695cff853690b4494dc94b",
+  "first_gw": 6,
+  "generated_at": "2026-09-23T20:54:01.201275+00:00",
+  "horizon": 12,
+  "last_gw": 17,
+  "model_bundle": {
+    "directory": "saved_models",
+    "files": 35,
+    "sha256": "541ac980c366c59730218b19a8180ab59239066f32a04bbcbee8ef747bd99cef"
+  },
+  "players": 487,
+  "rows": 5844,
+  "schema": 1,
+  "season": "2026-27",
+  "sha256": "d48febe1fd42f85f0b450aeccee16d8aac6c2ecb28cfc05f8ce1baa86ab98516"
+}
