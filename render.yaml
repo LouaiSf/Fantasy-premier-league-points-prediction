@@ -10,12 +10,22 @@ services:
     buildCommand: pip install -r webapp/requirements.txt
     # One worker: the predictions are cached in process memory, and a second
     # worker would only double the RAM on a 512 MB instance. The long timeout
-    # covers /api/refresh, which shells out to a data pull of up to 120 s.
+    # covers /api/refresh, which shells out to a data pull of up to 180 s.
     startCommand: gunicorn webapp.app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 180
-    healthCheckPath: /api/meta
+    # Readiness, not liveness: a service with no usable predictions or prices, or
+    # (in production) an unverified artifact, should not receive traffic.
+    healthCheckPath: /api/health/ready
     autoDeploy: true
     envVars:
       - key: PYTHON_VERSION
         value: 3.13.5
+      # Production fails closed: with no ALLOWED_ORIGINS no browser origin may
+      # call the API, and '*' is refused at startup.
+      - key: APP_ENV
+        value: production
       - key: ALLOWED_ORIGINS
         sync: false   # set in the dashboard to the Vercel URL once it exists
+      # Bearer token for /api/refresh, /api/refresh/predictions, /api/refresh/status
+      # and /api/reload. Without it those endpoints refuse every remote caller.
+      - key: REFRESH_TOKEN
+        generateValue: true
