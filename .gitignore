@@ -72,3 +72,7 @@ fpl_results/
 
 # IDE / tool cache
 .omo/
+
+# Refresh pipeline: lock file and half-written temporaries
+data/.refresh_pipeline.lock
+*.tmp
