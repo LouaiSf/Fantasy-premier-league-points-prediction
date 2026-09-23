@@ -84,7 +84,9 @@ def load_models() -> dict:
         raise SystemExit(
             f"{meta_path} not found.\n"
             f"Train first (python scripts/train.py), or copy saved_models/ back\n"
-            f"from Drive if you trained on Colab -- the .joblib files are gitignored."
+            f"from Drive if you trained on Colab -- the .joblib files are gitignored.\n"
+            f"A deployed site does not need them: it serves the committed\n"
+            f"predictions_next_gw.csv and its manifest (see scripts/artifacts.py)."
         )
     meta = json.load(open(meta_path, encoding='utf-8'))
 
