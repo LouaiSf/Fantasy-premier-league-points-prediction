@@ -166,6 +166,58 @@ reports **not ready** unless the manifest verifies, so an unversioned or hand-ed
 artifact cannot go live unnoticed. `/api/meta` returns the artifact hash, generation
 time and model-bundle hash, so any served number can be traced to the exact models.
 
+## Monitoring
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/health/live` | Process is up. Never touches data. |
+| `GET /api/health/ready` | `200` only when predictions load, live prices exist and (in production) the manifest verifies; else `503` with the blocking reasons. Also returns freshness and alerts. Used as Render's health check. |
+| `GET /api/metrics` | Prometheus text: data ages, next deadline, `fpl_ready`, one `fpl_alert_active{alert=...}` per alert, artifact identity, request counts and latency. Same token/loopback guard as the refresh endpoints. |
+
+Every request gets an `X-Request-ID` (a safe inbound one is honoured) and one JSON log
+line on stderr (`event`, `request_id`, `route`, `status`, `duration_ms`, `error_code`);
+unhandled errors log the traceback there and return only a generic 500. `LOG_LEVEL`
+sets verbosity; health and metrics calls log at DEBUG.
+
+Alert conditions, all visible in `/api/health/ready` and as metrics, and logged when
+raised and cleared: `predictions_unavailable`, `market_prices_unavailable`,
+`artifact_manifest_invalid` (the three that block readiness), `predictions_older_than_market`,
+`predictions_gameweek_mismatch`, `predictions_too_old` (72 h), `market_data_old` (48 h),
+`predictions_stale_before_deadline` (deadline within 24 h and predictions over 12 h old),
+`predictions_predate_deadline`, and `predictions_rebuild_failing`. Thresholds:
+`MAX_PREDICTION_AGE_HOURS`, `MAX_MARKET_AGE_HOURS`, `DEADLINE_WINDOW_HOURS`,
+`STALE_BEFORE_DEADLINE_HOURS`. The deadline is estimated as the gameweek's first
+kick-off minus 90 minutes, because the local fixtures file has no official deadline.
+
+This service exposes the alerts; it does not deliver them. Point Prometheus/Alertmanager
+(or an uptime monitor on `/api/health/ready`) at it to page someone. Conditions are
+evaluated when scraped, so nothing fires unless something is watching.
+
+## Concurrency
+
+Loaded data is an immutable snapshot that is replaced wholesale, never edited: a request
+uses one snapshot from start to finish, and rebuilds are serialised by a lock. A snapshot
+is rebuilt when any source file changes (predictions, manifest, market prices, teams,
+fixtures). During a refresh the last good snapshot keeps being served instead of reading
+files mid-write, and a source file that cannot be read never replaces good data. The
+server no longer calls `os.chdir`; paths are built from the project root. The
+`/api/platform` payload and the ~800-player enrichment are cached by file modification
+time. State is per process, so run one worker (as `render.yaml` does).
+
+## Intentional product limitations
+
+- **No accounts or authentication for users.** There is no login and no server-side user
+  data. (Only the refresh/metrics endpoints are token-protected, for the operator.)
+- **Squad, chip and finance data live in the browser** (`localStorage`), with
+  export/import to move between devices. Clearing site data loses them.
+- **No global manager-name search.** FPL has no such endpoint; search is scoped to a
+  classic league whose ID you supply (or a lineup by entry ID).
+- **No built-in background scheduler.** Predictions refresh when someone clicks Refresh
+  or when you schedule `python scripts/refresh_pipeline.py` (cron, Task Scheduler, CI).
+  The monitoring above tells you when that has not happened.
+- **Fetching rewrites data files in place.** Readers are protected by the snapshot, but
+  `fetch_data.py` itself is not atomic per file.
+
 ## Quick start
 
 ```bash
