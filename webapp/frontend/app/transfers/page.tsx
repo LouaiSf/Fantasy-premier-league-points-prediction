@@ -8,6 +8,7 @@ import { PlayerPhoto } from "@/components/player-photo";
 import { ClubCrest } from "@/components/club-crest";
 import { clubStyle } from "@/lib/club-colors";
 import { money, num, signed } from "@/lib/format";
+import { fromTenths } from "@/lib/finance";
 import type { PlayerRecord, TransferResult } from "@/lib/types";
 import { Loading } from "@/components/loading";
 import { ModelInfo } from "@/components/model-info";
@@ -88,7 +89,7 @@ function DeskRow({
 }
 
 export default function TransfersPage() {
-  const { snapshot, loading, squadPlayers, squadElements, toast } = useApp();
+  const { snapshot, loading, squadPlayers, squadElements, financeSummary, toast } = useApp();
   const [outQuery, setOutQuery] = React.useState("");
   const [inQuery, setInQuery] = React.useState("");
   const [outFilter, setOutFilter] = React.useState<(typeof OUT_FILTERS)[number]>("ALL");
@@ -97,7 +98,13 @@ export default function TransfersPage() {
   const [outId, setOutId] = React.useState<number | null>(null);
   const [inId, setInId] = React.useState<number | null>(null);
   const [free, setFree] = React.useState(1);
-  const [bank, setBank] = React.useState(0);
+  // Seeded from the same finance state My Team reads -- not a fresh 0, which
+  // disagreed with an owned squad's real bank on every visit to this page.
+  const [bankOverride, setBankOverride] = React.useState<number | null>(null);
+  const bank = bankOverride ?? Math.max(0, fromTenths(financeSummary.bankTenths));
+  const setBank = React.useCallback((updater: (value: number) => number) => {
+    setBankOverride((current) => updater(current ?? Math.max(0, fromTenths(financeSummary.bankTenths))));
+  }, [financeSummary.bankTenths]);
   const [maxTransfers, setMaxTransfers] = React.useState(3);
   const [analysis, setAnalysis] = React.useState<TransferResult | null>(null);
   const [analysisError, setAnalysisError] = React.useState<string | null>(null);

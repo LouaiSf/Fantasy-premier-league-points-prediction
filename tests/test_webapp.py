@@ -266,6 +266,20 @@ def test_transfers_reject_legacy_name_identity() -> None:
     assert response.get_json()["error"] == "elements must be a list of numeric FPL element IDs"
 
 
+def test_platform_exposes_market_price_freshness() -> None:
+    # My Team and Transfer Studio need to know when the current market price
+    # was last observed, independent of the prediction export's own timestamp.
+    client = app.test_client()
+
+    res = client.get("/api/platform")
+
+    assert res.status_code == 200
+    data = res.get_json()
+    assert "market_prices_updated_at" in data
+    assert data["market_prices_updated_at"] is not None
+    assert isinstance(data["predictions_older_than_market"], bool)
+
+
 def test_transfers_reject_boolean_element_ids() -> None:
     client = app.test_client()
     response = client.post(

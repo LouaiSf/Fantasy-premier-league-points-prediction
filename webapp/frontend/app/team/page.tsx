@@ -4,6 +4,7 @@ import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
 import { api } from "@/lib/api";
 import { money, num } from "@/lib/format";
+import { fromTenths } from "@/lib/finance";
 import { previewSquad } from "@/lib/squad";
 import { Pitch } from "@/components/team/pitch";
 import { SquadEditor } from "@/components/team/squad-editor";
@@ -26,9 +27,9 @@ export default function TeamPage() {
     squadElements,
     teamResult,
     setTeamResult,
-    setSquadElements,
     setImportedTeam,
     storedSquad,
+    financeSummary,
     toast,
     openProfile,
   } = useApp();
@@ -39,12 +40,11 @@ export default function TeamPage() {
   const [transferPlan, setTransferPlan] = React.useState<TransferResult | null>(null);
   const [transferPlanError, setTransferPlanError] = React.useState<string | null>(null);
   const [transferPlanLoading, setTransferPlanLoading] = React.useState(false);
+  // Date.now() is impure, so it's captured once via a lazy initializer
+  // (matching DeadlineClock) rather than called directly in render.
+  const [now] = React.useState(() => Date.now());
 
-  const plannerBankValue = plannerBank ?? (
-    storedSquad?.source !== "manual" && storedSquad?.bank != null
-      ? Math.max(0, storedSquad.bank)
-      : 0
-  );
+  const plannerBankValue = plannerBank ?? Math.max(0, fromTenths(financeSummary.bankTenths));
 
   React.useEffect(() => {
     if (!snapshot?.prediction_available || squadElements.length !== 15) return;
@@ -107,14 +107,22 @@ export default function TeamPage() {
       : preview.xiPoints
     : null;
   const predictionAvailable = snapshot.prediction_available;
-  // FPL gives every manager 100.0m. Prices move during a season, so a squad
-  // saved last week can be worth more than the budget that bought it -- show
-  // that as a negative rather than clamping it to zero and hiding the problem.
-  const bank = storedSquad?.source !== "manual" && storedSquad?.bank != null
-    ? storedSquad.bank
-    : preview
-      ? BUDGET - preview.spend
-      : 0;
+  // A squad's current market value (what buying it today would cost) and its
+  // selling value (what it actually returns if sold, after the half-rise
+  // rule) diverge as soon as any player's price moves -- neither one is
+  // "£100.0m minus something," and an appreciated squad is not over budget.
+  const bank = fromTenths(financeSummary.bankTenths);
+  const marketValue = fromTenths(financeSummary.marketValueTenths);
+  const sellingValue = fromTenths(financeSummary.sellingValueTenths);
+  const marketPricesUpdatedAt = snapshot.market_prices_updated_at
+    ? new Date(snapshot.market_prices_updated_at)
+    : null;
+  const marketStale = Boolean(
+    marketPricesUpdatedAt && now - marketPricesUpdatedAt.getTime() > 24 * 60 * 60 * 1000,
+  );
+  const marketPricesUpdatedLabel = marketPricesUpdatedAt
+    ? marketPricesUpdatedAt.toLocaleString()
+    : "unknown";
   const flagged = squadPlayers.filter(
     (player) => player.status !== "a" || (player.chance_of_playing_next_round ?? 100) < 100,
   );
@@ -123,8 +131,7 @@ export default function TeamPage() {
     setPicking(true);
     try {
       const result = await api.squad({ budget: BUDGET, lock: [], ban: [] });
-      setSquadElements([...result.xi, ...result.bench].map((player) => player.element));
-      setTeamResult(result);
+      setTeamResult(result, "reset");
       toast("Optimal squad loaded from the prediction pipeline.");
     } catch (err) {
       toast((err as Error).message);
@@ -141,7 +148,7 @@ export default function TeamPage() {
     setLiningUp(true);
     try {
       const result = await api.lineup({ elements: squadElements });
-      setTeamResult(result);
+      setTeamResult(result, "lineup");
       toast("Starting XI, bench order and armband picks updated.");
     } catch (err) {
       toast((err as Error).message);
@@ -151,7 +158,7 @@ export default function TeamPage() {
   }
 
   function applyTransferPlan(row: TransferRow) {
-    setTeamResult(row, "optimizer", row.bank_after);
+    setTeamResult(row, row.transfers === 0 ? "lineup" : "transfer");
     setPlannerBank(row.bank_after);
     toast(row.transfers === 0 ? "Lineup recommendation applied." : "Transfer plan applied to My Team.");
   }
@@ -199,8 +206,8 @@ export default function TeamPage() {
             <strong>{snapshot.players.length}</strong>
           </div>
           <div className="cell">
-            <span>Squad cost</span>
-            <strong>{preview ? money(preview.spend) : "--"}</strong>
+            <span>Market value</span>
+            <strong>{preview ? money(marketValue) : "--"}</strong>
           </div>
           <div className="cell">
             <span>XI projection</span>
@@ -283,11 +290,32 @@ export default function TeamPage() {
                 </strong>
               </div>
               <div className="rail-stat">
+                <span>Selling value</span>
+                <strong>{preview ? money(sellingValue) : "--"}</strong>
+              </div>
+              <div className="rail-stat">
                 <span>In the bank</span>
                 <strong className={bank < 0 ? "is-over" : undefined}>
                   {preview ? money(bank) : "--"}
                 </strong>
               </div>
+              {preview && financeSummary.priceBasis === "estimated" && (
+                <p className="finance-basis-note">
+                  Purchase prices are estimated from a squad saved before price tracking; selling
+                  value may not match your real FPL account.
+                </p>
+              )}
+              {marketStale && (
+                <p className="finance-basis-note">
+                  Local market prices are more than 24 hours old (as of {marketPricesUpdatedLabel}).
+                </p>
+              )}
+              {snapshot.predictions_older_than_market && (
+                <p className="finance-basis-note">
+                  Point projections were generated before the last market price update; prices shown
+                  are current, projections may not reflect the latest price moves.
+                </p>
+              )}
               {storedSquad?.source === "manager" && (
                 <div className="team-source-note">
                   <span className="kicker">Imported source</span>

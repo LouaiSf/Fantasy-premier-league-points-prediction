@@ -302,12 +302,30 @@ def api_platform():
         datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc).isoformat()
         if mtime else None
     )
+
+    # players_raw.csv (current market prices, joined into `snapshot['players']`
+    # above) and the prediction export are two independent files that can be
+    # refreshed at different times. My Team and Transfer Studio need to know
+    # when the price they're showing was last observed, and whether the point
+    # projections predate a since-changed market.
+    raw_path = os.path.join('data', season, 'players_raw.csv')
+    market_mtime = os.path.getmtime(raw_path) if os.path.exists(raw_path) else None
+    market_prices_updated_at = (
+        datetime.datetime.fromtimestamp(market_mtime, tz=datetime.timezone.utc).isoformat()
+        if market_mtime else None
+    )
+    predictions_older_than_market = bool(
+        prediction_available and mtime and market_mtime and mtime < market_mtime
+    )
+
     snapshot.update({
         'ok': True,
         'prediction_available': prediction_available,
         'prediction_error': s.get('error'),
         'prediction_timestamp': prediction_timestamp,
         'model': s.get('model') or model_summary(),
+        'market_prices_updated_at': market_prices_updated_at,
+        'predictions_older_than_market': predictions_older_than_market,
     })
     return jsonify(snapshot)
 

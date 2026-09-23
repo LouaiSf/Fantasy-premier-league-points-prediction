@@ -1954,6 +1954,7 @@
   .team-source-note{display:flex;flex-direction:column;gap:var(--space-1);margin-top:var(--space-3);padding-top:var(--space-3);border-top:1px solid rgba(255,255,255,.1)}
   .team-source-note strong{font:700 var(--type-small)/1.1 var(--ui)}
   .team-source-note small{color:var(--muted-mid);font:600 var(--type-caption)/1 var(--data)}
+  .finance-basis-note{margin-top:var(--space-2);color:var(--muted-mid);font:550 var(--type-caption)/1.4 var(--ui)}
   .team-plan-wrap{grid-column:1/-1}
   .team-plan{background:var(--night-850);border:1px solid rgba(255,255,255,.14);padding:var(--space-5);clip-path:var(--blade)}
   .team-plan-head{display:flex;justify-content:space-between;gap:var(--space-5);align-items:flex-start}

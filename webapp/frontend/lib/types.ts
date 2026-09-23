@@ -90,6 +90,8 @@ export interface PlatformSnapshot {
   prediction_available: boolean;
   prediction_error: string | null;
   prediction_timestamp: string | null;
+  market_prices_updated_at: string | null;
+  predictions_older_than_market: boolean;
   model: ModelSummary;
 }
 
@@ -162,6 +164,24 @@ export interface PlayerHistoryRecord {
   ict_index: number;
 }
 
+export type PriceBasis = "imported" | "manual" | "estimated";
+
+export interface OwnedPrice {
+  purchaseTenths: number;
+  // Retained from an import for a one-time consistency check against the
+  // selling-price formula; not read back as a computation input.
+  sellingTenths?: number;
+}
+
+export interface SquadFinance {
+  version: 2;
+  bankTenths: number;
+  ownedPrices: Record<number, OwnedPrice>;
+  priceBasis: PriceBasis;
+  marketPriceAsOf?: string | null;
+  lineupGameweek?: number;
+}
+
 export interface StoredSquad {
   season?: string;
   ids: number[];
@@ -170,12 +190,14 @@ export interface StoredSquad {
   viceCaptainId?: number;
   xiIds?: number[];
   benchIds?: number[];
+  /** @deprecated superseded by finance.bankTenths; kept for reading pre-finance saves. */
   bank?: number;
   source?: "manual" | "manager" | "optimizer";
   sourceEntryId?: number;
   sourceManagerName?: string;
   sourceTeamName?: string;
   sourceGameweek?: number;
+  finance?: SquadFinance;
 }
 
 export interface ManagerSearchCandidate {

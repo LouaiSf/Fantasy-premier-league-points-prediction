@@ -5,6 +5,7 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { useApp } from "@/components/providers/app-provider";
 import { PlayerPhoto } from "@/components/player-photo";
 import { money, num } from "@/lib/format";
+import { checkAffordability, fromTenths } from "@/lib/finance";
 import { validateSquad } from "@/lib/squad";
 import type { PlayerRecord } from "@/lib/types";
 
@@ -12,7 +13,7 @@ const POSITIONS: PlayerRecord["position"][] = ["GK", "DEF", "MID", "FWD"];
 const NEEDED: Record<string, number> = { GK: 2, DEF: 5, MID: 5, FWD: 3 };
 
 export function SquadEditor() {
-  const { snapshot, squadElements, setSquadElements, toast } = useApp();
+  const { snapshot, squadElements, squadPlayers, storedSquad, setSquadElements, toast } = useApp();
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   // Keyed on element rather than name: two players can share a display name,
@@ -34,7 +35,30 @@ export function SquadEditor() {
   );
 
   const chosenPlayers = players.filter((player) => selected.has(player.element));
-  const problem = validateSquad(chosenPlayers);
+  const shapeProblem = validateSquad(chosenPlayers);
+
+  // An existing owned squad is edited against bank + the selling value of
+  // whatever's dropped; a squad with no finance history yet (brand new, or
+  // never priced) must simply fit the standard £100.0m budget at today's
+  // prices.
+  let budgetProblem = "";
+  if (!shapeProblem) {
+    const finance = storedSquad?.finance;
+    if (finance) {
+      const removed = squadPlayers.filter((player) => !selected.has(player.element));
+      const added = chosenPlayers.filter((player) => !squadElements.includes(player.element));
+      const affordability = checkAffordability(finance, removed, added);
+      if (!affordability.affordable) {
+        budgetProblem = `This edit is £${fromTenths(affordability.shortfallTenths).toFixed(1)}m over budget (bank + sale proceeds available: £${fromTenths(affordability.availableTenths).toFixed(1)}m).`;
+      }
+    } else {
+      const totalSpend = chosenPlayers.reduce((sum, player) => sum + player.value_m, 0);
+      if (totalSpend > 100.0 + 1e-9) {
+        budgetProblem = `Squad costs £${totalSpend.toFixed(1)}m, £${(totalSpend - 100).toFixed(1)}m over the £100.0m budget.`;
+      }
+    }
+  }
+  const problem = shapeProblem || budgetProblem;
 
   function toggle(player: PlayerRecord) {
     setSelected((prev) => {

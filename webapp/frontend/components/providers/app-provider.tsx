@@ -2,10 +2,19 @@
 
 import * as React from "react";
 import { api } from "@/lib/api";
+import {
+  applyOwnershipDiff,
+  computeFinanceSummary,
+  fromTenths,
+  toTenths,
+  type FinanceSummary,
+} from "@/lib/finance";
 import type {
   ManagerLineup,
+  OwnedPrice,
   PlatformSnapshot,
   PlayerRecord,
+  SquadFinance,
   SquadResult,
   StoredSquad,
 } from "@/lib/types";
@@ -27,9 +36,19 @@ interface AppState {
   squadPlayers: PlayerRecord[];
 
   teamResult: SquadResult | null;
-  setTeamResult: (result: SquadResult | null, source?: "manual" | "optimizer", bankAfter?: number) => void;
+  // "reset" treats the result as a brand-new squad bought fresh against a
+  // full £100.0m budget (auto-pick). "lineup" reorders/recaptains the same
+  // 15 and must not touch bank or purchase prices (lineup optimise).
+  // "transfer" diffs the composition change against the owned squad's
+  // finance block, crediting selling proceeds and charging purchase prices
+  // (an applied transfer-plan row). Defaults to "transfer", the safest
+  // assumption when composition may have changed.
+  setTeamResult: (result: SquadResult | null, mode?: "reset" | "lineup" | "transfer") => void;
   setImportedTeam: (lineup: ManagerLineup) => void;
   storedSquad: StoredSquad | null;
+  // Bank + market/selling value for the current squad, computed once here so
+  // My Team and Transfer Studio never derive it independently.
+  financeSummary: FinanceSummary;
 
   selectedPlayer: PlayerRecord | null;
   openProfile: (player: PlayerRecord) => void;
@@ -42,22 +61,45 @@ interface AppState {
 
 const AppContext = React.createContext<AppState | null>(null);
 
-function parseStoredSquad(): StoredSquad | null {
-  if (typeof window === "undefined") return null;
+function isValidFinance(value: unknown): value is SquadFinance {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  if (v.version !== 2) return false;
+  if (typeof v.bankTenths !== "number" || !Number.isFinite(v.bankTenths)) return false;
+  if (v.priceBasis !== "imported" && v.priceBasis !== "manual" && v.priceBasis !== "estimated") return false;
+  if (typeof v.ownedPrices !== "object" || v.ownedPrices === null) return false;
+  return Object.values(v.ownedPrices as Record<string, unknown>).every(
+    (entry) =>
+      typeof entry === "object" &&
+      entry !== null &&
+      typeof (entry as Record<string, unknown>).purchaseTenths === "number",
+  );
+}
+
+interface ParsedSquad {
+  squad: StoredSquad | null;
+  financeWasInvalid: boolean;
+}
+
+function parseStoredSquad(): ParsedSquad {
+  if (typeof window === "undefined") return { squad: null, financeWasInvalid: false };
   try {
     const raw = window.localStorage.getItem(SQUAD_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
+    if (!raw) return { squad: null, financeWasInvalid: false };
+    const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed)) {
       // Legacy format: array of strings
-      return { ids: [], season: undefined };
+      return { squad: { ids: [], season: undefined }, financeWasInvalid: false };
     }
-    if (isStoredSquad(parsed)) {
-      return parsed;
-    }
-    return null;
+    if (!isStoredSquad(parsed)) return { squad: null, financeWasInvalid: false };
+    const rawFinance = parsed.finance;
+    if (rawFinance === undefined) return { squad: parsed, financeWasInvalid: false };
+    if (isValidFinance(rawFinance)) return { squad: { ...parsed, finance: rawFinance }, financeWasInvalid: false };
+    // Corrupt finance block: keep the squad's ids/lineup, drop the bad
+    // finance data rather than losing the whole saved squad over it.
+    return { squad: { ...parsed, finance: undefined }, financeWasInvalid: true };
   } catch {
-    return null;
+    return { squad: null, financeWasInvalid: false };
   }
 }
 
@@ -135,25 +177,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => window.clearTimeout(timer);
   }, [toastMessage, toastQueue]);
 
-  const saveSquadData = React.useCallback(
-    (ids: number[], currentSnapshot: PlatformSnapshot | null, result: SquadResult | null) => {
-      if (typeof window === "undefined" || !currentSnapshot) return;
-      const data: StoredSquad = {
-        season: currentSnapshot.season,
-        ids,
-        formation: result?.formation,
-        captainId: result?.captain?.element,
-        viceCaptainId: result?.vice_captain?.element,
-        xiIds: result?.xi.map((p) => p.element),
-        benchIds: result?.bench.map((p) => p.element),
-        bank: currentSnapshot.players.length ? 100 - (result?.spend ?? 0) : 0,
-        source: "manual",
-      };
-      window.localStorage.setItem(SQUAD_STORAGE_KEY, JSON.stringify(data));
-      setStoredSquad(data);
-    },
-    [],
-  );
+  const persistSquad = React.useCallback((data: StoredSquad) => {
+    window.localStorage.setItem(SQUAD_STORAGE_KEY, JSON.stringify(data));
+    setStoredSquad(data);
+  }, []);
 
   const fetchSnapshot = React.useCallback(() => {
     return api.platform().then((data) => {
@@ -161,9 +188,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const playerById = new Map(data.players.map((p) => [p.element, p]));
       const playerByName = new Map(data.players.map((p) => [p.name, p]));
 
-      const stored = parseStoredSquad();
+      const { squad: stored, financeWasInvalid } = parseStoredSquad();
       setStoredSquad(stored);
       const legacyNames = parseLegacyNames();
+
+      if (financeWasInvalid) {
+        toast("Saved squad finance data was invalid; prices are shown as estimates.");
+      }
 
       if (stored && stored.ids.length > 0) {
         if (stored.season && stored.season !== data.season) {
@@ -175,17 +206,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
+        if (new Set(stored.ids).size !== stored.ids.length) {
+          toast("Saved squad had duplicate players; please re-save your squad.");
+        }
+
         const validPlayers = stored.ids
           .map((id) => playerById.get(id))
           .filter((p): p is PlayerRecord => p != null);
 
         setSquadElementsState(validPlayers.map((p) => p.element));
 
-        // Budget check
-        const totalValue = validPlayers.reduce((sum, p) => sum + p.value_m, 0);
-        if (totalValue > 100.0) {
-          toast(`Squad over budget (£${totalValue.toFixed(1)}m) — prices may have changed.`);
+        if (validPlayers.length !== stored.ids.length) {
+          const missing = stored.ids.length - validPlayers.length;
+          toast(
+            `${missing} player${missing === 1 ? "" : "s"} from your saved squad ${missing === 1 ? "is" : "are"} missing from this season's data.`,
+          );
         }
+
+        const totalValue = validPlayers.reduce((sum, p) => sum + p.value_m, 0);
 
         // Restore teamResult if stored
         if (stored.xiIds && stored.benchIds && stored.formation) {
@@ -225,10 +263,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           .filter((p): p is PlayerRecord => p != null)
           .map((p) => p.element);
         setSquadElementsState(migrated);
-        saveSquadData(migrated, data, null);
+        const { finance } = applyOwnershipDiff(null, [], migrated, playerById, { priceBasis: "estimated" });
+        persistSquad({
+          season: data.season,
+          ids: migrated,
+          bank: fromTenths(finance.bankTenths),
+          source: "manual",
+          finance,
+        });
       }
     });
-  }, [saveSquadData, toast]);
+  }, [persistSquad, toast]);
 
   const load = React.useCallback(() => {
     setLoading(true);
@@ -244,40 +289,70 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setLoading(false));
   }, [fetchSnapshot]);
 
+  // A manual squad-editor save: diffs against whatever was owned before (if
+  // anything) so a save that only swaps a couple of players still charges
+  // and credits real purchase/selling prices instead of resetting the bank.
   const setSquadElements = React.useCallback(
     (elements: number[]) => {
       setSquadElementsState(elements);
       setTeamResultState(null);
-      saveSquadData(elements, snapshot, null);
+      if (!snapshot) return;
+      const byId = new Map(snapshot.players.map((p) => [p.element, p]));
+      const { finance } = applyOwnershipDiff(
+        storedSquad?.finance ?? null,
+        squadElements,
+        elements,
+        byId,
+        { priceBasis: "manual" },
+      );
+      persistSquad({
+        season: snapshot.season,
+        ids: elements,
+        bank: fromTenths(finance.bankTenths),
+        source: "manual",
+        finance,
+      });
     },
-    [saveSquadData, snapshot],
+    [snapshot, squadElements, storedSquad, persistSquad],
   );
 
   const setTeamResult = React.useCallback(
-    (result: SquadResult | null, source: "manual" | "optimizer" = "optimizer", bankAfter?: number) => {
+    (result: SquadResult | null, mode: "reset" | "lineup" | "transfer" = "transfer") => {
       const normalized = result ? normalizeSquadResult(result, snapshot) : null;
       setTeamResultState(normalized);
-      if (normalized) {
-        const ids = normalized.xi.map((p) => p.element).concat(normalized.bench.map((p) => p.element));
-        setSquadElementsState(ids);
-        if (snapshot) {
-          const data: StoredSquad = {
-            season: snapshot.season,
-            ids,
-            formation: normalized.formation,
-            captainId: normalized.captain?.element,
-            viceCaptainId: normalized.vice_captain?.element,
-            xiIds: normalized.xi.map((player) => player.element),
-            benchIds: normalized.bench.map((player) => player.element),
-            bank: bankAfter ?? 100 - normalized.spend,
-            source,
-          };
-          window.localStorage.setItem(SQUAD_STORAGE_KEY, JSON.stringify(data));
-          setStoredSquad(data);
-        }
+      if (!normalized || !snapshot) return;
+
+      const ids = normalized.xi.map((p) => p.element).concat(normalized.bench.map((p) => p.element));
+      setSquadElementsState(ids);
+
+      const base: StoredSquad = {
+        season: snapshot.season,
+        ids,
+        formation: normalized.formation,
+        captainId: normalized.captain?.element,
+        viceCaptainId: normalized.vice_captain?.element,
+        xiIds: normalized.xi.map((player) => player.element),
+        benchIds: normalized.bench.map((player) => player.element),
+        source: "optimizer",
+      };
+
+      if (mode === "lineup") {
+        // Same 15 players, only XI/bench/captain changed -- finance is untouched.
+        const finance = storedSquad?.finance;
+        persistSquad({
+          ...base,
+          bank: finance ? fromTenths(finance.bankTenths) : (storedSquad?.bank ?? 100 - normalized.spend),
+          finance,
+        });
+        return;
       }
+
+      const byId = new Map(snapshot.players.map((p) => [p.element, p]));
+      const prevFinance = mode === "reset" ? null : (storedSquad?.finance ?? null);
+      const { finance } = applyOwnershipDiff(prevFinance, squadElements, ids, byId, { priceBasis: "manual" });
+      persistSquad({ ...base, bank: fromTenths(finance.bankTenths), finance });
     },
-    [snapshot],
+    [snapshot, squadElements, storedSquad, persistSquad],
   );
 
   const setImportedTeam = React.useCallback(
@@ -307,6 +382,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         xi_points: xi.reduce((total, player) => total + (player.predicted_points ?? 0), 0),
         formation: `${counts.DEF ?? 0}-${counts.MID ?? 0}-${counts.FWD ?? 0}`,
       };
+
+      // Real ownership prices, straight from the FPL public API -- the only
+      // finance basis that isn't an estimate.
+      const ownedPrices: Record<number, OwnedPrice> = {};
+      for (const pick of lineup.picks) {
+        ownedPrices[pick.element] = {
+          purchaseTenths: toTenths(pick.purchase_price),
+          sellingTenths: toTenths(pick.selling_price),
+        };
+      }
+      const finance: SquadFinance = {
+        version: 2,
+        bankTenths: toTenths(lineup.bank ?? 0),
+        ownedPrices,
+        priceBasis: "imported",
+        marketPriceAsOf: lineup.fetched_at,
+        lineupGameweek: lineup.lineup_gameweek,
+      };
+
       const data: StoredSquad = {
         season: snapshot.season,
         ids: selected.map((player) => player.element),
@@ -321,13 +415,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         sourceManagerName: lineup.manager.manager_name,
         sourceTeamName: lineup.manager.team_name,
         sourceGameweek: lineup.lineup_gameweek,
+        finance,
       };
-      window.localStorage.setItem(SQUAD_STORAGE_KEY, JSON.stringify(data));
-      setStoredSquad(data);
+      persistSquad(data);
       setSquadElementsState(data.ids);
       setTeamResultState(result);
     },
-    [snapshot],
+    [snapshot, persistSquad],
   );
 
   const squadPlayers = React.useMemo(() => {
@@ -346,6 +440,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [squadPlayers],
   );
 
+  const financeSummary = React.useMemo(
+    () => computeFinanceSummary(squadPlayers, storedSquad?.finance ?? null),
+    [squadPlayers, storedSquad],
+  );
+
   const value: AppState = {
     snapshot,
     loading,
@@ -359,6 +458,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setTeamResult,
     setImportedTeam,
     storedSquad,
+    financeSummary,
     selectedPlayer,
     openProfile: setSelectedPlayer,
     closeProfile: () => setSelectedPlayer(null),
