@@ -1057,9 +1057,19 @@ def suggest_transfers(current: pd.DataFrame, players: pd.DataFrame,
 # ---------------------------------------------------------------------------
 # Chips
 # ---------------------------------------------------------------------------
-def fixture_calendar(season: str, first_gw: int, horizon: int) -> pd.DataFrame:
+def season_dir(season: str, root: str | None = None) -> str:
+    """data/<season> under `root`, or relative to the working directory.
+
+    The CLI runs from the project root and passes no root. A server should pass
+    one rather than chdir: the working directory is process-wide state.
+    """
+    return os.path.join(root or '', 'data', season)
+
+
+def fixture_calendar(season: str, first_gw: int, horizon: int,
+                     root: str | None = None) -> pd.DataFrame:
     """Fixtures per team per gameweek, with average difficulty."""
-    path = os.path.join('data', season, 'fixtures.csv')
+    path = os.path.join(season_dir(season, root), 'fixtures.csv')
     if not os.path.exists(path):
         raise SystemExit(f"{path} not found")
 
