@@ -2194,3 +2194,28 @@
     .chip-data-bar{padding:10px 12px}
     .chip-manage>summary{padding:10px 12px}
   }
+
+
+  /* FPL Platform v2: deadline decision board on My Team. */
+  .deadline-board{margin:var(--space-6) 0;padding:var(--space-5);border:1px solid rgba(255,255,255,.16);background:rgba(20,0,28,.9);color:var(--paper)}
+  .deadline-board-head{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:8px 16px;margin-bottom:var(--space-4)}
+  .deadline-board-head h2{margin:4px 0 0;font:900 clamp(1.2rem,2.4vw,1.8rem)/1 var(--display);text-transform:uppercase}
+  .deadline-board-head p{margin:0;color:var(--muted-light);font:600 12px var(--data)}
+  .deadline-list{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+  .deadline-row{display:grid;grid-template-columns:130px minmax(0,1fr) auto;align-items:center;gap:12px;min-height:44px;padding:8px 12px;border-left:3px solid var(--muted-mid);background:rgba(255,255,255,.045)}
+  .deadline-row.is-ready{border-left-color:var(--lime)}
+  .deadline-row.is-review{border-left-color:var(--gold)}
+  .deadline-row.is-missing{border-left-color:var(--pink)}
+  .deadline-state{display:inline-flex;align-items:center;gap:6px;font:800 11px var(--data);letter-spacing:.06em;text-transform:uppercase}
+  .deadline-row.is-ready .deadline-state{color:var(--lime)}
+  .deadline-row.is-review .deadline-state{color:var(--gold)}
+  .deadline-row.is-missing .deadline-state{color:var(--pink)}
+  .deadline-row b{display:block;font:800 13px var(--display)}
+  .deadline-row div span{display:block;color:var(--muted-light);font:500 12px/1.4 var(--editorial);overflow-wrap:anywhere}
+  .deadline-row .text-button{min-height:44px;display:inline-flex;align-items:center}
+  .deadline-note{margin:var(--space-3) 0 0;color:var(--muted-light);font:600 11px var(--data)}
+  @media(max-width:560px){
+    .deadline-board{padding:12px}
+    .deadline-row{grid-template-columns:minmax(0,1fr) auto;gap:4px 10px}
+    .deadline-state{grid-column:1/-1}
+  }

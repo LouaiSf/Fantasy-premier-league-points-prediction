@@ -13,6 +13,7 @@ import { Loading } from "@/components/loading";
 import { ModelInfo } from "@/components/model-info";
 import { ManagerSearch } from "@/components/team/manager-search";
 import { TeamPlan } from "@/components/team/team-plan";
+import { DeadlineBoard } from "@/components/team/deadline-board";
 import { DataPortability } from "@/components/team/data-portability";
 import type { TransferResult, TransferRow } from "@/lib/types";
 
@@ -254,6 +255,8 @@ export default function TeamPage() {
           </div>
         )}
       </div>
+
+      <DeadlineBoard />
 
       <div className="pitch-zone">
         <div className="shell pitch-layout">

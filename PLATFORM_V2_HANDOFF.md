@@ -115,6 +115,27 @@ Historical: Slice 4 remainder was (1) `app/captain/page.tsx::riskFor()` wording 
 
 - No additional visual redesign was made beyond the reproducible issues above; the exploratory pass found no new clipping or overflow.
 
+## Slice 5a: deadline decision board (done); saved scenarios (not started)
+
+### Implemented
+
+- `components/team/deadline-board.tsx`, rendered on My Team between the hero and the pitch. One row per explicit fact, each `Ready / Needs review / Missing input` (text plus glyph, not colour alone) with a link to the tool: squad (15 saved), captain (set / flagged / missing), transfers (hold recorded, saved draft not applied, or nothing recorded), chips (planned this GW, inventory entered, or not entered), bank and prices (official purchase prices vs estimated), availability of the active 15, and data freshness (predictions available, market prices under 24h). It states that it reflects this device only, not the FPL account. No new server account or storage: it reads the existing squad, hold, saved-draft and chip-inventory keys.
+
+### Verification evidence
+
+- `npm exec tsc -- --noEmit` and `npm run build` passed.
+- Playwright at 1440x1000 and 375x812 with a seeded squad: initial Transfers and Chips rows were `Missing input`; after `Hold this week` on the Studio and marking chips on the chip page they became `Ready` and the header said "Everything listed is ready." No overflow, 0 console errors. Screenshots: `artifacts/deadline-board-desktop.png`, `artifacts/deadline-board-mobile-375.png`.
+
+### Not done
+
+- Saved scenario A/B (up to three local scenarios comparing final 15, XI, captain, net points, hit, bank and a 3-GW total on one snapshot version) is not started.
+- Slice 5 items 3-5 (projection change explainer, watchlist alerts, model reliability card) depend on data that does not exist yet and were intentionally not started.
+- Free transfers are not persisted anywhere, so the board cannot show them.
+
+### Exact next action
+
+Saved scenarios: extend `lib/transfer-planning.ts` with a small versioned list (max 3) keyed by squad fingerprint and snapshot `prediction_timestamp`, add "Duplicate as scenario" and a compare table to `app/transfers/transfer-studio.tsx` reusing `/api/lineup` for each scenario, and label any scenario saved against a different prediction snapshot as stale. Then a final full-suite run and a single acceptance-matrix pass.
+
 ## Official FPL rules already checked for later slices
 
 - [2026/27 chip rules](https://www.premierleague.com/en/news/4679879/whats-happening-with-fpl-chips-in-202627): two chip sets, halves split after GW19, one chip per GW, Free Hit unavailable GW1, and Free Hit in GW19 prevents using it again in GW20.
