@@ -36,9 +36,8 @@ Follow the plan slices: (1) manager direct import and bounded league search; (2)
 
 ### Commit/push
 
-- Implementation commit: pending.
-- Handoff/evidence commit: pending.
-- Push: pending.
+- Slice 1 implementation, handoff, and browser evidence: `17bcad95` (full SHA is in Git history), pushed to `origin/main`.
+- Push verified: `origin/main` advanced from `9aa20df7` to `17bcad95`; the commit has no Co-authored-by trailer.
 
 ### Blockers and exact next action
 
