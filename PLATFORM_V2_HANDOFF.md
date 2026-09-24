@@ -1,44 +1,52 @@
-# Platform v2 planning handoff
+# FPL Platform v2 implementation handoff
 
-This file preserves the planning state if context is compacted or the work moves to another session. Read `PLATFORM_V2_IMPLEMENTATION_PLAN.md` first. The current task is **planning**, not implementing the application changes.
+This handoff tracks execution of `PLATFORM_V2_IMPLEMENTATION_PLAN.md`. The planning audit is complete; continue implementing the ordered product slices. Read the plan and inspect `git status` before every resumed work session.
 
-## User request
+## Workspace and preservation
 
-Produce a detailed, implementation-ready plan for manager search by name, multi-transfer Studio, Chip Advisor realism, other visual/logical problems, and new features. Specify issue, cause, exact fix, and verification without repetitive QA. Commit and push useful progress, with no `Co-authored-by` trailer. Continue writing a handoff before later context compaction.
+- Workspace: `C:\Users\HP\Desktop\FPL PROJECT - Copy\Fantasy-premier-league-points-prediction`
+- Branch/remote: `main` / `origin` (`LouaiSf/Fantasy-premier-league-points-prediction`)
+- Preserve the pre-existing dirty/untracked files: `data/2026-27/players_raw.csv`, `predictions_next_gw.csv`, `predictions_next_gw.manifest.json`, `CONTINUE_PROGRESS.md`, `CONTINUE_PROMPT.md`, `IMPLEMENTATION_PROMPT.md`, `debug.log`, and `webapp/frontend/.agents/`, `.claude/`, `.continue/`, `.kilocode/`, `.qwen/`, `.windsurf/`.
+- Do not stage those files. Stage only files owned by the current product increment and its handoff/evidence.
+- Use OMO `mcp__git_bash__run` for Windows shell commands. Do not add a Co-authored-by trailer to commits.
 
-## Workspace and safety
+## Delivery order
 
-- Root: `C:\Users\HP\Desktop\FPL PROJECT - Copy\Fantasy-premier-league-points-prediction`.
-- Branch: `main`, remote: `origin` (`LouaiSf/Fantasy-premier-league-points-prediction`).
-- Existing dirty/untracked user files were present before this task: `data/2026-27/players_raw.csv`, `predictions_next_gw.csv`, `predictions_next_gw.manifest.json`, `CONTINUE_PROGRESS.md`, `CONTINUE_PROMPT.md`, `IMPLEMENTATION_PROMPT.md`, `debug.log`, and several untracked `webapp/frontend/.agents/`, `.claude/`, `.continue/`, `.kilocode/`, `.qwen/`, `.windsurf/` directories. Leave them untouched and stage only the two `PLATFORM_V2_*.md` files.
-- Prefer OMO `mcp__git_bash__run` for shell commands on Windows; PowerShell is suitable for native process management. Do not spawn subagents; current developer instruction prohibits them without an explicit user or AGENTS/skill request.
+Follow the plan slices: (1) manager direct import and bounded league search; (2) actual multi-transfer staging and comparison; (3) Chip Advisor rules and evidence-based decisions; (4) adjacent wording, GK captain eligibility, and mobile fixes; (5) prioritized deadline board and saved scenarios. The final definition of done and acceptance matrix are in the implementation plan.
 
-## Verified findings
+## Slice 1: manager import and league-name search
 
-1. **Manager search**: `webapp/frontend/components/team/manager-search.tsx` name filtering only covers fetched league standings pages (50 members per page). It auto-scans at most five pages only if the current filter has zero results. Numeric entry IDs work, but `webapp/fpl_client.py::search_text` always raises `SearchNotConfigured`. `webapp/manager_routes.py` has league paging but no global name index. On a 375px viewport, the My Team hero is about 739px high and the manager search starts around document y=931px, so lookup is below the first screen. Plan a prominent direct entry ID/profile URL flow, recent saved accounts, and honest bounded league scanning with coverage/progress; do not claim true global name search without a real data source.
-2. **Transfer Studio**: `webapp/frontend/app/transfers/page.tsx` has only scalar `outId`/`inId`. `maxTransfers` changes optimizer count but cannot stage or display multiple individual pairs. Full analysis ignores selected A/B players. Backend `scripts/optimise.py::compute_transfers` already calculates rows for 0..N transfers. `webapp/frontend/components/team/team-plan.tsx` already derives full outgoing/incoming element sets. In live GW6 data, a max-three run yielded 0, 1, 2, and 3-transfer rows; later rows contained multiple names but the broadcast channel still showed one pair. Stage ordered manual pairs separately from optimizer output; never invent an out-to-in pairing for optimizer rows that only provide two sets. Add stable element IDs and locked selections to the optimizer contract if a staged draft is meant to constrain it. The “Hold this week” action currently only displays a toast and does not persist any decision.
-3. **Chip Advisor**: Live GW6 auto-picked squad plus saved inventory showed Triple Captain +6.5 and Bench Boost +14.7 both as `PLAY`, while the “Next chip decision” chose Triple Captain because it is first in the fixed chip order. Wildcard showed +45.2 for GW7. `scripts/predict_gameweek.py` already exports expected points after multiplying by appearance probability, but `scripts/optimise.py::_projection_matrix` multiplies those values by availability again. `compute_chips` compares TC, BB, FH, and WC on noncomparable baselines; FH ignores normal free transfers; WC sums an optimized squad versus a frozen squad across the horizon; BB treats gross bench points as chip gain. A fixed 1-point margin (`scripts/chip_policy.py`) labels PLAY without evidence or wait value. `confidence` is hard-coded. Future weeks freeze player state in `predict_gameweek.py`. `_candidate_window` can mishandle a horizon crossing GW19/20. Current owned unavailable players can be missing from the market table used to align the squad, likely causing a server error; reproduce before calling it confirmed. The frontend permits multiple planned chips in one GW. `app/chips/page.tsx` puts a long inventory form before the decision on mobile. Plan a rules engine, projection correction, credible baselines, explicit data quality, single coherent decision, and calibrated thresholds; until validated, show `WATCH/COMPARE`, not `PLAY`.
-4. **Other findings**: `app/captain/page.tsx` labels every healthy status “Nailed on”, unsupported by the status field. `components/chrome/main-nav.tsx` news badge counts all player news/status rows rather than unread or squad-specific items. `app/watchlist/page.tsx` and `components/player-drawer.tsx` infer “Promoted/New” from missing training history, which does not prove newness. `DESIGN.md` contains stale copy claiming all figures are seeded prototype data. Preserve its angular broadcast design tokens while improving hierarchy and mobile layouts. Production CSS is `webapp/frontend/app/broadcast.css`.
+### Implemented
 
-## External authoritative rule sources
+- Replaced the old entry/name lookup with direct entry ID or official FPL profile URL lookup, immediate public lineup preview, explicit import, and up to five season-scoped recent teams in local storage.
+- Plain names route to a known-league search instead of the unsupported global name endpoint. The UI explains the search scope and shows progress, scanned standings pages/member count, partial results, and a manual rank/page starting point. Requests cancel on criteria changes.
+- Added `GET /api/managers/leagues/<league_id>/search` with accent-insensitive matching, cursor/page scanning capped at five pages per request, deduplication, partial results on upstream failure, and typed range/limit errors. League standings responses use a short cache.
+- Moved manager lookup above the My Team hero.
+- Corrected URL validation to reject negative numeric IDs, non-FPL hosts/protocols, custom ports, and embedded credentials.
 
-- [Official 2026/27 chips](https://www.premierleague.com/en/news/4679879/whats-happening-with-fpl-chips-in-202627): two sets, first through GW19 and second from GW20, one chip per GW, FH unavailable GW1, and FH GW19 cannot be followed by FH GW20.
-- [Official 2026/27 rule changes](https://www.premierleague.com/en/news/4679873): free transfers roll to five, no AFCON bonus transfers.
+### Verification evidence
+
+- `npm exec tsc -- --noEmit` passed.
+- `npm run build` passed on Next.js 16.3.5 after the final URL-boundary and import-cleanup edits; optimized compilation, TypeScript, and static page generation all completed.
+- `python -m pytest -q tests/test_manager_search.py tests/test_fpl_client.py`: 13 passed. `python -m py_compile webapp/manager_routes.py webapp/fpl_client.py` passed. `git diff --check` passed.
+- Real browser at `/team`: entry ID `1` returned its live public manager and GW5 lineup preview; clicking “Set as my team” persisted that manager into the season-scoped Recent teams list. A full `https://fantasy.premierleague.com/entry/1/event/5` URL also resolved to that preview.
+- Real browser search for `Chris` in league `314` (“Overall”) reported “Checked pages 1–5 · 250 members checked” and returned matching actual managers. This is bounded standings search, not global FPL search.
+- Desktop viewport 1440×1000 and 375×812 were inspected. No document-level horizontal overflow at 375px; the manager lookup is above the hero. Browser console had 0 errors (one development warning).
+- Screenshots: `artifacts/manager-search-desktop.png`, `artifacts/manager-search-mobile-375.png`.
+
+### Commit/push
+
+- Implementation commit: pending.
+- Handoff/evidence commit: pending.
+- Push: pending.
+
+### Blockers and exact next action
+
+No Slice 1 blocker. Implement Slice 2 now: inspect the transfer UI, `/api/transfers` contract, and `compute_transfers`/`solve_squad`; stage ordered outgoing/incoming ID pairs, preserve optimizer choices without inventing pairs, validate exact finance in tenths, constrain the optimizer with staged locks, and add save/hold/apply plus scenario comparison per the plan. Add focused tests and run browser QA once at desktop and 375px after the slice is stable.
+
+## Official FPL rules already checked for later slices
+
+- [2026/27 chip rules](https://www.premierleague.com/en/news/4679879/whats-happening-with-fpl-chips-in-202627): two chip sets, halves split after GW19, one chip per GW, Free Hit unavailable GW1, and Free Hit in GW19 prevents using it again in GW20.
+- [2026/27 rule changes](https://www.premierleague.com/en/news/4679873): free transfers roll up to five; no AFCON bonus transfers.
 - [Official FPL FAQ](https://www.premierleague.com/en/news/4661030): Wildcard and Free Hit unavailable GW1; saved free transfers remain after a chip.
-
-## Completed in this planning turn
-
-- Created `PLATFORM_V2_IMPLEMENTATION_PLAN.md` with the issue/cause/fix matrix, exact search and transfer contracts, chip rules and scoring requirements, mobile composition, ordered implementation slices, feature roadmap, focused tests and one-pass acceptance matrix.
-- Checked key file paths and solver entrypoints against the current tree. The production stylesheet is `webapp/frontend/app/broadcast.css`; the player drawer is `webapp/frontend/components/player-drawer.tsx`.
-- Reset the temporary 375px browser viewport and closed the hidden localhost audit tab. Stopped only the audited Flask and Next.js development process trees after checking their command lines.
-- Preserved all pre-existing dirty/untracked user files. No product code or data files were changed.
-
-## Delivery state
-
-- Planning work is complete. `PLATFORM_V2_IMPLEMENTATION_PLAN.md` was committed as `f18a98c955847ce041c1219c13aa066323aff748` and pushed to `origin/main`; the remote SHA matched. The commit message had no `Co-authored-by` trailer and contained only the plan and this handoff.
-- `git diff --check` passed. Browser and audit servers were cleaned up. Pre-existing dirty/untracked user files remain untouched.
-- Product implementation has **not** started. The next session should implement the ordered slices in the plan, beginning with Slice 1, and should inspect `git status` before editing.
-
-## Suggested execution prompt for the next session
-
-> Implement FPL Platform v2 from `PLATFORM_V2_IMPLEMENTATION_PLAN.md`. Read the plan and this handoff, inspect `git status`, and preserve all pre-existing dirty files. Follow the ordered slices and their exact contracts/acceptance matrix. Make reviewable commits and push good progress with no `Co-authored-by` trailer. Before context compaction, update this handoff with completed work, verification, commit SHA and remaining tasks. The planning audit is complete; product implementation has not begun.
+- Official rules do not prohibit selecting a goalkeeper as captain or vice-captain. Slice 4 should remove the app’s goalkeeper exclusion in `solve_squad`; preserve starting-XI eligibility and other official squad rules.

@@ -196,3 +196,29 @@ def test_league_standings_typed_not_found(monkeypatch: pytest.MonkeyPatch) -> No
 
     with pytest.raises(LeagueNotFound):
         FplClient().get_league_standings(999999999)
+
+
+def test_league_standings_cache_lasts_sixty_seconds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = [100.0]
+    calls: list[str] = []
+
+    def fake_open(request, timeout):
+        calls.append(request.full_url)
+        return FakeResponse({
+            "league": {"name": "Overall"},
+            "standings": {"has_next": True, "results": []},
+        })
+
+    monkeypatch.setattr(fpl_client.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr("webapp.fpl_client.request.urlopen", fake_open)
+    client = FplClient()
+
+    client.get_league_standings(314, page=1)
+    now[0] = 159.0
+    client.get_league_standings(314, page=1)
+    now[0] = 161.0
+    client.get_league_standings(314, page=1)
+
+    assert len(calls) == 2

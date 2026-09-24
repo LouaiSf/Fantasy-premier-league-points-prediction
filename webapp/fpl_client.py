@@ -31,6 +31,9 @@ class LineupNotFound(FplClientError):
 class UpstreamUnavailable(FplClientError):
     pass
 
+class UpstreamRateLimited(FplClientError):
+    pass
+
 class InvalidUpstreamResponse(FplClientError):
     pass
 
@@ -151,6 +154,7 @@ class FplClient:
 
     def _get_json(
         self, url: str, *, not_found_exc: type[FplClientError] = ManagerNotFound,
+        cache_ttl_seconds: float = CACHE_TTL_SECONDS,
     ) -> dict[str, object]:
         now = time.monotonic()
         cached = _CACHE.get(url)
@@ -171,6 +175,8 @@ class FplClient:
                     status = response.getcode()
                 if status == 404:
                     raise not_found_exc("public FPL resource was not found")
+                if status == 429:
+                    raise UpstreamRateLimited("public FPL API rate limit reached")
                 if status < 200 or status >= 300:
                     raise UpstreamUnavailable(f"public FPL API returned HTTP {status}")
                 raw = response.read(MAX_RESPONSE_BYTES + 1)
@@ -179,6 +185,8 @@ class FplClient:
         except error.HTTPError as exc:
             if exc.code == 404:
                 raise not_found_exc("public FPL resource was not found") from exc
+            if exc.code == 429:
+                raise UpstreamRateLimited("public FPL API rate limit reached") from exc
             raise UpstreamUnavailable(f"public FPL API returned HTTP {exc.code}") from exc
         except (error.URLError, TimeoutError, OSError) as exc:
             raise UpstreamUnavailable("public FPL API could not be reached") from exc
@@ -189,7 +197,7 @@ class FplClient:
             payload = _mapping(json.loads(raw.decode("utf-8")), "API")
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise InvalidUpstreamResponse("public FPL API returned invalid JSON") from exc
-        _CACHE[url] = _CacheEntry(now + CACHE_TTL_SECONDS, payload)
+        _CACHE[url] = _CacheEntry(now + cache_ttl_seconds, payload)
         if len(_CACHE) > CACHE_LIMIT:
             oldest = min(_CACHE, key=lambda key: _CACHE[key].expires_at)
             _CACHE.pop(oldest, None)
@@ -305,7 +313,8 @@ class FplClient:
         if page <= 0:
             raise InvalidUpstreamResponse("page must be a positive number")
         url = self._url(f"leagues-classic/{league_id}/standings/?page_standings={page}")
-        data = self._get_json(url, not_found_exc=LeagueNotFound)
+        data = self._get_json(
+            url, not_found_exc=LeagueNotFound, cache_ttl_seconds=60.0)
         league = _mapping(data.get("league", {}), "league")
         standings = _mapping(data.get("standings", {}), "standings")
         raw_results = standings.get("results")

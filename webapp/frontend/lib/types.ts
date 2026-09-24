@@ -237,6 +237,22 @@ export interface LeagueStandingsResult {
   entries: LeagueStandingsEntry[];
 }
 
+export interface LeagueNameSearchResult {
+  ok: true;
+  league_id: number;
+  league_name: string;
+  query: string;
+  results: LeagueStandingsEntry[];
+  scanned_from_page: number;
+  scanned_through_page: number;
+  scanned_entries: number;
+  next_cursor: number | null;
+  has_more: boolean;
+  scope: "league_pages";
+  interrupted?: boolean;
+  interrupted_code?: "upstream_rate_limited" | "upstream_unavailable";
+}
+
 export interface ManagerPick {
   element: number;
   position: number;

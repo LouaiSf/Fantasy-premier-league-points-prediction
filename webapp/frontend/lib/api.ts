@@ -2,6 +2,7 @@ import type {
   ApiError,
   ChipInventory,
   LeagueStandingsResult,
+  LeagueNameSearchResult,
   ManagerLineup,
   ManagerSearchCandidate,
   PlatformSnapshot,
@@ -162,17 +163,30 @@ export async function refreshDataAndPredictions(
 }
 
 export const api = {
-  searchManagers: (query: string) =>
+  searchManagers: (query: string, signal?: AbortSignal) =>
     requestJson<{ ok: true; query: string; results: ManagerSearchCandidate[] }>(
       `/api/managers/search?q=${encodeURIComponent(query)}`,
+      signal ? { signal } : undefined,
     ),
-  managerLineup: (entryId: number, gameweek?: number) =>
+  managerLineup: (entryId: number, gameweek?: number, signal?: AbortSignal) =>
     requestJson<ManagerLineup>(
       `/api/managers/${entryId}/lineup${gameweek ? `?gameweek=${gameweek}` : ""}`,
+      signal ? { signal } : undefined,
     ),
   leagueStandings: (leagueId: number, page = 1) =>
     requestJson<LeagueStandingsResult>(
       `/api/managers/leagues/${leagueId}/standings?page=${page}`,
+    ),
+  searchLeagueManagers: (
+    leagueId: number,
+    query: string,
+    cursor: number,
+    limit = 5,
+    signal?: AbortSignal,
+  ) =>
+    requestJson<LeagueNameSearchResult>(
+      `/api/managers/leagues/${leagueId}/search?q=${encodeURIComponent(query)}&cursor=${cursor}&limit=${limit}`,
+      signal ? { signal } : undefined,
     ),
   meta: () =>
     requestJson<{

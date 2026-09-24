@@ -43,7 +43,7 @@ interface AppState {
   // (an applied transfer-plan row). Defaults to "transfer", the safest
   // assumption when composition may have changed.
   setTeamResult: (result: SquadResult | null, mode?: "reset" | "lineup" | "transfer") => void;
-  setImportedTeam: (lineup: ManagerLineup) => void;
+  setImportedTeam: (lineup: ManagerLineup) => boolean;
   storedSquad: StoredSquad | null;
   // Bank + market/selling value for the current squad, computed once here so
   // My Team and Transfer Studio never derive it independently.
@@ -356,7 +356,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const setImportedTeam = React.useCallback(
     (lineup: ManagerLineup) => {
-      if (!snapshot || lineup.missing_elements.length > 0 || lineup.picks.length !== 15) return;
+      if (!snapshot || lineup.missing_elements.length > 0 || lineup.picks.length !== 15) return false;
       const byElement = new Map(snapshot.players.map((player) => [player.element, player]));
       const picks = [...lineup.picks].sort((a, b) => a.position - b.position);
       const selected = picks
@@ -419,6 +419,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       persistSquad(data);
       setSquadElementsState(data.ids);
       setTeamResultState(result);
+      return true;
     },
     [snapshot, persistSquad],
   );

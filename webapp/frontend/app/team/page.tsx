@@ -191,6 +191,19 @@ export default function TeamPage() {
 
   return (
     <section className="page" aria-label="My team">
+      <div className="manager-search-zone manager-search-zone--top">
+        <div className="shell">
+          <ManagerSearch
+            snapshot={snapshot}
+            onImport={(lineup) => {
+              if (!setImportedTeam(lineup)) return false;
+              setPlannerBank(lineup.bank ?? 0);
+              toast("Imported " + (lineup.manager.team_name || "public team") + " as My Team.");
+              return true;
+            }}
+          />
+        </div>
+      </div>
       <div className="hero-team">
         <div className="hero-glow" aria-hidden="true" />
         <div className="hero-rays" aria-hidden="true" />
@@ -240,19 +253,6 @@ export default function TeamPage() {
             <ModelInfo model={snapshot.model} timestamp={snapshot.prediction_timestamp} />
           </div>
         )}
-      </div>
-
-      <div className="manager-search-zone">
-        <div className="shell">
-          <ManagerSearch
-            snapshot={snapshot}
-            onImport={(lineup) => {
-              setPlannerBank(lineup.bank ?? 0);
-              setImportedTeam(lineup);
-              toast(`Imported ${lineup.manager.team_name || "public team"} as My Team.`);
-            }}
-          />
-        </div>
       </div>
 
       <div className="pitch-zone">
