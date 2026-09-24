@@ -33,12 +33,12 @@ Produce a detailed, implementation-ready plan for manager search by name, multi-
 - Reset the temporary 375px browser viewport and closed the hidden localhost audit tab. Stopped only the audited Flask and Next.js development process trees after checking their command lines.
 - Preserved all pre-existing dirty/untracked user files. No product code or data files were changed.
 
-## Remaining work
+## Delivery state
 
-1. Finish final factual/style review of the plan against code and official rules; correct any unsupported claims. Avoid product code changes: user requested a plan.
-2. Review `git diff --check` and the full staged diff. Stage only the plan and this handoff, commit with no co-author, and push. Verify commit message/body and remote state. Do not touch the pre-existing dirty files.
-3. Confirm the commit is on `origin/main`, then give the user the plan file link, the main findings, and the commit hash. The browser and audit servers have already been cleaned up.
+- Planning work is complete. `PLATFORM_V2_IMPLEMENTATION_PLAN.md` was committed as `f18a98c955847ce041c1219c13aa066323aff748` and pushed to `origin/main`; the remote SHA matched. The commit message had no `Co-authored-by` trailer and contained only the plan and this handoff.
+- `git diff --check` passed. Browser and audit servers were cleaned up. Pre-existing dirty/untracked user files remain untouched.
+- Product implementation has **not** started. The next session should implement the ordered slices in the plan, beginning with Slice 1, and should inspect `git status` before editing.
 
 ## Suggested execution prompt for the next session
 
-> Continue the FPL Platform v2 planning task from `PLATFORM_V2_HANDOFF.md`. Read the file and inspect current git status before editing. The detailed plan already exists at `PLATFORM_V2_IMPLEMENTATION_PLAN.md`; perform the final review, stage only the two `PLATFORM_V2_*.md` files, commit without any `Co-authored-by` trailer, and push. Preserve all pre-existing dirty files. The user requested an implementation plan, not application changes.
+> Implement FPL Platform v2 from `PLATFORM_V2_IMPLEMENTATION_PLAN.md`. Read the plan and this handoff, inspect `git status`, and preserve all pre-existing dirty files. Follow the ordered slices and their exact contracts/acceptance matrix. Make reviewable commits and push good progress with no `Co-authored-by` trailer. Before context compaction, update this handoff with completed work, verification, commit SHA and remaining tasks. The planning audit is complete; product implementation has not begun.
