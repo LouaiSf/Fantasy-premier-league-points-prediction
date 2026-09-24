@@ -128,13 +128,34 @@ Historical: Slice 4 remainder was (1) `app/captain/page.tsx::riskFor()` wording 
 
 ### Not done
 
-- Saved scenario A/B (up to three local scenarios comparing final 15, XI, captain, net points, hit, bank and a 3-GW total on one snapshot version) is not started.
+- Saved scenario A/B was started afterwards and is recorded under Slice 5b.
 - Slice 5 items 3-5 (projection change explainer, watchlist alerts, model reliability card) depend on data that does not exist yet and were intentionally not started.
 - Free transfers are not persisted anywhere, so the board cannot show them.
 
 ### Exact next action
 
 Saved scenarios: extend `lib/transfer-planning.ts` with a small versioned list (max 3) keyed by squad fingerprint and snapshot `prediction_timestamp`, add "Duplicate as scenario" and a compare table to `app/transfers/transfer-studio.tsx` reusing `/api/lineup` for each scenario, and label any scenario saved against a different prediction snapshot as stale. Then a final full-suite run and a single acceptance-matrix pass.
+
+## Slice 5b: saved transfer scenarios (done, single-gameweek comparison)
+
+### Implemented
+
+- `lib/transfer-planning.ts`: versioned scenario record (max 3, season-scoped key) with a squad fingerprint and the snapshot `prediction_timestamp`; `scenarioStaleReason()` marks a scenario stale when the squad or prediction snapshot differs.
+- `app/transfers/transfer-studio.tsx`: `Save as scenario` (legal draft only, names A/B/C), a `Scenarios (n/3)` tab with load/remove, and `Compare scenarios`, which evaluates the no-transfer baseline and each fresh scenario through `/api/lineup` and shows gross, hit, net (with delta vs baseline), bank after and captain. Stale scenarios are labelled and excluded rather than compared.
+
+### Verification evidence
+
+- `python -m pytest -q tests`: 305 passed (no backend changes in this increment). `npm exec tsc -- --noEmit` and `npm run build` passed.
+- Playwright at 1440x1000 and 375x812: saved Scenario A (1 move) and Scenario B (2 moves), tab showed 2/3, comparison table listed No transfers 64.2 net, A 62.7 net, B 60.7 gross / hit 4 / 56.7 net; after rewriting Scenario A's stored prediction timestamp and reloading, A showed "Stale: Saved against an older prediction snapshot" and the comparison contained only the baseline and B. No overflow, 0 console errors. Screenshots: `artifacts/transfer-scenarios-desktop.png`, `artifacts/transfer-scenarios-mobile-375.png`.
+
+### Not done
+
+- The plan's "3-GW projected total" is not shown: the only per-squad evaluator (`/api/lineup`) is single-gameweek, and a multi-week figure would need a horizon evaluator that does not exist. The table caption says this explicitly.
+- Scenarios do not carry chip choices; JSON export/import and sharing were out of scope.
+
+### Exact next action
+
+Everything in the implementation plan is either done or explicitly deferred. Remaining deferred items, in order of value: (1) Free Hit no-chip counterfactual (needs `free_transfers` passed to `/api/chips`), (2) Bench Boost exact enumeration and historical calibration, (3) Wildcard rolling baseline, (4) a horizon evaluator for the scenario 3-GW total, (5) Slice 5 items 3-5 (projection change explainer, personal alerts, model reliability card), which need new stored data. Push is pending: nothing from this session has been pushed to `origin/main`.
 
 ## Official FPL rules already checked for later slices
 

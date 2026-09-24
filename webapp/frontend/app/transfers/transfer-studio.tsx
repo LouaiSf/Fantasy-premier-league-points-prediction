@@ -9,7 +9,7 @@ import { clubStyle } from "@/lib/club-colors";
 import { api } from "@/lib/api";
 import { fromTenths, sellingPricesTenthsForSquad, toTenths } from "@/lib/finance";
 import { money, num, signed } from "@/lib/format";
-import { isHeldWeek, isSavedTransferDraft, heldWeekKey, squadFingerprint, transferDraftKey, type HeldWeek, type SavedTransferDraft, type TransferDraftPair } from "@/lib/transfer-planning";
+import { isHeldWeek, isSavedScenario, isSavedTransferDraft, heldWeekKey, MAX_SCENARIOS, scenarioKey, scenarioStaleReason, squadFingerprint, transferDraftKey, type HeldWeek, type SavedScenario, type SavedTransferDraft, type TransferDraftPair } from "@/lib/transfer-planning";
 import { validateSquad } from "@/lib/squad";
 import type { PlayerRecord, SquadResult, TransferResult, TransferRow } from "@/lib/types";
 import { Loading } from "@/components/loading";
@@ -45,6 +45,8 @@ function PlayerRow({ player, selected, teamCode, onClick }: {
     </button>
   );
 }
+
+interface ScenarioResult { gross: number; net: number; hit: number; bank: number; captain: string }
 
 function OptimizerCard({ row, byElement, onView }: {
   row: TransferRow; byElement: Map<number, PlayerRecord>; onView: () => void;
@@ -84,7 +86,10 @@ export default function TransfersPage() {
   const [lockedAnalysis, setLockedAnalysis] = React.useState<TransferResult | null>(null);
   const [analysisError, setAnalysisError] = React.useState<string | null>(null);
   const [analysing, setAnalysing] = React.useState(false);
-  const [resultTab, setResultTab] = React.useState<"draft" | "best">("draft");
+  const [resultTab, setResultTab] = React.useState<"draft" | "best" | "scenarios">("draft");
+  const [scenarios, setScenarios] = React.useState<SavedScenario[]>([]);
+  const [scenarioResults, setScenarioResults] = React.useState<Record<string, ScenarioResult> | null>(null);
+  const [comparing, setComparing] = React.useState(false);
   const [viewedRow, setViewedRow] = React.useState<TransferRow | null>(null);
   const [marketLimit, setMarketLimit] = React.useState(200);
   const [savedPlan, setSavedPlan] = React.useState<SavedTransferDraft | null>(null);
@@ -126,6 +131,9 @@ export default function TransfersPage() {
         window.localStorage.removeItem(heldWeekKey(snapshot.season));
         setHeldWeek(null);
       }
+      const rawScenarios = window.localStorage.getItem(scenarioKey(snapshot.season));
+      const parsedScenarios: unknown = rawScenarios ? JSON.parse(rawScenarios) : [];
+      setScenarios(Array.isArray(parsedScenarios) ? parsedScenarios.filter(isSavedScenario).slice(0, MAX_SCENARIOS) : []);
     } catch {
       setPersistError("Saved transfer data could not be read. You can clear it from this device.");
     }
@@ -213,6 +221,62 @@ export default function TransfersPage() {
       window.localStorage.setItem(transferDraftKey(currentSnapshot.season), JSON.stringify(value));
       setSavedPlan(value); setPersistError(null); setMessage("Draft saved on this device.");
     } catch { setPersistError("This device could not save the draft. Check its local storage space."); }
+  }
+  function persistScenarios(next: SavedScenario[]): boolean {
+    try {
+      window.localStorage.setItem(scenarioKey(currentSnapshot.season), JSON.stringify(next));
+      setScenarios(next); setScenarioResults(null); setPersistError(null);
+      return true;
+    } catch {
+      setPersistError("This device could not save the scenario. Check its local storage space.");
+      return false;
+    }
+  }
+  function saveScenario() {
+    if (!canEvaluate || !draft.length || scenarios.length >= MAX_SCENARIOS) return;
+    const used = new Set(scenarios.map((scenario) => scenario.name));
+    const name = ["A", "B", "C"].map((letter) => "Scenario " + letter).find((label) => !used.has(label)) ?? "Scenario";
+    const value: SavedScenario = {
+      id: String(Date.now()), name, pairs: draft, free_transfers: free, bank_tenths: bankTenths,
+      fingerprint, prediction_timestamp: currentSnapshot.prediction_timestamp, saved_at: new Date().toISOString(),
+    };
+    if (persistScenarios([...scenarios, value])) { setMessage(name + " saved on this device."); setResultTab("scenarios"); }
+  }
+  function loadScenario(scenario: SavedScenario) {
+    setDraft(scenario.pairs); setFree(scenario.free_transfers); setBankOverride(scenario.bank_tenths);
+    setMaxTransfers(Math.max(maxTransfers, scenario.pairs.length));
+    setPendingOut(null); setPendingIn(null); setEditingIndex(null); invalidate();
+    setMessage(scenario.name + " loaded into the draft.");
+  }
+  async function compareScenarios() {
+    const comparable = scenarios.filter((scenario) => !scenarioStaleReason(scenario, fingerprint, currentSnapshot.prediction_timestamp));
+    if (!comparable.length || !currentSnapshot.prediction_available) return;
+    setComparing(true); setAnalysisError(null);
+    try {
+      const results: Record<string, ScenarioResult> = {};
+      const base = await api.lineup({ elements: squadElements });
+      results.baseline = { gross: score(base), net: score(base), hit: 0, bank: fromTenths(scenarioBank(bankTenths, [])), captain: nameOf(base.captain ?? undefined) };
+      for (const scenario of comparable) {
+        const finalIds = squadElements.map((id) => scenario.pairs.find((pair) => pair.out_element === id)?.in_element ?? id);
+        const lineup = await api.lineup({ elements: finalIds });
+        const scenarioHit = Math.max(0, scenario.pairs.length - scenario.free_transfers) * 4;
+        results[scenario.id] = {
+          gross: score(lineup), net: score(lineup) - scenarioHit, hit: scenarioHit,
+          bank: fromTenths(scenarioBank(scenario.bank_tenths, scenario.pairs)), captain: nameOf(lineup.captain ?? undefined),
+        };
+      }
+      setScenarioResults(results);
+    } catch (error) {
+      setAnalysisError((error as Error).message);
+    } finally {
+      setComparing(false);
+    }
+  }
+  function scenarioBank(startTenths: number, pairs: readonly TransferDraftPair[]): number {
+    return startTenths + pairs.reduce((total, pair) => {
+      const incomingPlayer = byElement.get(pair.in_element);
+      return total + (sellPrices[pair.out_element] ?? 0) - (incomingPlayer ? toTenths(incomingPlayer.value_m) : 0);
+    }, 0);
   }
   function toggleHold() {
     try {
@@ -352,6 +416,8 @@ export default function TransfersPage() {
             <div className="draft-buttons">
               <button className="btn secondary sm" type="button" disabled={!draft.length && pendingOut === null} onClick={clearDraft}>Clear draft</button>
               <button className="btn secondary sm" type="button" disabled={pendingOut !== null} onClick={saveDraft}>Save draft</button>
+              <button className="btn secondary sm" type="button" disabled={!canEvaluate || !draft.length || scenarios.length >= MAX_SCENARIOS} onClick={saveScenario}
+                title={scenarios.length >= MAX_SCENARIOS ? "Remove a scenario to save another" : "Keep this draft as a scenario to compare"}>Save as scenario</button>
               <button className="btn secondary sm" type="button" onClick={toggleHold}>{holdMatches ? "Clear this week's hold" : "Hold this week"}</button>
               <button className="btn sm" type="button" disabled={!canEvaluate} onClick={evaluateDraft}>Evaluate this draft</button>
             </div>
@@ -376,7 +442,37 @@ export default function TransfersPage() {
           <div className="result-tabs" role="tablist" aria-label="Transfer comparison">
             <button type="button" role="tab" aria-selected={resultTab === "draft"} className={resultTab === "draft" ? "is-active" : ""} onClick={() => setResultTab("draft")}>My draft</button>
             <button type="button" role="tab" aria-selected={resultTab === "best"} className={resultTab === "best" ? "is-active" : ""} onClick={() => setResultTab("best")}>Best available</button>
+            <button type="button" role="tab" aria-selected={resultTab === "scenarios"} className={resultTab === "scenarios" ? "is-active" : ""} onClick={() => setResultTab("scenarios")}>Scenarios ({scenarios.length}/{MAX_SCENARIOS})</button>
           </div>
+          {resultTab === "scenarios" ? <div className="scenario-panel">
+            {scenarios.length === 0 ? <p>Stage a legal draft and choose Save as scenario. Up to {MAX_SCENARIOS} scenarios are kept on this device and compared on the same prediction snapshot.</p> : <>
+              <ul className="scenario-list">{scenarios.map((scenario) => {
+                const stale = scenarioStaleReason(scenario, fingerprint, currentSnapshot.prediction_timestamp);
+                return <li key={scenario.id} className={"scenario-item" + (stale ? " is-stale" : "")}>
+                  <b>{scenario.name}</b>
+                  <span>{scenario.pairs.length} move{scenario.pairs.length === 1 ? "" : "s"}: {scenario.pairs.map((pair) => nameOf(byElement.get(pair.out_element)) + " → " + nameOf(byElement.get(pair.in_element))).join("; ")}</span>
+                  {stale ? <em>Stale: {stale}. Not included in the comparison.</em> : null}
+                  <span className="scenario-actions">
+                    <button type="button" className="text-button" disabled={Boolean(stale)} onClick={() => loadScenario(scenario)}>Load into draft</button>
+                    <button type="button" className="text-button" onClick={() => persistScenarios(scenarios.filter((other) => other.id !== scenario.id))}>Remove</button>
+                  </span>
+                </li>;
+              })}</ul>
+              <button className="btn" type="button" disabled={comparing || !currentSnapshot.prediction_available} onClick={compareScenarios}>{comparing ? "Comparing…" : "Compare scenarios"}</button>
+              {!currentSnapshot.prediction_available ? <p>Prediction data are unavailable, so points cannot be compared.</p> : null}
+              {analysisError ? <p className="analysis-status is-error" role="alert">{analysisError}</p> : null}
+              {scenarioResults ? <div className="scenario-table-wrap"><table className="scenario-table">
+                <caption>GW{currentSnapshot.gameweek ?? "--"} only, same snapshot. Net = gross minus transfer hit. No multi-week total is shown.</caption>
+                <thead><tr><th scope="col">Plan</th><th scope="col">Gross</th><th scope="col">Hit</th><th scope="col">Net</th><th scope="col">Bank after</th><th scope="col">Captain</th></tr></thead>
+                <tbody>
+                  <tr><th scope="row">No transfers</th><td>{num(scenarioResults.baseline.gross)}</td><td>0</td><td>{num(scenarioResults.baseline.net)}</td><td>{money(scenarioResults.baseline.bank)}</td><td>{scenarioResults.baseline.captain}</td></tr>
+                  {scenarios.filter((scenario) => scenarioResults[scenario.id]).map((scenario) => {
+                    const result = scenarioResults[scenario.id];
+                    return <tr key={scenario.id}><th scope="row">{scenario.name}</th><td>{num(result.gross)}</td><td>{result.hit}</td><td>{num(result.net)} <small>({signed(result.net - scenarioResults.baseline.net)})</small></td><td>{money(result.bank)}</td><td>{result.captain}</td></tr>;
+                  })}
+                </tbody></table></div> : null}
+            </>}
+          </div> : null}
           {resultTab === "draft" ? <div className="draft-evaluation">
             {!evaluation ? <p>Evaluation runs only when you choose the button above. Check the full 15, bank and hit before applying.</p> :
               <><h2>My draft · {evaluation.hasPoints ? "projected lineup" : "legal squad and finance"}</h2>
@@ -393,7 +489,7 @@ export default function TransfersPage() {
                 <p className="local-only-note">This is an unsaved plan until saved. Applying it updates this app only, not your official FPL account.</p>
                 <button className="btn" type="button" onClick={() => setShowReview(true)}>Review and apply to My Team</button>
               </>}
-          </div> : <div>
+          </div> : resultTab === "best" ? <div>
             <div className="optimizer-controls">
               <button className="btn" type="button" disabled={!snapshot.prediction_available || analysing} onClick={() => compareTransfers(false)}>
                 {analysing ? "Comparing…" : "Compare best available"}
@@ -416,7 +512,7 @@ export default function TransfersPage() {
               </div></> : null}
               {viewedRow ? <div className="optimizer-xi"><h3>{viewedRow.transfers} transfer full XI · {viewedRow.formation}</h3><ol className="final-xi">{viewedRow.xi.map((player) => <li key={player.element}>{nameOf(player)} · {player.position}{player.element === viewedRow.captain?.element ? " · captain" : ""}</li>)}</ol></div> : null}
             </div> : <p>Run a comparison to see the 0..{maxTransfers} transfer results, with separate OUT and IN IDs.</p>}
-          </div>}
+          </div> : null}
         </section>
       </div>
 

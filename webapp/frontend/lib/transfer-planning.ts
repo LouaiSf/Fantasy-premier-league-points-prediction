@@ -75,3 +75,47 @@ export function isHeldWeek(value: unknown): value is HeldWeek {
     typeof hold.fingerprint === "string" &&
     typeof hold.created_at === "string";
 }
+
+export const MAX_SCENARIOS = 3;
+
+export interface SavedScenario {
+  readonly id: string;
+  readonly name: string;
+  readonly pairs: TransferDraftPair[];
+  readonly free_transfers: number;
+  readonly bank_tenths: number;
+  readonly fingerprint: string;
+  readonly prediction_timestamp: string | null;
+  readonly saved_at: string;
+}
+
+export function scenarioKey(season: string): string {
+  return `fpl-assistant-transfer-scenarios:${season}`;
+}
+
+export function isSavedScenario(value: unknown): value is SavedScenario {
+  if (typeof value !== "object" || value === null) return false;
+  const scenario = value as Record<string, unknown>;
+  return typeof scenario.id === "string" &&
+    typeof scenario.name === "string" &&
+    Array.isArray(scenario.pairs) &&
+    scenario.pairs.every((pair) => typeof pair === "object" && pair !== null &&
+      Number.isSafeInteger((pair as Record<string, unknown>).out_element) &&
+      Number.isSafeInteger((pair as Record<string, unknown>).in_element)) &&
+    Number.isInteger(scenario.free_transfers) &&
+    Number.isSafeInteger(scenario.bank_tenths) &&
+    typeof scenario.fingerprint === "string" &&
+    (scenario.prediction_timestamp === null || typeof scenario.prediction_timestamp === "string") &&
+    typeof scenario.saved_at === "string";
+}
+
+/** A scenario is comparable only against the same squad and the same prediction snapshot. */
+export function scenarioStaleReason(
+  scenario: SavedScenario,
+  fingerprint: string,
+  predictionTimestamp: string | null,
+): string | null {
+  if (scenario.fingerprint !== fingerprint) return "Saved for a different squad";
+  if (scenario.prediction_timestamp !== predictionTimestamp) return "Saved against an older prediction snapshot";
+  return null;
+}

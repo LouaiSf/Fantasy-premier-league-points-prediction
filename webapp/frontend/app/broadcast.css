@@ -2219,3 +2219,19 @@
     .deadline-row{grid-template-columns:minmax(0,1fr) auto;gap:4px 10px}
     .deadline-state{grid-column:1/-1}
   }
+
+
+  /* FPL Platform v2: saved transfer scenarios. */
+  .scenario-panel{display:grid;gap:12px}
+  .scenario-list{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+  .scenario-item{display:grid;gap:4px;padding:10px 12px;border-left:3px solid var(--lime);background:rgba(255,255,255,.05);overflow-wrap:anywhere}
+  .scenario-item.is-stale{border-left-color:var(--gold);opacity:.8}
+  .scenario-item span{color:var(--muted-light);font:500 12px/1.4 var(--editorial)}
+  .scenario-item em{color:var(--gold);font:700 12px var(--editorial);font-style:normal}
+  .scenario-actions{display:flex;gap:10px}
+  .scenario-table-wrap{overflow-x:auto}
+  .scenario-table{width:100%;min-width:520px;border-collapse:collapse;font:600 12px var(--data)}
+  .scenario-table caption{padding:8px 0;text-align:left;color:var(--muted-light)}
+  .scenario-table th,.scenario-table td{padding:8px;border-bottom:1px solid rgba(255,255,255,.12);text-align:left}
+  .scenario-table small{color:var(--cyan)}
+  @media(max-width:560px){.result-tabs{flex-wrap:wrap}}
