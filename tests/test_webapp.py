@@ -308,6 +308,26 @@ def test_transfers_accept_element_ids_and_return_current_lineup() -> None:
     }
 
 
+def test_transfers_map_invalid_staged_ids_to_invalid_transfer_draft() -> None:
+    client = app.test_client()
+    squad = client.post("/api/squad", json={"budget": 100.0}).get_json()
+    elements = [player["element"] for player in squad["xi"] + squad["bench"]]
+    duplicate = elements[0]
+
+    response = client.post(
+        "/api/transfers",
+        json={
+            "elements": elements, "free": 2, "bank": 10.0, "max": 2,
+            "locked_out_elements": [duplicate, duplicate],
+            "locked_in_elements": [999991, 999992],
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["code"] == "invalid_transfer_draft"
+
+
+
 def test_transfers_accept_valid_selling_prices_tenths() -> None:
     client = app.test_client()
     squad = client.post("/api/squad", json={"budget": 100.0}).get_json()
@@ -329,6 +349,34 @@ def test_transfers_accept_valid_selling_prices_tenths() -> None:
     row = response.get_json()["rows"][0]
     assert row["bank_after"] == 0.0
     assert "selling_value" in row and "market_value" in row
+
+
+def test_transfers_reject_fractional_tenth_prices() -> None:
+    client = app.test_client()
+    squad = client.post("/api/squad", json={"budget": 100.0}).get_json()
+    elements = [player["element"] for player in squad["xi"] + squad["bench"]]
+    fractional = {str(element): 50.5 for element in elements}
+
+    response = client.post("/api/transfers", json={
+        "elements": elements, "free": 0, "bank": 0.0, "max": 0,
+        "selling_prices_tenths": fractional,
+    })
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "selling_prices_tenths values must be whole-number tenths"
+
+
+def test_transfers_reject_bank_below_tenth_precision() -> None:
+    client = app.test_client()
+    squad = client.post("/api/squad", json={"budget": 100.0}).get_json()
+    elements = [player["element"] for player in squad["xi"] + squad["bench"]]
+
+    response = client.post("/api/transfers", json={
+        "elements": elements, "free": 0, "bank": 0.05, "max": 0,
+    })
+
+    assert response.status_code == 400
+    assert response.get_json()["field"] == "bank"
 
 
 def test_transfers_reject_incomplete_selling_prices_tenths() -> None:

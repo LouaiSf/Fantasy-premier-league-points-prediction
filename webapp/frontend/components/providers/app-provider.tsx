@@ -42,7 +42,7 @@ interface AppState {
   // finance block, crediting selling proceeds and charging purchase prices
   // (an applied transfer-plan row). Defaults to "transfer", the safest
   // assumption when composition may have changed.
-  setTeamResult: (result: SquadResult | null, mode?: "reset" | "lineup" | "transfer") => void;
+  setTeamResult: (result: SquadResult | null, mode?: "reset" | "lineup" | "transfer", bankTenthsOverride?: number) => void;
   setImportedTeam: (lineup: ManagerLineup) => boolean;
   storedSquad: StoredSquad | null;
   // Bank + market/selling value for the current squad, computed once here so
@@ -187,8 +187,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const playerById = new Map(data.players.map((p) => [p.element, p]));
       const playerByName = new Map(data.players.map((p) => [p.name, p]));
 
-      const { squad: stored, financeWasInvalid } = parseStoredSquad();
-      setStoredSquad(stored);
+      const { squad: parsedStored, financeWasInvalid } = parseStoredSquad();
+      let stored = parsedStored;
+      if (stored?.finance?.priceBasis === "imported") {
+        const missingPriceIds = stored.ids.filter((id) => {
+          const purchaseTenths = stored?.finance?.ownedPrices[id]?.purchaseTenths;
+          return purchaseTenths === undefined || purchaseTenths <= 0;
+        });
+        if (missingPriceIds.length > 0 && stored.finance) {
+          const ownedPrices = { ...stored.finance.ownedPrices };
+          for (const id of missingPriceIds) {
+            const player = playerById.get(id);
+            if (player) {
+              const currentTenths = toTenths(player.value_m);
+              ownedPrices[id] = { purchaseTenths: currentTenths, sellingTenths: currentTenths };
+            }
+          }
+          stored = {
+            ...stored,
+            finance: { ...stored.finance, ownedPrices, priceBasis: "estimated" },
+          };
+          persistSquad(stored);
+          toast("Saved FPL purchase prices were missing; current market values are being used as estimates.");
+        } else {
+          setStoredSquad(stored);
+        }
+      } else {
+        setStoredSquad(stored);
+      }
       const legacyNames = parseLegacyNames();
 
       if (financeWasInvalid) {
@@ -316,7 +342,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const setTeamResult = React.useCallback(
-    (result: SquadResult | null, mode: "reset" | "lineup" | "transfer" = "transfer") => {
+    (result: SquadResult | null, mode: "reset" | "lineup" | "transfer" = "transfer", bankTenthsOverride?: number) => {
       const normalized = result ? normalizeSquadResult(result, snapshot) : null;
       setTeamResultState(normalized);
       if (!normalized || !snapshot) return;
@@ -348,7 +374,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       const byId = new Map(snapshot.players.map((p) => [p.element, p]));
       const prevFinance = mode === "reset" ? null : (storedSquad?.finance ?? null);
-      const { finance } = applyOwnershipDiff(prevFinance, squadElements, ids, byId, { priceBasis: "manual" });
+      const { finance: computedFinance } = applyOwnershipDiff(
+        prevFinance,
+        squadElements,
+        ids,
+        byId,
+        { priceBasis: "manual" },
+      );
+      const finance = mode === "transfer" && bankTenthsOverride !== undefined
+        ? { ...computedFinance, bankTenths: bankTenthsOverride }
+        : computedFinance;
       persistSquad({ ...base, bank: fromTenths(finance.bankTenths), finance });
     },
     [snapshot, squadElements, storedSquad, persistSquad],
@@ -382,23 +417,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         formation: `${counts.DEF ?? 0}-${counts.MID ?? 0}-${counts.FWD ?? 0}`,
       };
 
-      // Real ownership prices, straight from the FPL public API -- the only
-      // finance basis that isn't an estimate.
+      // Some public picks responses omit account prices. Preserve actual prices
+      // when all are present; otherwise price affected players at current market
+      // value and label the squad estimate instead of recording £0.0m ownership.
+      let hasCompleteAccountPrices = lineup.bank !== null;
       const ownedPrices: Record<number, OwnedPrice> = {};
       for (const pick of lineup.picks) {
+        const player = byElement.get(pick.element);
+        const validPrices = pick.purchase_price !== null && pick.purchase_price > 0 &&
+          pick.selling_price !== null && pick.selling_price > 0 && player !== undefined;
+        hasCompleteAccountPrices &&= validPrices;
+        const currentTenths = player ? toTenths(player.value_m) : 0;
         ownedPrices[pick.element] = {
-          purchaseTenths: toTenths(pick.purchase_price),
-          sellingTenths: toTenths(pick.selling_price),
+          purchaseTenths: pick.purchase_price !== null && pick.purchase_price > 0 ? toTenths(pick.purchase_price) : currentTenths,
+          sellingTenths: pick.selling_price !== null && pick.selling_price > 0 ? toTenths(pick.selling_price) : currentTenths,
         };
       }
       const finance: SquadFinance = {
         version: 2,
         bankTenths: toTenths(lineup.bank ?? 0),
         ownedPrices,
-        priceBasis: "imported",
+        priceBasis: hasCompleteAccountPrices ? "imported" : "estimated",
         marketPriceAsOf: lineup.fetched_at,
         lineupGameweek: lineup.lineup_gameweek,
       };
+      if (!hasCompleteAccountPrices) {
+        toast("FPL did not provide purchase prices for every player; transfer prices are estimated from current market values.");
+      }
 
       const data: StoredSquad = {
         season: snapshot.season,

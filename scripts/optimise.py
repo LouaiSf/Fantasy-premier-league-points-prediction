@@ -333,13 +333,6 @@ def solve_squad(players: pd.DataFrame, budget: float, *, squad_size: int = SQUAD
     for i in idx:
         problem += in_xi[i] <= in_squad[i]
         problem += is_cap[i] <= in_xi[i]
-        # Never the goalkeeper. A keeper's ceiling is a clean sheet, a few
-        # saves and three bonus, so doubling one is the wrong bet against any
-        # starting outfielder even in a week where the projection likes him.
-        # The armband was the one place this could go wrong unchecked: the
-        # squad itself still needs two keepers and they are picked on merit.
-        if position[i] == 'GK':
-            problem += is_cap[i] == 0
 
     problem += pulp.lpSum(in_squad.values()) == squad_size
     problem += pulp.lpSum(in_xi.values()) == XI_SIZE
@@ -380,7 +373,7 @@ def solve_squad(players: pd.DataFrame, budget: float, *, squad_size: int = SQUAD
     captain_idx = skipper[0] if skipper else None
     vice_candidates = [
         i for i in starters
-        if i != captain_idx and position[i] != 'GK'
+        if i != captain_idx
     ]
     # The vice-captain only scores if the captain does not play. With no
     # no-show probability in this single-GW solver, the sound deterministic
@@ -810,7 +803,9 @@ def annotate_marginals(rows: list) -> None:
 
 def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
                       free: int, bank: float, max_transfers: int,
-                      selling_prices: dict | None = None) -> dict:
+                      selling_prices: dict | None = None,
+                      locked_out_elements: list[int] | None = None,
+                      locked_in_elements: list[int] | None = None) -> dict:
     """Jointly optimise every transfer count, net of the points hit.
 
     Each count is one integer program over the complete squad. This is
@@ -839,6 +834,30 @@ def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
     current_ids = set(current[identity])
     current_market_value = current.set_index(identity)['value_m']
 
+    locked_out = list(locked_out_elements or [])
+    locked_in = list(locked_in_elements or [])
+    if len(locked_out) != len(locked_in):
+        raise ValueError('staged outgoing and incoming elements must be paired')
+    if len(locked_out) > max_transfers:
+        raise ValueError(f'needs at least {len(locked_out)} staged moves')
+    if len(set(locked_out)) != len(locked_out) or len(set(locked_in)) != len(locked_in):
+        raise ValueError('staged transfer elements must be unique')
+    if locked_out and identity != 'element':
+        raise ValueError('staged transfers require stable element IDs')
+    if not set(locked_out).issubset(current_ids):
+        raise ValueError('every staged outgoing player must belong to the current squad')
+    if set(locked_in) & current_ids:
+        raise ValueError('staged incoming players cannot already be owned')
+    market_by_element = players.set_index(identity, drop=False)
+    current_by_element = current.set_index(identity, drop=False)
+    missing_incoming = [element for element in locked_in if element not in market_by_element.index]
+    if missing_incoming:
+        raise ValueError('every staged incoming player must be available in the market')
+    for outgoing_element, incoming_element in zip(locked_out, locked_in):
+        if (current_by_element.loc[outgoing_element, 'position'] !=
+                market_by_element.loc[incoming_element, 'position']):
+            raise ValueError('staged outgoing and incoming players must have the same position')
+
     def sell_value(pid) -> float:
         if selling_prices is not None and pid in selling_prices:
             return float(selling_prices[pid])
@@ -849,6 +868,24 @@ def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
     # squad that mostly isn't being sold.
     total_selling_value = sum(sell_value(pid) for pid in current_ids)
     budget = total_selling_value + bank
+
+    bank_tenths = round(float(bank) * 10)
+    staged_sales_tenths = sum(round(sell_value(element) * 10) for element in locked_out)
+    staged_buys_tenths = sum(
+        round(float(market_by_element.loc[element, 'value_m']) * 10)
+        for element in locked_in
+    )
+    if bank_tenths + staged_sales_tenths - staged_buys_tenths < 0:
+        raise ValueError('staged transfers exceed the available bank and selling proceeds')
+
+    final_ids = (current_ids - set(locked_out)) | set(locked_in)
+    final_rows = [
+        current_by_element.loc[element] if element in current_ids else market_by_element.loc[element]
+        for element in final_ids
+    ]
+    club_counts = pd.Series([row['team'] for row in final_rows]).value_counts()
+    if not club_counts.empty and int(club_counts.max()) > MAX_PER_CLUB:
+        raise ValueError('staged squad exceeds three players from one club')
 
     keep_idx = list(players.index[players[identity].isin(current_ids)])
     available_current_ids = set(players.loc[keep_idx, identity])
@@ -861,6 +898,12 @@ def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
     # substitutes for market price -- squad/xi/bench records below still
     # carry each player's real value_m.
     cost_overrides = {i: sell_value(players.loc[i, identity]) for i in keep_idx}
+    locked_out_idx = [
+        i for i in players.index[players[identity].isin(locked_out)]
+    ]
+    locked_in_idx = [
+        i for i in players.index[players[identity].isin(locked_in)]
+    ]
 
     # Score standing pat independently. Count zero may be infeasible when an
     # owned player is unavailable, but gains still need the actual current
@@ -880,6 +923,12 @@ def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
     rows = []
     failures = []
     for count in range(0, max_transfers + 1):
+        if count < len(locked_out):
+            failures.append({
+                'transfers': count,
+                'status': f'needs at least {len(locked_out)} staged moves',
+            })
+            continue
         if count < forced_out:
             failures.append({
                 'transfers': count,
@@ -889,6 +938,8 @@ def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
         result, status = solve_squad(
             players, budget,
             must_transfer_out=(keep_idx, SQUAD_SIZE - count),
+            locked=locked_in_idx,
+            banned=locked_out_idx,
             cost_overrides=cost_overrides)
         if result is None:
             failures.append({'transfers': count, 'status': status})
@@ -922,6 +973,8 @@ def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
             'gain': round(float(gross - hit - baseline), 2),
             'out': list(out['name']),
             'in': list(into['name']),
+            'out_elements': list(map(int, out['element'])) if 'element' in out else [],
+            'in_elements': list(map(int, into['element'])) if 'element' in into else [],
             'squad': squad_records(result['squad']),
             **lineup_payload(result, budget),
             'market_value': round(market_value_total, 1),
@@ -953,6 +1006,10 @@ def compute_transfers(current: pd.DataFrame, players: pd.DataFrame,
         'marginal_recommendation': bool(
             recommended is not None and recommended['transfers']
             and recommended['gain'] < DECISION_MARGIN),
+        'draft_constraints': {
+            'locked_out_elements': locked_out,
+            'locked_in_elements': locked_in,
+        },
         'current_lineup': lineup_payload(
             baseline_result, float(current['value_m'].sum())),
     }

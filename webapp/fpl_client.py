@@ -59,8 +59,8 @@ class ManagerPick:
     multiplier: int
     is_captain: bool
     is_vice_captain: bool
-    purchase_price: float
-    selling_price: float
+    purchase_price: float | None
+    selling_price: float | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -247,8 +247,8 @@ class FplClient:
                 multiplier=_optional_int(pick, "multiplier") or 0,
                 is_captain=_bool(pick.get("is_captain")),
                 is_vice_captain=_bool(pick.get("is_vice_captain")),
-                purchase_price=(_optional_float(pick, "purchase_price", 10.0) or 0.0),
-                selling_price=(_optional_float(pick, "selling_price", 10.0) or 0.0),
+                purchase_price=_optional_float(pick, "purchase_price", 10.0),
+                selling_price=_optional_float(pick, "selling_price", 10.0),
             ))
         picks.sort(key=lambda pick: pick.position)
         return data, picks

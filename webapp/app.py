@@ -951,6 +951,8 @@ def api_transfers():
                             range_message='free transfers must be between 0 and 5')
     bank = contracts.number(body, 'bank', 0.0, lo=0, hi=100,
                             range_message='bank must be between 0.0m and 100.0m')
+    if not math.isclose(bank * 10, round(bank * 10), rel_tol=0.0, abs_tol=1e-8):
+        return fail('bank must be in £0.1m increments', code='invalid_field', field='bank')
     max_transfers = contracts.number(body, 'max', 3, lo=0, hi=5, integer=True,
                                      range_message='max transfers must be between 0 and 5')
 
@@ -960,11 +962,40 @@ def api_transfers():
     selling_prices = contracts.selling_prices(body, set(raw_elements))
 
     try:
+        locked_out_elements = contracts.int_list(
+            body, 'locked_out_elements',
+            message='locked_out_elements must be a list of positive element IDs')
+        locked_in_elements = contracts.int_list(
+            body, 'locked_in_elements',
+            message='locked_in_elements must be a list of positive element IDs')
+    except RequestError as exc:
+        return fail(exc.message, code='invalid_transfer_draft')
+    has_locked_out = locked_out_elements is not None
+    has_locked_in = locked_in_elements is not None
+    if has_locked_out != has_locked_in:
+        return fail('both locked element lists must be supplied together',
+                    code='invalid_transfer_draft')
+    locked_out_elements = locked_out_elements or []
+    locked_in_elements = locked_in_elements or []
+    if len(locked_out_elements) > 5 or len(locked_in_elements) > 5:
+        return fail('a staged transfer draft can contain at most five moves',
+                    code='invalid_transfer_draft')
+    if len(locked_out_elements) != len(locked_in_elements):
+        return fail('staged outgoing and incoming elements must be paired',
+                    code='invalid_transfer_draft')
+    if len(locked_out_elements) > max_transfers:
+        return fail(f'needs at least {len(locked_out_elements)} staged moves',
+                    code='invalid_transfer_draft')
+
+    try:
         data = opt.compute_transfers(
             current, s['players'], free, bank, max_transfers,
-            selling_prices=selling_prices)
+            selling_prices=selling_prices,
+            locked_out_elements=locked_out_elements,
+            locked_in_elements=locked_in_elements)
     except ValueError as exc:
-        return fail(str(exc), code='invalid_squad')
+        code = 'invalid_transfer_draft' if locked_out_elements else 'invalid_squad'
+        return fail(str(exc), code=code)
     data['ok'] = True
     return jsonify(data)
 

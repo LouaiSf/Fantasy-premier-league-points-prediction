@@ -231,6 +231,8 @@ export const api = {
     bank?: number;
     max?: number;
     selling_prices_tenths?: Record<number, number>;
+    locked_out_elements?: number[];
+    locked_in_elements?: number[];
   }) => postJson<TransferResult>("/api/transfers", body),
   watchlist: (maxOwnership = 10, top = 12) =>
     requestJson<WatchlistResult>(

@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 import optimise as optimise_module
@@ -513,3 +514,97 @@ def test_a_seed_moves_the_eleven_not_only_the_bench() -> None:
     }
 
     assert len(elevens) > 1
+
+
+def test_locked_transfer_pairs_stay_in_optimizer_rows_with_an_extra_move() -> None:
+    current = current_squad()
+    market = pd.concat([
+        current,
+        pd.DataFrame([
+            player(100, 'Cheap enabler', 'P', 'MID', 4.0, 7.0),
+            player(101, 'Elite upgrade', 'Q', 'MID', 11.0, 14.0),
+            player(102, 'Extra upgrade', 'R', 'FWD', 6.0, 9.0),
+        ]),
+    ], ignore_index=True)
+
+    result = compute_transfers(
+        current, market, free=3, bank=6.0, max_transfers=3,
+        locked_out_elements=[20, 21], locked_in_elements=[100, 101],
+    )
+
+    assert [failure['status'] for failure in result['failures'][:2]] == [
+        'needs at least 2 staged moves', 'needs at least 2 staged moves',
+    ]
+    two_moves = next(row for row in result['rows'] if row['transfers'] == 2)
+    three_moves = next(row for row in result['rows'] if row['transfers'] == 3)
+    assert {20, 21}.issubset(set(two_moves['out_elements']))
+    assert {100, 101}.issubset(set(two_moves['in_elements']))
+    assert {20, 21}.issubset(set(three_moves['out_elements']))
+    assert {100, 101}.issubset(set(three_moves['in_elements']))
+    assert len(three_moves['out_elements']) == len(three_moves['in_elements']) == 3
+    assert result['draft_constraints'] == {
+        'locked_out_elements': [20, 21],
+        'locked_in_elements': [100, 101],
+    }
+
+
+def test_locked_transfer_validation_rejects_bad_pairs_duplicates_and_overbudget() -> None:
+    current = current_squad()
+    market = pd.concat([
+        current,
+        pd.DataFrame([
+            player(100, 'Midfield target', 'P', 'MID', 11.0, 14.0),
+            player(101, 'Forward target', 'Q', 'FWD', 6.0, 9.0),
+        ]),
+    ], ignore_index=True)
+
+    with pytest.raises(ValueError, match='same position'):
+        compute_transfers(
+            current, market, free=1, bank=20.0, max_transfers=1,
+            locked_out_elements=[20], locked_in_elements=[101],
+        )
+    with pytest.raises(ValueError, match='unique'):
+        compute_transfers(
+            current, market, free=2, bank=20.0, max_transfers=2,
+            locked_out_elements=[20, 20], locked_in_elements=[100, 100],
+        )
+    with pytest.raises(ValueError, match='exceed'):
+        compute_transfers(
+            current, market, free=1, bank=0.0, max_transfers=1,
+            locked_out_elements=[21], locked_in_elements=[100],
+        )
+
+
+def test_staged_transfer_can_sell_an_unavailable_owned_player_at_real_price() -> None:
+    current = current_squad()
+    market = current[current['element'] != 1].reset_index(drop=True)
+    market = pd.concat([
+        market,
+        pd.DataFrame([player(102, 'Replacement keeper', 'R', 'GK', 4.0, 5.0)]),
+    ], ignore_index=True)
+    selling_prices = {int(row.element): float(row.value_m) for row in current.itertuples()}
+    selling_prices[1] = 3.8
+
+    result = compute_transfers(
+        current, market, free=1, bank=0.2, max_transfers=1,
+        selling_prices=selling_prices,
+        locked_out_elements=[1], locked_in_elements=[102],
+    )
+
+    row = result['rows'][0]
+    assert row['out_elements'] == [1]
+    assert row['in_elements'] == [102]
+    assert row['bank_after'] == 0.0
+    assert result['draft_constraints']['locked_out_elements'] == [1]
+
+
+def test_goalkeepers_are_eligible_for_captain_and_vice() -> None:
+    squad = current_squad()
+    squad.loc[squad['element'] == 1, 'predicted_points'] = 20.0
+    captain_result, _ = solve_squad(squad, float(squad['value_m'].sum()))
+    assert captain_result['captain']['position'] == 'GK'
+
+    squad.loc[squad['element'] == 1, 'predicted_points'] = 7.0
+    vice_result, _ = solve_squad(squad, float(squad['value_m'].sum()))
+    assert vice_result['captain']['position'] != 'GK'
+    assert vice_result['vice_captain']['position'] == 'GK'

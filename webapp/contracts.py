@@ -175,6 +175,9 @@ def selling_prices(source: dict, owned_elements: set[int] | None,
            for value in parsed.values()):
         raise RequestError(f'{field} values must be finite nonnegative numbers',
                            'invalid_field', field)
+    if any(not float(value).is_integer() for value in parsed.values()):
+        raise RequestError(f'{field} values must be whole-number tenths',
+                           'invalid_field', field)
     if owned_elements is None:
         raise RequestError(f'{field} requires a 15-player squad in this request',
                            'invalid_field', field)

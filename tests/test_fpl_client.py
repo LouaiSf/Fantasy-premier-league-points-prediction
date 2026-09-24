@@ -106,6 +106,23 @@ def test_lineup_normalizes_prices_and_keeps_fpl_position_order(
     assert lineup.picks[1].selling_price == 5.6
 
 
+def test_lineup_keeps_missing_account_prices_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_open(request, timeout):
+        path = request.full_url.removeprefix("https://fantasy.premierleague.com/api")
+        if path == "/entry/123/":
+            return FakeResponse({"id": 123, "current_event": 7, "bank": 0})
+        return FakeResponse({"event": 7, "picks": [{
+            "element": 8, "position": 1, "multiplier": 1,
+            "is_captain": False, "is_vice_captain": False,
+        }]})
+
+    monkeypatch.setattr("webapp.fpl_client.request.urlopen", fake_open)
+    lineup = FplClient().get_lineup(123, requested_gameweek=7)
+
+    assert lineup.picks[0].purchase_price is None
+    assert lineup.picks[0].selling_price is None
+
+
 def test_lineup_falls_back_to_previous_public_event(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_open(request, timeout):
         path = request.full_url.removeprefix("https://fantasy.premierleague.com/api")

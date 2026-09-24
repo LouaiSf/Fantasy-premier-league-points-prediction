@@ -120,6 +120,8 @@ export interface TransferRow extends SquadResult {
   marginal: number | null;
   out: string[];
   in: string[];
+  out_elements: number[];
+  in_elements: number[];
   squad: PlayerRecord[];
   market_value: number;
   selling_value: number;
@@ -147,6 +149,10 @@ export interface TransferResult {
   recommended: TransferRow | null;
   recommendation_edge: number | null;
   marginal_recommendation: boolean;
+  draft_constraints: {
+    locked_out_elements: number[];
+    locked_in_elements: number[];
+  };
   current_lineup: SquadResult;
 }
 
@@ -259,8 +265,8 @@ export interface ManagerPick {
   multiplier: number;
   is_captain: boolean;
   is_vice_captain: boolean;
-  purchase_price: number;
-  selling_price: number;
+  purchase_price: number | null;
+  selling_price: number | null;
 }
 
 export interface ManagerLineup {
