@@ -155,7 +155,7 @@ export function PlayerDrawer() {
                     </span>
                     <h2 id="drawerName">
                       {player.web_name || player.name}
-                      {player.has_prior_history === false && <span className="badge new">New</span>}
+                      {player.has_prior_history === false && <span className="badge new" title="No prior model history: projection is less reliable">Limited history</span>}
                     </h2>
                     <div className="drawer-meta">
                       <span>{player.position}</span>
@@ -168,8 +168,8 @@ export function PlayerDrawer() {
                   </div>
                   {player.has_prior_history === false && (
                     <p className="drawer-new-note">
-                      New to the Premier League — predicted points are less reliable and lean on
-                      baseline position priors rather than this player&apos;s own history.
+                      No prior model history — predicted points are less reliable and lean on
+                      baseline position priors rather than this player&apos;s own record.
                     </p>
                   )}
                   <DialogPrimitive.Close
@@ -223,7 +223,7 @@ export function PlayerDrawer() {
                   </div>
                   {player.has_prior_history === false && (
                     <p className="proj-caveat">
-                      No prior Premier League record, so this figure comes from position
+                      No prior model history, so this figure comes from position
                       baselines rather than from what this player has actually done.
                     </p>
                   )}

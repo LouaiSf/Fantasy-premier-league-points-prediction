@@ -159,7 +159,7 @@ export default function WatchlistPage() {
     { key: "value", label: "Top Value", count: valList?.length ?? 0 },
     { key: "differentials", label: `Differentials (≤${maxOwnership}%)`, count: diffList?.length ?? 0 },
     { key: "overpriced", label: "Price Traps", count: overList?.length ?? 0 },
-    { key: "no_history", label: "Promoted / New", count: noHistList?.length ?? 0 },
+    { key: "no_history", label: "Limited model history", count: noHistList?.length ?? 0 },
   ];
 
   return (
@@ -314,19 +314,19 @@ export default function WatchlistPage() {
           {(activeSection === "all" || activeSection === "no_history") && (
             <div className="watch-section" data-section="new">
               <div className="sub-head">
-                <h3>Promoted &amp; New Signings</h3>
+                <h3>Limited model history</h3>
                 <span className="rule" />
                 <small>Baseline Projection</small>
               </div>
               <p className="watch-section-desc">
-                Talent without previous Premier League game logs. Forecasted using baseline position priors.
+                Players with no prior model history. Their projections lean on position baselines, so treat them as less reliable.
               </p>
               <div className="watch-grid">
                 {noHistList.map((player) =>
-                  renderPlayerCard(player, "new", "New to PL"),
+                  renderPlayerCard(player, "new", "No model history"),
                 )}
                 {noHistList.length === 0 && (
-                  <p className="empty-copy">No new/promoted players with predictions.</p>
+                  <p className="empty-copy">No players with limited model history have predictions.</p>
                 )}
               </div>
             </div>

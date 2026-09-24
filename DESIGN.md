@@ -246,4 +246,4 @@ panels use hard gradient light and clipped graphic shapes rather than grey eleva
   Owner action: drop licensed WOFF2 files into `webapp/static/fonts/` and the named families take over.
 - Crest and player photography come from the Premier League CDN for prototype purposes. Production
   publication requires the owner to confirm rights and host local optimised derivatives.
-- All figures are seeded prototype data. Nothing is wired to the model, the FPL API or the Flask app.
+- The prototype HTML uses seeded data. The production app reads live data: model projections and market prices from the Flask snapshot, public manager and league data from the FPL API, and the manager's squad, chip inventory, drafts and holds from this device's local storage. Fixture-signal figures are estimates, not results; nothing is synced with an FPL account.

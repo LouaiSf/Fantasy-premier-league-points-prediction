@@ -93,7 +93,27 @@ Slice 3 is now implemented (see below). Historical note, the order used was: (1)
 
 ### Exact next action
 
-Slice 4 remainder: (1) `app/captain/page.tsx::riskFor()` wording (no "Nailed on" from status alone); (2) squad-only alert badge in `components/chrome/main-nav.tsx`; (3) "Limited model history" wording in `app/watchlist/page.tsx` and `components/player-drawer.tsx`; (4) phone hierarchy on My Team; (5) refresh the stale `DESIGN.md` data paragraph. GK captain removal is already done. Then one exploratory pass Team -> Captain -> Transfers -> Chips -> Watchlist at desktop and 375px, then Slice 5 (deadline board, saved scenarios).
+Historical: Slice 4 remainder was (1) `app/captain/page.tsx::riskFor()` wording (no "Nailed on" from status alone); (2) squad-only alert badge in `components/chrome/main-nav.tsx`; (3) "Limited model history" wording in `app/watchlist/page.tsx` and `components/player-drawer.tsx`; (4) phone hierarchy on My Team; (5) refresh the stale `DESIGN.md` data paragraph. GK captain removal is already done. That work and the exploratory pass are done (see Slice 4). Next: Slice 5 -- the deadline decision board (`/deadline` or a My Team card merging squad, captain, transfer draft, chip plan, bank/free transfers, owned-player alerts and snapshot time, each row `ready / needs review / missing input` from explicit facts) and up to three saved local scenarios comparing final 15, XI, captain, net points, hit, bank and a 3-GW total on the same snapshot. Slice 3 leftovers that need new modelling (Bench Boost enumeration, Free Hit and Wildcard counterfactuals) remain evidence-only.
+
+## Slice 4: adjacent wording, badge and copy fixes
+
+### Implemented
+
+- Captain risk label: status-a players read "No official doubt" instead of "Nailed on" (status does not prove a start). The "New" badge is now "Limited history" with a tooltip.
+- Nav badge on News Wire counts only alerts for the active 15 (none without a complete squad), with a screen-reader label "N squad alerts" and a tooltip.
+- Watchlist/player drawer: "Promoted / New" and "New to the Premier League" replaced by "Limited model history" / "No prior model history" with a lower-reliability explanation; no player is called promoted from `has_prior_history` alone.
+- `DESIGN.md` now describes the production data flow (live snapshot, FPL public API, local storage; fixture signals are estimates).
+- GK captain/vice exclusion was removed earlier (Slice 2 backend commit) with a regression test.
+- Phone hierarchy: My Team lookup sits above the hero (Slice 1); Chip Advisor shows the data bar and decision before a collapsed "Manage my chips" (Slice 3).
+
+### Verification evidence
+
+- `npm exec tsc -- --noEmit` and `npm run build` passed.
+- Playwright exploratory pass over /team, /captain, /transfers, /chips, /watchlist, /news, /fixtures, /comparison at 1440x1000 and 375x812, with and without a seeded squad: 0 horizontal overflow, 0 console errors, none of "Nailed on", "Promoted", "New to PL" in any page body. Captain labels on the seeded squad: only "No official doubt". A squad containing one flagged player produced a nav badge of 1 (the market has 21 flagged players, which the old badge would have counted).
+
+### Not done
+
+- No additional visual redesign was made beyond the reproducible issues above; the exploratory pass found no new clipping or overflow.
 
 ## Official FPL rules already checked for later slices
 

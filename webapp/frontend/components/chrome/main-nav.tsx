@@ -20,7 +20,7 @@ const TABS = [
 
 export function MainNav() {
   const pathname = usePathname();
-  const { snapshot, reload, toast } = useApp();
+  const { snapshot, reload, toast, squadPlayers } = useApp();
   const [refreshing, setRefreshing] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const tabsRef = React.useRef<HTMLDivElement>(null);
@@ -37,12 +37,16 @@ export function MainNav() {
       setRefreshing(false);
     }
   };
-  const newsCount = snapshot?.players.filter(
-    (player) =>
-      Boolean(player.news) ||
-      player.status !== "a" ||
-      (player.chance_of_playing_next_round ?? 100) < 100,
-  ).length ?? 0;
+  // Only alerts about the active 15. With no complete squad there is nothing
+  // to attribute an alert to, so no badge is shown.
+  const squadAlertCount = squadPlayers.length === 15
+    ? squadPlayers.filter(
+      (player) =>
+        Boolean(player.news) ||
+        player.status !== "a" ||
+        (player.chance_of_playing_next_round ?? 100) < 100,
+    ).length
+    : 0;
 
   const positionInk = React.useCallback(() => {
     const container = tabsRef.current;
@@ -114,8 +118,14 @@ export function MainNav() {
                   className="nav-tab"
                 >
                   {tab.label}
-                  {tab.href === "/news" && newsCount > 0 && (
-                    <span className="tab-count">{newsCount}</span>
+                  {tab.href === "/news" && squadAlertCount > 0 && (
+                    <span
+                      className="tab-count"
+                      title={`${squadAlertCount} of your 15 players ${squadAlertCount === 1 ? "has" : "have"} an availability alert`}
+                    >
+                      <span aria-hidden="true">{squadAlertCount}</span>
+                      <span className="sr-only">{squadAlertCount} squad alerts</span>
+                    </span>
                   )}
                 </Link>
               );

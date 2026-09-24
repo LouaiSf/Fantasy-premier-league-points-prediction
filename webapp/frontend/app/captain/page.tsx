@@ -39,7 +39,9 @@ function riskFor(player: PlayerRecord): { label: string; level: "low" | "med" | 
   const chance = player.chance_of_playing_next_round ?? 100;
   if (player.status !== "a" || chance < 50) return { label: "High risk", level: "high" };
   if (chance < 100) return { label: "Some doubt", level: "med" };
-  return { label: "Nailed on", level: "low" };
+  // Official status "available" says nothing about whether he starts, so this
+  // only reports the absence of an availability doubt.
+  return { label: "No official doubt", level: "low" };
 }
 
 function nextFixture(team: TeamRecord | undefined, gameweek: number | null) {
@@ -226,7 +228,7 @@ export default function CaptainPage() {
                 <span className="cand-id">
                   <b>
                     {player.web_name || player.name}
-                    {player.has_prior_history === false && <span className="badge new">New</span>}
+                    {player.has_prior_history === false && <span className="badge new" title="No prior model history: projection is less reliable">Limited history</span>}
                   </b>
                   <span className="muted">
                     {player.team} · {player.position}
