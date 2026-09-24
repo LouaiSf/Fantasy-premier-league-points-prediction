@@ -114,16 +114,16 @@ export default function TransfersPage() {
   React.useEffect(() => {
     if (!snapshot || !fingerprint) return;
     try {
-      const rawDraft = window.localStorage.getItem(transferDraftKey(currentSnapshot.season));
+      const rawDraft = window.localStorage.getItem(transferDraftKey(snapshot.season));
       const parsedDraft: unknown = rawDraft ? JSON.parse(rawDraft) : null;
       setSavedPlan(isSavedTransferDraft(parsedDraft) && parsedDraft.season === snapshot.season ? parsedDraft : null);
-      const rawHold = window.localStorage.getItem(heldWeekKey(currentSnapshot.season));
+      const rawHold = window.localStorage.getItem(heldWeekKey(snapshot.season));
       const parsedHold: unknown = rawHold ? JSON.parse(rawHold) : null;
       if (isHeldWeek(parsedHold) && parsedHold.season === snapshot.season &&
           (snapshot.gameweek == null || parsedHold.gameweek >= snapshot.gameweek)) {
         setHeldWeek(parsedHold);
       } else {
-        window.localStorage.removeItem(heldWeekKey(currentSnapshot.season));
+        window.localStorage.removeItem(heldWeekKey(snapshot.season));
         setHeldWeek(null);
       }
     } catch {

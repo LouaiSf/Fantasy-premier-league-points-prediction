@@ -4,7 +4,7 @@ This handoff tracks execution of `PLATFORM_V2_IMPLEMENTATION_PLAN.md`. The plann
 
 ## Workspace and preservation
 
-- Workspace: `C:\Users\HP\Desktop\FPL PROJECT - Copy\Fantasy-premier-league-points-prediction`
+- Workspace: `C:\Users\pc\Desktop\Projects\Fantasy-premier-league-points-prediction` (previously `C:\Users\HP\...`)
 - Branch/remote: `main` / `origin` (`LouaiSf/Fantasy-premier-league-points-prediction`)
 - Preserve the pre-existing dirty/untracked files: `data/2026-27/players_raw.csv`, `predictions_next_gw.csv`, `predictions_next_gw.manifest.json`, `CONTINUE_PROGRESS.md`, `CONTINUE_PROMPT.md`, `IMPLEMENTATION_PROMPT.md`, `debug.log`, and `webapp/frontend/.agents/`, `.claude/`, `.continue/`, `.kilocode/`, `.qwen/`, `.windsurf/`.
 - Do not stage those files. Stage only files owned by the current product increment and its handoff/evidence.
@@ -39,9 +39,31 @@ Follow the plan slices: (1) manager direct import and bounded league search; (2)
 - Slice 1 implementation, handoff, and browser evidence: `17bcad95` (full SHA is in Git history), pushed to `origin/main`.
 - Push verified: `origin/main` advanced from `9aa20df7` to `17bcad95`; the commit has no Co-authored-by trailer.
 
-### Blockers and exact next action
+## Slice 2: multi-transfer Studio
 
-No Slice 1 blocker. Implement Slice 2 now: inspect the transfer UI, `/api/transfers` contract, and `compute_transfers`/`solve_squad`; stage ordered outgoing/incoming ID pairs, preserve optimizer choices without inventing pairs, validate exact finance in tenths, constrain the optimizer with staged locks, and add save/hold/apply plus scenario comparison per the plan. Add focused tests and run browser QA once at desktop and 375px after the slice is stable.
+### Implemented (commit `0d0cd120` "incomplete fixes" plus the follow-up commit)
+
+- Backend: `/api/transfers` accepts optional paired `locked_out_elements`/`locked_in_elements` (max 5, equal length, unique, same position, owned/market membership, bank in tenths, club limit); invalid drafts return 400 `invalid_transfer_draft`. `compute_transfers()` locks incoming and bans outgoing indices, keeps real selling prices, returns `out_elements`/`in_elements` per row and `draft_constraints`. Counts below the staged length are failures ("needs at least N staged moves"). Bank must be in 0.1 steps and selling prices whole tenths.
+- Frontend (`app/transfers/transfer-studio.tsx`, `lib/transfer-planning.ts`): ordered draft pairs with add/edit/remove, max-lowering guard, exact tenths finance, final-15 validation, explicit `Evaluate this draft` via `/api/lineup`, separate OUT/IN optimizer lists (never zipped), unconstrained vs staged-constraint comparison, save/reopen keyed by squad fingerprint, `Hold this week`, and a review-then-apply flow that updates local My Team only.
+- Slice 4 item done early: goalkeeper captain/vice exclusion removed from `solve_squad` with a regression test.
+- Follow-up fix: the storage effect referenced `currentSnapshot` before its declaration (ReferenceError whenever the squad was not 15 players); it now uses `snapshot`.
+
+### Verification evidence
+
+- `python -m pytest -q tests/test_optimise.py tests/test_webapp.py tests/test_fpl_client.py tests/test_manager_search.py`: 68 passed.
+- `npm exec tsc -- --noEmit` and `npm run build` passed.
+- Playwright run (Flask :5000 + `next start` :3000, squad seeded from `/api/squad`) at 1440x1000 and 375x812: staged 3 moves (3 rows, hit 8 pts with 1 free), edited the middle move, lowering max was refused with the expected message, evaluate showed gross 59.1 / net 51.1 / gain -13.0, the staged-constraint 3-transfer row gave the same -13.0, counts 0-2 showed "needs at least 3 staged moves", save then reload then reopen restored 3 rows, hold showed "Holding GW6", review listed all outs/ins/bank/hit/XI and apply navigated to /team. No horizontal overflow, 0 console errors.
+- Screenshots: `artifacts/transfer-studio-desktop.png`, `artifacts/transfer-studio-mobile-375.png`.
+
+### Not done / caveats
+
+- No frontend unit-test runner exists in this repo (no vitest/jest), so the plan's client-level draft add/edit/remove test was covered by the browser run only. The draft logic lives inline in the page component.
+- Transfer edge scenarios (club >3, negative bank, unavailable owned player) are covered by backend tests and the client validator, but were not each replayed in the browser.
+- The follow-up commit is local; nothing was pushed in this session.
+
+### Exact next action
+
+Implement Slice 3 (Chip Advisor). Order: (1) single appearance weighting in `_projection_matrix()` with the p_plays=0.5 / 4.0 regression fixture; (2) owned unavailable players via `s['everyone']` and typed `unknown_player` 400; (3) per-GW chip eligibility across the GW19/20 boundary, GW1 and FH19->FH20, plus duplicate-planned-chip rejection; (4) status vocabulary `watch/consider/hold/unavailable/compare`, backend `primary_decision`, `inventory_source`, and null gains where counterfactuals are not implemented. Then Slice 4 remainder and Slice 5.
 
 ## Official FPL rules already checked for later slices
 
