@@ -2164,3 +2164,33 @@
     .transfer-results{overflow-wrap:anywhere}
     .review-panel{padding:16px}
   }
+
+
+  /* FPL Platform v2: chip contract v3 -- status vocabulary, data bar, collapsed inventory. */
+  .chip-conf.status-consider{background:rgba(0,255,135,.15);color:var(--lime)}
+  .chip-conf.status-compare{background:rgba(4,245,255,.15);color:var(--cyan)}
+  .chip-conf.status-watch{background:rgba(255,212,90,.14);color:var(--gold)}
+  .chip-conf.status-hold,.chip-conf.status-unavailable{background:rgba(255,255,255,.08);color:var(--muted-light)}
+  .chip-advisor-card.status-consider{border-color:rgba(0,255,135,.7);background:rgba(0,255,135,.07)}
+  .chip-advisor-card.status-compare{border-color:rgba(4,245,255,.5);background:rgba(4,245,255,.05)}
+  .chip-decision-score.status-consider{color:var(--lime)}
+  .chip-decision-score.status-compare{color:var(--cyan)}
+  .chip-next-decision.status-consider{background:linear-gradient(120deg,rgba(0,255,135,.14),rgba(255,255,255,.04));border-left-color:var(--lime)}
+  .chip-next-decision.status-compare{border-left-color:var(--cyan)}
+  .chip-advisor-note{margin:0;color:var(--muted-light);font:600 11px/1.4 var(--data)}
+  .chip-data-bar{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0 0 var(--space-4);padding:10px 14px;border-left:3px solid var(--cyan);background:rgba(4,245,255,.06);color:var(--white);font:600 12px/1.4 var(--data)}
+  .chip-data-bar b{color:var(--cyan)}
+  .chip-data-bar small{flex-basis:100%;color:var(--muted-light);font-size:11px}
+  .chip-manage{margin:0 0 var(--space-6);border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.03)}
+  .chip-manage>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px;padding:10px var(--space-4);cursor:pointer;color:var(--white);font:800 12px var(--display);letter-spacing:.08em;text-transform:uppercase}
+  .chip-manage>summary small{color:var(--muted-light);font:600 11px var(--data);letter-spacing:0;text-transform:none}
+  .chip-manage .chip-inventory{margin:0;border:0;border-top:1px solid rgba(255,255,255,.1)}
+  .chip-score--raw{background:rgba(255,255,255,.16);color:var(--white);font-style:italic}
+  .chip-score--index{background:transparent;color:var(--muted-light);box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)}
+  .chip-matrix-legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin:0;padding:var(--space-3) var(--space-4);color:var(--muted-light);font:600 11px/1.4 var(--data)}
+  .chip-matrix-legend span{display:inline-flex;align-items:center;gap:6px}
+  .chip-swatch{display:inline-block;width:14px;height:14px}
+  @media(max-width:560px){
+    .chip-data-bar{padding:10px 12px}
+    .chip-manage>summary{padding:10px 12px}
+  }

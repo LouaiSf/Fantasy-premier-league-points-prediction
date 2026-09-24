@@ -321,14 +321,18 @@ export interface ChipRow {
   avg_fdr: number;
   squad_playing?: number;
   squad_blanks?: number;
+  /** Gain over the best no-chip alternative. Only Triple Captain has one today. */
   projected_gain: Partial<Record<ChipId, number | null>>;
+  /** Raw supporting values in different units per chip; not comparable gains. */
+  raw_signal: Partial<Record<ChipId, number | null>>;
   fixture_signal_index: Partial<Record<ChipId, number | null>>;
+  projection_state: "complete" | "partial" | "fixture_only" | "unknown";
 }
 
 export const CHIP_IDS = ["triple_captain", "bench_boost", "free_hit", "wildcard"] as const;
 export type ChipId = (typeof CHIP_IDS)[number];
 export type ChipState = "unused" | "used" | "expired";
-export type ChipStatus = "play" | "watch" | "hold" | "unavailable";
+export type ChipStatus = "watch" | "consider" | "hold" | "unavailable" | "compare";
 
 export interface ChipInventory {
   first_half: Record<ChipId, ChipState>;
@@ -339,6 +343,8 @@ export interface ChipDecisionPolicy {
   minimum_projected_gain: number;
   uncertainty_note: string;
   basis: string;
+  strongest_status: "consider";
+  calibration_version: string | null;
 }
 
 export interface ChipCaptainEvidence {
@@ -361,13 +367,14 @@ export interface ChipBenchEvidence {
   chip: "bench_boost";
   ordered_bench: ChipBenchPlayer[];
   bench_total: number;
+  gross_bench_points: number;
 }
 
 export interface ChipFreeHitEvidence {
   chip: "free_hit";
   current_xi_captain_total: number;
   optimized_xi_captain_total: number | null;
-  raw_delta: number | null;
+  raw_lineup_delta: number | null;
   current_xi_total: number;
   optimized_xi_total: number | null;
   current_captain_points: number | null;
@@ -377,6 +384,7 @@ export interface ChipFreeHitEvidence {
 
 export interface ChipWildcardEvidence {
   chip: "wildcard";
+  rebuild_potential_vs_static_squad: number;
   current_cumulative_total: number;
   optimized_cumulative_total: number;
   weekly_deltas: Record<string, number>;
@@ -393,7 +401,9 @@ export type ChipEvidence =
 export interface ChipAlternative {
   chip: ChipId;
   gw: number;
+  inventory_set: "first_half" | "second_half";
   projected_gain: number | null;
+  raw_signal: number | null;
   fixture_signal_index: number | null;
   evidence: ChipEvidence | null;
 }
@@ -406,6 +416,9 @@ export interface ChipRecommendationBase {
   gw: number | null;
   candidate_gw: number | null;
   projected_gain: number | null;
+  gain_kind: string | null;
+  raw_signal: number | null;
+  raw_signal_kind: string;
   fixture_signal_index: number | null;
   alternatives: ChipAlternative[];
   runner_up_gameweek: number | null;
@@ -414,9 +427,26 @@ export interface ChipRecommendationBase {
   reasons: string[];
   warnings: string[];
   inventory_set: "first_half" | "second_half";
+  inventory_windows: ChipInventoryWindow[];
   expires_after_gameweek: number;
-  confidence: "high" | "low" | "medium";
   formula?: string;
+}
+
+export interface ChipInventoryWindow {
+  half: "first_half" | "second_half";
+  state: ChipState | "unknown";
+  expires_after_gameweek: number;
+  gameweeks: number[];
+}
+
+export interface ChipPrimaryDecision {
+  chip: ChipId;
+  label: string;
+  gw: number;
+  status: ChipStatus;
+  projected_gain: number | null;
+  gain_kind: string | null;
+  reason: string;
 }
 
 export type ChipRecommendation =
@@ -433,7 +463,7 @@ export interface ChipBenchPlayer {
 }
 
 
-export const CHIPS_CONTRACT_VERSION = 2;
+export const CHIPS_CONTRACT_VERSION = 3;
 
 export interface ChipsResult {
   ok: boolean;
@@ -448,8 +478,11 @@ export interface ChipsResult {
   unmapped_teams?: string[];
   current_gameweek: number;
   projection_mode: "fixture_signal" | "model_projection";
-  inventory_status: "synced" | "not_synced";
-  inventory_sync_state: "synced" | "not_synced";
+  /** Chip inventory is entered by the manager on this device, never synced from FPL. */
+  inventory_source: "local_user_reported" | "unknown";
+  primary_decision: ChipPrimaryDecision | null;
+  projection_semantics: "expected_points_including_appearance";
+  projection_note: string;
   scheduled_gameweeks: number[];
   projection_source: string;
   projection_generated_at: string | null;

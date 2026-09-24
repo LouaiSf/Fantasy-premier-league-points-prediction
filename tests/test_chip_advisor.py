@@ -89,7 +89,7 @@ def test_no_squad_is_explicit_fixture_signal(monkeypatch, tmp_path):
 
     data = compute_chips(None, 'test-season', 2, 4, market())
 
-    assert data['inventory_status'] == 'not_synced'
+    assert data['inventory_source'] == 'unknown'
     assert data['projection_mode'] == 'fixture_signal'
     assert all(rec['projected_gain'] is None for rec in data['recommendations'])
     assert all(rec['fixture_signal_index'] is not None for rec in data['recommendations'])
@@ -179,7 +179,9 @@ def test_free_hit_includes_new_captain_delta(monkeypatch, tmp_path):
     breakdown = free_hit['evidence']
 
     assert breakdown['optimized_captain_points'] > breakdown['current_captain_points']
-    assert free_hit['projected_gain'] == round(
+    # Raw lineup delta is evidence, not a chip gain: no-chip transfers are not netted off.
+    assert free_hit['projected_gain'] is None
+    assert free_hit['raw_signal'] == breakdown['raw_lineup_delta'] == round(
         breakdown['optimized_xi_captain_total'] - breakdown['current_xi_captain_total'], 2)
     assert 'avoided_transfer_hits' not in breakdown
 
@@ -220,7 +222,7 @@ def test_current_complete_candidate_uses_named_margin_policy(monkeypatch, tmp_pa
     triple_captain = next(rec for rec in data['recommendations']
                           if rec['chip'] == 'triple_captain')
 
-    assert triple_captain['status'] == 'play'
+    assert triple_captain['status'] == 'consider'
     assert triple_captain['decision_policy']['minimum_projected_gain'] == data['decision_policy']['minimum_projected_gain']
     assert triple_captain['decision_policy']['minimum_projected_gain'] > 0
     assert data['projection_mode'] == 'model_projection'
@@ -246,7 +248,8 @@ def test_injured_bench_reduces_bench_boost_value(monkeypatch, tmp_path):
     healthy_bb = next(rec for rec in healthy_result['recommendations'] if rec['chip'] == 'bench_boost')
     injured_bb = next(rec for rec in injured_result['recommendations'] if rec['chip'] == 'bench_boost')
 
-    assert injured_bb['projected_gain'] < healthy_bb['projected_gain']
+    assert injured_bb['projected_gain'] is None
+    assert injured_bb['raw_signal'] < healthy_bb['raw_signal']
 
 
 def test_inventory_expiry_and_scheduled_week_conflict(monkeypatch, tmp_path):
@@ -284,9 +287,9 @@ def test_unsynced_inventory_never_promotes_fixture_signal_to_play(monkeypatch, t
 
     data = compute_chips(squad, 'test-season', 1, 3, players)
 
-    assert data['inventory_sync_state'] == 'not_synced'
+    assert data['inventory_source'] == 'unknown'
     assert data['projection_mode'] == 'fixture_signal'
-    assert all(rec['status'] != 'play' for rec in data['recommendations'])
+    assert all(rec['status'] == 'watch' for rec in data['recommendations'])
 
 
 
@@ -303,7 +306,7 @@ def test_complete_projection_without_synced_inventory_cannot_play(monkeypatch, t
                           if rec['chip'] == 'triple_captain')
     assert triple_captain['projected_gain'] is not None
     assert triple_captain['status'] == 'watch'
-    assert all(rec['status'] != 'play' for rec in data['recommendations'])
+    assert all(rec['status'] != 'consider' for rec in data['recommendations'])
 
 def test_wildcard_uses_cumulative_multi_gameweek_gain(monkeypatch, tmp_path):
     write_season(tmp_path)
@@ -319,7 +322,11 @@ def test_wildcard_uses_cumulative_multi_gameweek_gain(monkeypatch, tmp_path):
     assert wildcard['evidence']['horizon_length'] == 8
     assert 'current_cumulative_total' in wildcard['evidence']
     assert 'optimized_cumulative_total' in wildcard['evidence']
-    assert all(data['rows'][index]['projected_gain']['wildcard'] is not None
+    assert wildcard['projected_gain'] is None
+    assert wildcard['status'] == 'watch'
+    assert all(data['rows'][index]['raw_signal']['wildcard'] is not None
+               for index in range(len(data['rows'])))
+    assert all(data['rows'][index]['projected_gain']['wildcard'] is None
                for index in range(len(data['rows'])))
 
 
@@ -340,7 +347,8 @@ def test_wildcard_reoptimizes_for_each_remaining_horizon(monkeypatch, tmp_path):
 
     assert wildcard['candidate_gw'] == 3
     assert wildcard['evidence']['horizon_length'] == 2
-    assert wildcard['projected_gain'] > 8.0
+    assert wildcard['raw_signal'] > 8.0
+    assert wildcard['evidence']['rebuild_potential_vs_static_squad'] == wildcard['raw_signal']
 
 
 def _priced_market_with_reach_candidate():
@@ -418,29 +426,123 @@ def test_wildcard_budget_uses_real_selling_price_not_market_value(monkeypatch, t
     assert wildcard_with_finance['evidence']['optimized_cumulative_total'] < 90
 
 
-def test_simultaneous_play_verdicts_warn_about_the_one_chip_per_gw_rule(monkeypatch, tmp_path):
+def test_only_one_current_week_candidate_and_no_play_verdict(monkeypatch, tmp_path):
     write_season(tmp_path)
     monkeypatch.chdir(tmp_path)
     players = market()
     squad = players.iloc[:15].copy()
-    points = horizon_points(players, [1])
 
     data = compute_chips(squad, 'test-season', 1, 1, players,
-                         inventory=synced_inventory(), future_points=points)
-    by_chip = {rec['chip']: rec for rec in data['recommendations']}
+                         inventory=synced_inventory(),
+                         future_points=horizon_points(players, [1]))
+    statuses = {rec['chip']: rec['status'] for rec in data['recommendations']}
 
-    playing = [chip for chip, rec in by_chip.items() if rec['status'] == 'play' and rec['gw'] == 1]
-    assert len(playing) >= 2, 'fixture must actually exercise the conflict'
-    chip_labels = {
-        'triple_captain': 'Triple Captain', 'bench_boost': 'Bench Boost',
-        'free_hit': 'Free Hit', 'wildcard': 'Wildcard',
-    }
-    for chip in playing:
-        others = [c for c in playing if c != chip]
-        warning_text = ' '.join(by_chip[chip]['warnings'])
-        assert 'Only one chip can be played per gameweek' in warning_text
-        for other in others:
-            assert chip_labels[other] in warning_text
+    assert 'play' not in statuses.values()
+    assert list(statuses.values()).count('consider') <= 1
+    assert data['primary_decision']['chip'] == 'triple_captain'
+    assert data['primary_decision']['gw'] == 1
+    # Bench Boost has raw evidence only, so never an action label. GW1 has no
+    # Free Hit or Wildcard window at all.
+    assert statuses['bench_boost'] == 'watch'
+    assert statuses['free_hit'] == statuses['wildcard'] == 'hold'
+
+
+def test_exported_expected_points_are_not_discounted_by_appearance_again(monkeypatch, tmp_path):
+    write_season(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    players = market()
+    players['p_plays'] = 0.5
+    players.loc[players['element'] == 20, 'predicted_points'] = 4.0
+    future = horizon_points(players, [2])
+    squad = players.iloc[:15].copy()
+
+    data = compute_chips(squad, 'test-season', 2, 1, players,
+                         inventory=synced_inventory(), future_points=future)
+
+    assert data['projection_semantics'] == 'expected_points_including_appearance'
+    from optimise import _projection_matrix
+    matrix, mode = _projection_matrix(players, None, [2], {}, future)
+    assert mode == 'model_projection'
+    assert matrix.loc[players['element'] == 20, 2].iloc[0] == 4.0
+
+
+def test_chip_eligibility_is_decided_per_gameweek_across_the_half_boundary(monkeypatch, tmp_path):
+    write_season(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    from optimise import _candidate_window
+    inventory = {'first_half': {chip: 'unused' for chip in CHIPS},
+                 'second_half': {chip: 'unused' for chip in CHIPS}}
+
+    eligible, halves = _candidate_window(18, 4, 'wildcard', inventory, [], None)
+    assert eligible == [18, 19, 20, 21]
+    assert set(halves) == {'first_half', 'second_half'}
+    assert halves['first_half']['expires_after_gameweek'] == 19
+    assert halves['second_half']['expires_after_gameweek'] == 38
+
+    inventory['first_half']['wildcard'] = 'used'
+    eligible, _ = _candidate_window(18, 4, 'wildcard', inventory, [], None)
+    assert eligible == [20, 21]
+
+
+def test_gameweek_one_has_no_wildcard_or_free_hit_but_keeps_captain_and_bench(monkeypatch, tmp_path):
+    write_season(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    from optimise import _candidate_window
+    inventory = {'first_half': {chip: 'unused' for chip in CHIPS}, 'second_half': {}}
+
+    windows = {chip: _candidate_window(1, 3, chip, inventory, [], None)[0] for chip in CHIPS}
+
+    assert windows['wildcard'] == [2, 3]
+    assert windows['free_hit'] == [2, 3]
+    assert windows['triple_captain'] == [1, 2, 3]
+    assert windows['bench_boost'] == [1, 2, 3]
+
+
+def test_free_hit_in_gw19_blocks_free_hit_in_gw20_only(monkeypatch, tmp_path):
+    write_season(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    from optimise import _candidate_window
+    inventory = {'first_half': {'free_hit': 'used'}, 'second_half': {'free_hit': 'unused'}}
+
+    blocked, _ = _candidate_window(19, 3, 'free_hit', inventory, [], 19)
+    allowed, _ = _candidate_window(19, 3, 'free_hit', inventory, [], 5)
+
+    assert blocked == [21]
+    assert allowed == [20, 21]
+
+
+def test_owned_unavailable_player_is_kept_by_identity(monkeypatch, tmp_path):
+    write_season(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    players = market()
+    players.loc[players['element'] == 30, ['status', 'p_plays']] = ['i', 0.0]
+    squad = players.iloc[:15].copy()
+    buyable = players[players['element'] != 30].reset_index(drop=True)
+    owned_row = players[players['element'] == 30]
+    combined = pd.concat([buyable, owned_row], ignore_index=True)
+    future = horizon_points(combined, [2, 3])
+
+    data = compute_chips(squad, 'test-season', 2, 2, combined,
+                         inventory=synced_inventory(), future_points=future)
+
+    triple_captain = next(rec for rec in data['recommendations']
+                          if rec['chip'] == 'triple_captain')
+    assert data['has_squad'] is True
+    assert data['projection_mode'] == 'model_projection'
+    assert triple_captain['projected_gain'] is not None
+
+
+def test_weeks_without_confirmed_fixtures_carry_no_projection_state_or_gain(monkeypatch, tmp_path):
+    write_season(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    players = market()
+
+    data = compute_chips(None, 'test-season', 13, 4, players)  # fixtures end at GW14
+
+    states = {row['gw']: row['projection_state'] for row in data['rows']}
+    assert states[13] == 'fixture_only'
+    assert states[15] == 'unknown'
+    assert all(row['projected_gain'] == {chip: None for chip in CHIPS} for row in data['rows'])
 
 
 def test_horizon_changes_candidate_matrix(monkeypatch, tmp_path):

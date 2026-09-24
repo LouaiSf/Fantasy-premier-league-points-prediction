@@ -324,6 +324,7 @@ def _empty_snapshot(season: str | None) -> dict:
         'players': pd.DataFrame(),
         'everyone': pd.DataFrame(),
         'future_points': None,
+        'everyone_future_points': None,
         'future_gameweeks': [],
         'mtime': None,
         'market_mtime': None,
@@ -383,19 +384,26 @@ def _build_snapshot() -> dict:
                 'Refresh the local season data or regenerate predictions.')}
 
     future_points = None
+    everyone_future_points = None
     future_gameweeks = []
     try:
         horizon_players, horizon_points, future_gameweeks = opt.load_horizon(
-            path, drop_unavailable=True)
+            path, drop_unavailable=False)
         identity = 'element' if 'element' in players.columns and 'element' in horizon_players.columns else 'name'
         horizon_points.index = horizon_players[identity].to_list()
+        # Projections for every player, so an owned player who is currently
+        # injured or suspended still has a row when a chip is scored.
+        everyone_future_points = horizon_points.reindex(everyone[identity].to_list())
+        everyone_future_points.index = everyone.index
         future_points = horizon_points.reindex(players[identity].to_list())
         future_points.index = players.index
     except SystemExit:
         future_gameweeks = []
 
     return {**snapshot, 'players': players, 'everyone': everyone,
-            'future_points': future_points, 'future_gameweeks': future_gameweeks}
+            'future_points': future_points,
+            'everyone_future_points': everyone_future_points,
+            'future_gameweeks': future_gameweeks}
 
 
 def model_summary() -> dict:
@@ -463,6 +471,34 @@ def squad_from_elements(elements: list[int], snapshot: Mapping | None = None) ->
     order = {element: position for position, element in enumerate(elements)}
     current['_order'] = current['element'].map(order)
     return current.sort_values('_order').drop(columns='_order').reset_index(drop=True)
+
+
+def chip_market(s: Mapping, squad: pd.DataFrame | None):
+    """The market and projections a chip is scored against, keeping the owned 15.
+
+    `players` holds only buyable players. A squad can legitimately contain
+    someone who is injured or suspended today, so those owned rows are added
+    back (by stable element ID) instead of failing alignment or being replaced
+    by a different player. They stay in the pool at their exported projection.
+    """
+    players = s['players']
+    future_points = s.get('future_points')
+    if squad is None or 'element' not in squad.columns or 'element' not in players.columns:
+        return players, future_points
+    missing = squad[~squad['element'].isin(players['element'])]
+    if missing.empty:
+        return players, future_points
+    everyone = s['everyone']
+    extra = everyone[everyone['element'].isin(missing['element'])]
+    combined = pd.concat([players, extra], ignore_index=True)
+    if future_points is None:
+        return combined, None
+    extra_future = s.get('everyone_future_points')
+    if extra_future is None:
+        return combined, None
+    rows = extra_future.loc[extra.index].copy()
+    base = future_points.reset_index(drop=True)
+    return combined, pd.concat([base, rows.reset_index(drop=True)], ignore_index=True)
 
 
 def fail(message: str, status: int = 400, code: str = 'invalid_request', **extra):
@@ -1028,6 +1064,9 @@ def api_chips():
     scheduled = contracts.int_list(
         body, 'scheduled_gameweeks', maximum=38,
         message='scheduled_gameweeks must be a list of gameweek numbers (1-38)') or []
+    if len(set(scheduled)) != len(scheduled):
+        return fail('Only one chip can be planned per gameweek.', code='invalid_chip_plan',
+                    field='scheduled_gameweeks')
     last_free_hit = contracts.number(body, 'last_free_hit_gameweek', None,
                                      lo=1, hi=38, integer=True)
     bank = contracts.number(body, 'bank', None, lo=0, hi=100,
@@ -1037,12 +1076,24 @@ def api_chips():
              else {int(element) for element in squad['element']})
     selling_prices = contracts.selling_prices(body, owned)
 
-    data = opt.compute_chips(
-        squad, s['season'], s['gameweek'], horizon, s['players'],
+    players, future_points = chip_market(s, squad)
+    try:
+        data = _compute_chips(s, squad, horizon, players, future_points, inventory,
+                              scheduled, last_free_hit, bank, selling_prices)
+    except ValueError as exc:
+        return fail(str(exc), code='invalid_squad')
+    data['ok'] = True
+    return jsonify(data)
+
+
+def _compute_chips(s, squad, horizon, players, future_points, inventory,
+                   scheduled, last_free_hit, bank, selling_prices):
+    return opt.compute_chips(
+        squad, s['season'], s['gameweek'], horizon, players,
         inventory=inventory,
         scheduled_gameweeks=scheduled,
         last_free_hit_gameweek=last_free_hit,
-        future_points=s.get('future_points'),
+        future_points=future_points,
         projection_generated_at=(
             datetime.datetime.fromtimestamp(s['mtime'], tz=datetime.timezone.utc).isoformat()
             if s.get('mtime') else None
@@ -1051,8 +1102,6 @@ def api_chips():
         selling_prices=selling_prices,
         root=ROOT,
     )
-    data['ok'] = True
-    return jsonify(data)
 
 
 @app.route('/api/watchlist')

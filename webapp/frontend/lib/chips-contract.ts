@@ -3,6 +3,8 @@ import { CHIP_IDS, CHIPS_CONTRACT_VERSION, type ChipsResult } from "./types";
 export const CHIPS_CONTRACT_ERROR =
   "Chip advice server is out of date. Restart the Flask API and retry.";
 
+const CHIP_STATUSES = ["watch", "consider", "hold", "unavailable", "compare"];
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -50,7 +52,9 @@ function isValidRow(value: unknown): boolean {
     typeof value.blank_teams === "number" &&
     typeof value.avg_fdr === "number" &&
     isChipKeyedNumberMap(value.projected_gain) &&
-    isChipKeyedNumberMap(value.fixture_signal_index)
+    isChipKeyedNumberMap(value.raw_signal) &&
+    isChipKeyedNumberMap(value.fixture_signal_index) &&
+    typeof value.projection_state === "string"
   );
 }
 
@@ -69,7 +73,9 @@ function isValidRecommendation(value: unknown): boolean {
     isDecisionPolicy(value.decision_policy) &&
     isArray(value.reasons) &&
     isArray(value.warnings) &&
-    typeof value.confidence === "string"
+    isNumberOrNull(value.raw_signal) &&
+    isArray(value.inventory_windows) &&
+    CHIP_STATUSES.includes(value.status as never)
   );
 }
 
@@ -96,8 +102,10 @@ export function parseChipsResult(value: unknown): ChipsResult {
     !value.recommendations.every(isValidRecommendation) ||
     typeof value.current_gameweek !== "number" ||
     typeof value.projection_mode !== "string" ||
-    typeof value.inventory_status !== "string" ||
-    typeof value.inventory_sync_state !== "string" ||
+    (value.inventory_source !== "local_user_reported" && value.inventory_source !== "unknown") ||
+    !(value.primary_decision === null || isRecord(value.primary_decision)) ||
+    typeof value.projection_semantics !== "string" ||
+    typeof value.projection_note !== "string" ||
     !isNumberArray(value.scheduled_gameweeks) ||
     typeof value.projection_source !== "string" ||
     !isStringOrNull(value.projection_generated_at) ||

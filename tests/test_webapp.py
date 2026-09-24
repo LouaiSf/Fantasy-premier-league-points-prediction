@@ -468,7 +468,8 @@ def test_chips_response_matches_the_frontend_contract() -> None:
     required_top_level = {
         "first_gw", "last_gw", "any_dgw", "any_bgw", "has_squad", "rows",
         "recommendations", "current_gameweek", "projection_mode",
-        "inventory_status", "inventory_sync_state", "scheduled_gameweeks",
+        "inventory_source", "primary_decision", "projection_semantics",
+        "projection_note", "scheduled_gameweeks",
         "projection_source", "projection_generated_at", "projection_gameweeks",
         "requested_horizon", "evaluated_horizon", "coverage_warning",
         "data_quality", "methodology_version", "decision_policy",
@@ -478,14 +479,61 @@ def test_chips_response_matches_the_frontend_contract() -> None:
 
     for row in data["rows"]:
         assert {"gw", "matches", "dgw_teams", "blank_teams", "avg_fdr",
-                "projected_gain", "fixture_signal_index"} <= row.keys()
+                "projected_gain", "raw_signal", "fixture_signal_index",
+                "projection_state"} <= row.keys()
 
     for rec in data["recommendations"]:
         assert {"chip", "label", "status", "candidate_gameweeks", "gw",
                 "candidate_gw", "projected_gain", "fixture_signal_index",
                 "alternatives", "decision_policy", "reasons", "warnings",
-                "confidence"} <= rec.keys()
+                "raw_signal", "raw_signal_kind", "inventory_windows"} <= rec.keys()
+        assert rec["status"] in {"watch", "consider", "hold", "unavailable", "compare"}
+        assert "confidence" not in rec
         assert {"minimum_projected_gain", "uncertainty_note", "basis"} <= rec["decision_policy"].keys()
+
+
+def test_chips_reject_two_chips_planned_for_one_gameweek() -> None:
+    client = app.test_client()
+
+    response = client.post("/api/chips", json={"horizon": 4, "scheduled_gameweeks": [8, 8]})
+
+    assert response.status_code == 400
+    assert response.get_json()["code"] == "invalid_chip_plan"
+
+
+def test_chips_report_an_unknown_owned_element_as_a_typed_400() -> None:
+    client = app.test_client()
+    squad = client.post("/api/squad", json={"budget": 100.0}).get_json()
+    elements = [player["element"] for player in squad["xi"] + squad["bench"]]
+    elements[0] = 99999999
+
+    response = client.post("/api/chips", json={"elements": elements, "horizon": 3})
+
+    assert response.status_code == 400
+    assert response.get_json()["code"] == "unknown_player"
+
+
+def test_chips_keep_an_owned_player_who_is_no_longer_buyable(monkeypatch) -> None:
+    client = app.test_client()
+    squad = client.post("/api/squad", json={"budget": 100.0}).get_json()
+    elements = [player["element"] for player in squad["xi"] + squad["bench"]]
+    live = app_module.state()
+    injured = elements[-1]
+    everyone = live["everyone"].copy()
+    everyone.loc[everyone["element"] == injured, ["status", "p_plays"]] = ["i", 0.0]
+    buyable = everyone[everyone["element"] != injured].reset_index(drop=True)
+    future = live["future_points"]
+    everyone_future = future.reindex(everyone.index) if future is not None else None
+    patched = {**live, "players": buyable, "everyone": everyone,
+               "future_points": None if future is None else future.reindex(buyable.index),
+               "everyone_future_points": everyone_future}
+    monkeypatch.setattr(app_module, "state", lambda: patched)
+
+    response = client.post("/api/chips", json={"elements": elements, "horizon": 3})
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["has_squad"] is True
 
 
 def test_chips_accept_valid_selling_prices_tenths() -> None:

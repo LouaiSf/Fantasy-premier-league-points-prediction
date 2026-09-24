@@ -1,4 +1,4 @@
-import { CHIP_IDS, type ChipId, type ChipRecommendation, type ChipRow } from "@/lib/types";
+import { CHIP_IDS, type ChipId, type ChipPrimaryDecision, type ChipRow } from "@/lib/types";
 import { ChipIcon } from "./chip-icon";
 
 const CHIP_LABELS: Record<ChipId, string> = {
@@ -8,8 +8,16 @@ const CHIP_LABELS: Record<ChipId, string> = {
   wildcard: "Wildcard",
 };
 
-function cellLevel(value: number | null | undefined): string {
-  if (value == null) return "empty";
+const RAW_UNITS: Record<ChipId, string> = {
+  triple_captain: "extra captain points",
+  bench_boost: "gross bench points",
+  free_hit: "raw lineup difference",
+  wildcard: "rebuild potential vs a frozen squad",
+};
+
+// Only a measured gain (points over the best normal week) earns a colour
+// level. Raw evidence and fixture indexes are different units and stay neutral.
+function gainLevel(value: number): string {
   if (value >= 8) return "high";
   if (value >= 4) return "medium";
   if (value > 0) return "low";
@@ -18,21 +26,19 @@ function cellLevel(value: number | null | undefined): string {
 
 interface ChipOpportunityMatrixProps {
   rows: ChipRow[];
-  recommendations: ChipRecommendation[];
+  primary: ChipPrimaryDecision | null;
   projectionMode: "fixture_signal" | "model_projection";
   hasSquad: boolean;
 }
 
-export function ChipOpportunityMatrix({ rows, recommendations, projectionMode, hasSquad }: ChipOpportunityMatrixProps) {
-  const recommended = new Map(
-    recommendations
-      .filter((rec) => rec.status === "play")
-      .map((rec) => [rec.chip, rec.candidate_gw]),
-  );
+export function ChipOpportunityMatrix({ rows, primary, projectionMode, hasSquad }: ChipOpportunityMatrixProps) {
+  const fixtureOnly = projectionMode === "fixture_signal" || !hasSquad;
   return (
     <div className="chip-opportunity-scroll">
       <table className="chip-opportunity-matrix">
-        <caption>{projectionMode === "fixture_signal" || !hasSquad ? "Fixture signal index by chip and gameweek" : "Projected gain by chip and gameweek"}</caption>
+        <caption>
+          {fixtureOnly ? "Fixture signal index by chip and gameweek" : "Chip evidence by gameweek"}
+        </caption>
         <thead>
           <tr>
             <th scope="col">Chip</th>
@@ -49,17 +55,25 @@ export function ChipOpportunityMatrix({ rows, recommendations, projectionMode, h
                 </span>
               </th>
               {rows.map((row) => {
-                const points = row.projected_gain[chip] ?? null;
-                const fixtureIndex = row.fixture_signal_index[chip] ?? null;
-                const value = points ?? fixtureIndex;
-                const isRecommended = recommended.get(chip) === row.gw;
+                const gain = row.projected_gain[chip] ?? null;
+                const raw = row.raw_signal[chip] ?? null;
+                const index = row.fixture_signal_index[chip] ?? null;
+                const isPrimary = primary?.chip === chip && primary.gw === row.gw;
+                let kind: "gain" | "raw" | "index" | "empty" = "empty";
+                let value: number | null = null;
+                if (gain !== null) { kind = "gain"; value = gain; }
+                else if (raw !== null) { kind = "raw"; value = raw; }
+                else if (index !== null) { kind = "index"; value = index; }
+                const unit = kind === "gain" ? "extra points over your best normal week"
+                  : kind === "raw" ? RAW_UNITS[chip] + " (not a gain)"
+                    : "fixture signal index (not points)";
                 return (
                   <td
                     key={`${chip}-${row.gw}`}
-                    className={`chip-score chip-score--${cellLevel(value)}${isRecommended ? " is-recommended" : ""}`}
-                    title={CHIP_LABELS[chip] + " GW" + row.gw + ": " + (value == null ? "No value" : points == null ? "fixture signal index " + value.toFixed(1) : value.toFixed(1) + " projected points")}
+                    className={`chip-score chip-score--${kind === "gain" && value !== null ? gainLevel(value) : kind}${isPrimary ? " is-recommended" : ""}`}
+                    title={CHIP_LABELS[chip] + " GW" + row.gw + ": " + (value === null ? "no value" : value.toFixed(1) + " " + unit)}
                   >
-                    {value == null ? "—" : value.toFixed(1)}
+                    {value === null ? "—" : value.toFixed(1)}
                   </td>
                 );
               })}
@@ -67,6 +81,11 @@ export function ChipOpportunityMatrix({ rows, recommendations, projectionMode, h
           ))}
         </tbody>
       </table>
+      <p className="chip-matrix-legend">
+        <span><i className="chip-swatch chip-score--medium" /> Extra points over your best normal week (Triple Captain only)</span>
+        <span><i className="chip-swatch chip-score--raw" /> Raw evidence in that chip&apos;s own units, not a gain</span>
+        <span><i className="chip-swatch chip-score--index" /> Fixture signal index, not points</span>
+      </p>
     </div>
   );
 }

@@ -63,7 +63,37 @@ Follow the plan slices: (1) manager direct import and bounded league search; (2)
 
 ### Exact next action
 
-Implement Slice 3 (Chip Advisor). Order: (1) single appearance weighting in `_projection_matrix()` with the p_plays=0.5 / 4.0 regression fixture; (2) owned unavailable players via `s['everyone']` and typed `unknown_player` 400; (3) per-GW chip eligibility across the GW19/20 boundary, GW1 and FH19->FH20, plus duplicate-planned-chip rejection; (4) status vocabulary `watch/consider/hold/unavailable/compare`, backend `primary_decision`, `inventory_source`, and null gains where counterfactuals are not implemented. Then Slice 4 remainder and Slice 5.
+Slice 3 is now implemented (see below). Historical note, the order used was: (1) single appearance weighting in `_projection_matrix()` with the p_plays=0.5 / 4.0 regression fixture; (2) owned unavailable players via `s['everyone']` and typed `unknown_player` 400; (3) per-GW chip eligibility across the GW19/20 boundary, GW1 and FH19->FH20, plus duplicate-planned-chip rejection; (4) status vocabulary `watch/consider/hold/unavailable/compare`, backend `primary_decision`, `inventory_source`, and null gains where counterfactuals are not implemented. Then Slice 4 remainder and Slice 5.
+
+## Slice 3: Chip Advisor as a defensible decision tool (contract v3)
+
+### Implemented
+
+- **Single appearance weighting:** `_projection_matrix()` uses the exported expected points as they are (they already include p_plays). Only a hard official absence (`i/u/s/n`) zeroes a player. API exposes `projection_semantics = expected_points_including_appearance`. The prediction manifest file was not modified (generated artifact).
+- **Owned unavailable players:** `chip_market()` in `webapp/app.py` adds owned rows missing from the buyable market back by element ID, with projections from a new `everyone_future_points` snapshot field. Expected errors are 400 (`unknown_player`, `invalid_squad`) instead of a 500.
+- **Per-GW eligibility:** `_candidate_window()` checks each gameweek against its own half's inventory (GW1-19 / GW20-38), so a horizon crossing GW19/20 offers both sets. GW1 has no Wildcard/Free Hit; a GW19 Free Hit blocks Free Hit in GW20 only; one chip per GW. `/api/chips` rejects duplicate `scheduled_gameweeks` with `invalid_chip_plan`; the UI asks before replacing a chip already planned for that week.
+- **Honest scoring:** only Triple Captain has a comparable gain (extra captain points for the best legal captain). Bench Boost, Free Hit and Wildcard have `projected_gain = null` and expose raw evidence (`gross_bench_points`, `raw_lineup_delta`, `rebuild_potential_vs_static_squad`) with a `raw_signal_kind`. Wildcard +45.6 is no longer presented as a gain.
+- **Vocabulary:** `watch / consider / hold / unavailable / compare`; no `PLAY` is emitted (`strongest_status: consider`, `calibration_version: null`). At most one current-week `consider` (highest gain) is kept as `primary_decision`; others become `compare`. `confidence` removed.
+- **Inventory source:** `inventory_source: local_user_reported | unknown` replaces `inventory_status/inventory_sync_state`. `CHIPS_CONTRACT_VERSION = 3` in both the Python module and the runtime parser (`lib/chips-contract.ts`).
+- **Data state:** each row has `projection_state` (`complete | partial | fixture_only | unknown`); weeks without confirmed fixtures or complete projections get no numeric score. Page shows a data bar (GW range, mode, generated time, coverage, scenario-estimate note).
+- **UI:** lead decision comes from `primary_decision` (no arbitrary first chip); "Manage my chips" is a collapsed disclosure below the decision; matrix separates gain / raw evidence / fixture index with a legend and only colours measured gains.
+
+### Verification evidence
+
+- `python -m pytest -q tests`: 305 passed. New regression tests cover 4.0 staying 4.0 with p_plays=0.5, cross-half eligibility, GW1, FH19->FH20, an owned unavailable player, no-`PLAY`/single primary, unknown-fixture weeks, duplicate planned week and typed unknown-player 400. The route test for the unavailable owned player was confirmed to fail without `chip_market`.
+- `npm exec tsc -- --noEmit` and `npm run build` passed.
+- Playwright (Flask :5000, `next start` :3000) at 1440x1000 and 375x812 on `/chips`: without chips entered all four cards are `Watch` and the lead card says "No chip stands out" with a pointer to Manage my chips; after entering chips Triple Captain is the single `Consider` for GW6 (+7.05), the others stay `Watch`; planning Bench Boost for a week that already had Triple Captain raised the replace confirmation and left one planned chip; no overflow, 0 console errors.
+- Screenshots: `artifacts/chip-advisor-desktop.png`, `artifacts/chip-advisor-mobile-375.png`.
+
+### Not done / caveats
+
+- Bench Boost exact enumeration, the Free Hit no-chip counterfactual and the Wildcard rolling baseline are not built; those chips stay evidence-only (per the plan's fallback). No `PLAY` verdict until a holdout calibration exists.
+- The Refresh action is the existing header button; the chips page only points to it.
+- Free-transfer count is not passed to `/api/chips` yet (needed for the Free Hit counterfactual).
+
+### Exact next action
+
+Slice 4 remainder: (1) `app/captain/page.tsx::riskFor()` wording (no "Nailed on" from status alone); (2) squad-only alert badge in `components/chrome/main-nav.tsx`; (3) "Limited model history" wording in `app/watchlist/page.tsx` and `components/player-drawer.tsx`; (4) phone hierarchy on My Team; (5) refresh the stale `DESIGN.md` data paragraph. GK captain removal is already done. Then one exploratory pass Team -> Captain -> Transfers -> Chips -> Watchlist at desktop and 375px, then Slice 5 (deadline board, saved scenarios).
 
 ## Official FPL rules already checked for later slices
 

@@ -9,7 +9,7 @@ import { Loading } from "@/components/loading";
 import { EmptyState } from "@/components/empty-state";
 import { ChipIcon } from "@/components/chips/chip-icon";
 import { ChipOpportunityMatrix } from "@/components/chips/chip-opportunity-matrix";
-import { CHIP_IDS, type ChipId, type ChipInventory, type ChipRecommendation, type ChipRow, type ChipsResult, type ChipState } from "@/lib/types";
+import { CHIP_IDS, type ChipId, type ChipInventory, type ChipRecommendation, type ChipRow, type ChipsResult, type ChipState, type ChipStatus } from "@/lib/types";
 import { CHIP_INVENTORY_KEY } from "@/lib/storage-keys";
 
 // The last gameweek of each half-season set, per the official 2026/27 chip
@@ -30,6 +30,27 @@ const CHIP_DESCRIPTIONS: Record<ChipId, string> = {
   free_hit: "Build a one-week squad, then return to the original team.",
   wildcard: "Make unlimited permanent transfers in the gameweek.",
 };
+
+const STATUS_LABELS: Record<ChipStatus, string> = {
+  consider: "Consider",
+  compare: "Compare",
+  watch: "Watch",
+  hold: "Hold",
+  unavailable: "Unavailable",
+};
+
+const RAW_SIGNAL_LABELS: Record<string, string> = {
+  extra_captain_points: "extra captain points",
+  gross_bench_points: "gross bench points",
+  raw_lineup_delta: "raw lineup difference",
+  rebuild_potential_vs_static_squad: "rebuild potential vs a frozen squad",
+};
+
+function formatGeneratedAt(value: string | null): string {
+  if (!value) return "time unknown";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "time unknown" : date.toLocaleString();
+}
 
 function blankInventory(): ChipInventory {
   return {
@@ -254,7 +275,7 @@ function WhyThisChoice({ recommendation, data }: { recommendation: ChipRecommend
       {evidence?.chip === "triple_captain" && evidence.captain && (
         <p>
           {evidence.captain.name} ({evidence.captain.team}) projects {num(evidence.captain.projected_points ?? 0, 1)} points across {captainFixtureLabel(evidence.captain.fixtures)}.
-          Normal captain total: {num(evidence.normal_captain_total, 1)}; Triple Captain total: {num(evidence.triple_captain_total ?? 0, 1)}; incremental gain: {num(evidence.incremental_gain ?? 0, 1)}.
+          Normal captain total: {num(evidence.normal_captain_total, 1)}; Triple Captain total: {num(evidence.triple_captain_total ?? 0, 1)}; extra points from the chip: {num(evidence.incremental_gain ?? 0, 1)}. Projections already include the chance of playing.
         </p>
       )}
       {evidence?.chip === "bench_boost" && (
@@ -262,33 +283,36 @@ function WhyThisChoice({ recommendation, data }: { recommendation: ChipRecommend
           <ul>{evidence.ordered_bench.map((player) => (
             <li key={player.element}>{player.player}: {num(player.points, 1)} pts, {player.available ? "available" : "unavailable"}</li>
           ))}</ul>
-          <p>Bench total: {num(evidence.bench_total, 1)} points.</p>
+          <p>Gross bench projection: {num(evidence.gross_bench_points, 1)} points. This is not a net Bench Boost gain: the points a bench player would score anyway, and the outfield substitutions of a normal week, are not netted off.</p>
         </>
       )}
       {evidence?.chip === "free_hit" && (
         <p>
-          Current total {num(evidence.current_xi_captain_total, 1)}; optimized total {num(evidence.optimized_xi_captain_total ?? 0, 1)}; raw gain {num(evidence.raw_delta ?? 0, 1)} points across {evidence.changed_player_count} changed players.
+          Current total {num(evidence.current_xi_captain_total, 1)}; optimized one-week total {num(evidence.optimized_xi_captain_total ?? 0, 1)}; raw lineup difference {num(evidence.raw_lineup_delta ?? 0, 1)} points across {evidence.changed_player_count} changed players. This is not a chip gain: the transfers you could make without a chip are not subtracted.
         </p>
       )}
       {evidence?.chip === "wildcard" && (
         <>
           <p>
-            Current total {num(evidence.current_cumulative_total, 1)}; optimized total {num(evidence.optimized_cumulative_total, 1)} across {evidence.horizon_length} weeks and {evidence.changed_player_count} changed players.
+            Frozen current squad {num(evidence.current_cumulative_total, 1)}; rebuilt squad {num(evidence.optimized_cumulative_total, 1)} across {evidence.horizon_length} weeks and {evidence.changed_player_count} changed players. This is rebuild potential against a squad that never transfers, not the gain from playing a Wildcard.
           </p>
-          <p>Weekly gains: {Object.entries(evidence.weekly_deltas).map(([gw, gain]) => "GW" + gw + " " + num(gain, 1)).join(" · ")}.</p>
+          <p>Weekly differences: {Object.entries(evidence.weekly_deltas).map(([gw, gain]) => "GW" + gw + " " + num(gain, 1)).join(" · ")}.</p>
         </>
       )}
       {recommendation.alternatives.length > 0 && (
         <p>
           Top candidates: {recommendation.alternatives.map((candidate) => (
-            "GW" + candidate.gw + " " + (candidate.projected_gain == null ? "index " + num(candidate.fixture_signal_index ?? 0, 1) : "+" + num(candidate.projected_gain, 1) + " pts")
+            "GW" + candidate.gw + " " + (
+              candidate.projected_gain != null ? "+" + num(candidate.projected_gain, 1) + " pts"
+                : candidate.raw_signal != null ? num(candidate.raw_signal, 1) + " (" + (RAW_SIGNAL_LABELS[recommendation.raw_signal_kind] ?? "raw evidence") + ")"
+                  : "fixture index " + num(candidate.fixture_signal_index ?? 0, 1))
           )).join(" · ")}.
           {recommendation.runner_up_gameweek != null && recommendation.gap_to_runner_up != null
-            ? " Runner-up GW" + recommendation.runner_up_gameweek + "; gap " + num(recommendation.gap_to_runner_up, 1) + (recommendation.projected_gain != null ? " pts." : " index units.")
+            ? " Runner-up GW" + recommendation.runner_up_gameweek + "; gap " + num(recommendation.gap_to_runner_up, 1) + "."
             : ""}
         </p>
       )}
-      <p>Source: {data.projection_source}; coverage: {data.projection_gameweeks.length ? data.projection_gameweeks.map((gw) => "GW" + gw).join(", ") : "none"}. Inventory: {data.inventory_sync_state === "synced" ? "saved on this device" : "not saved"}. {recommendation.decision_policy.uncertainty_note}</p>
+      <p>Source: {data.projection_source}; coverage: {data.projection_gameweeks.length ? data.projection_gameweeks.map((gw) => "GW" + gw).join(", ") : "none"}. Inventory: {data.inventory_source === "local_user_reported" ? "entered by you on this device" : "not entered"}. {recommendation.decision_policy.uncertainty_note}</p>
       {recommendation.warnings.map((warning) => <p key={warning}>{warning}</p>)}
     </details>
   );
@@ -405,9 +429,16 @@ export default function ChipsPage() {
   }, [inventory, inventoryLoaded, snapshot?.season, lastFreeHitGameweek, plannedChips]);
 
   function addPlannedChip(chip: ChipId, gw: number) {
+    // Only one chip can be played in a gameweek, so a second plan for the
+    // same week replaces the first, after asking.
+    const existing = plannedChips.find((planned) => planned.gw === gw && planned.chip !== chip);
+    if (existing && !window.confirm(
+      `GW${gw} already has ${CHIP_LABELS[existing.chip]} planned. Replace it with ${CHIP_LABELS[chip]}?`)) {
+      return;
+    }
     setPlannedChips((current) => {
-      const withoutDuplicate = current.filter((planned) => !(planned.chip === chip && planned.gw === gw));
-      return [...withoutDuplicate, { chip, gw }].sort((a, b) => a.gw - b.gw);
+      const withoutSameWeek = current.filter((planned) => planned.gw !== gw && !(planned.chip === chip && planned.gw === gw));
+      return [...withoutSameWeek, { chip, gw }].sort((a, b) => a.gw - b.gw);
     });
   }
 
@@ -467,10 +498,11 @@ export default function ChipsPage() {
   const orderedRecommendations = CHIP_IDS.map((chip) => recsByChip.get(chip)).filter(
     (rec): rec is ChipRecommendation => rec != null,
   );
-  const nextDecision = orderedRecommendations.find((rec) => rec.status === "play")
-    ?? orderedRecommendations.find((rec) => rec.status === "watch")
-    ?? orderedRecommendations[0]
-    ?? null;
+  // The backend names at most one current-week candidate. Without one there is
+  // no lead card: an arbitrary first chip would look like a recommendation.
+  const nextDecision = data?.primary_decision
+    ? recsByChip.get(data.primary_decision.chip) ?? null
+    : null;
 
   return (
     <section className="page chips-page" aria-label="Chip advisor">
@@ -531,21 +563,114 @@ export default function ChipsPage() {
           </div>
         )}
 
+        {fetching && <Loading label="Calculating schedule matrices and fixture difficulty…" />}
+
+        {fetchError && (
+          <div className="chip-error">
+            <span>{fetchError}</span>
+            <button
+              type="button"
+              className="btn sm"
+              onClick={() => void loadChips(useSquad ? squadElements : [], effectiveHorizon)}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {data && (
+          <p className="chip-data-bar" role="status">
+            <b>GW{data.first_gw}–{data.last_gw}</b>
+            <span>{data.projection_mode === "model_projection" && data.has_squad ? "Player projections" : "Fixture signal only"}</span>
+            <span>Generated {formatGeneratedAt(data.projection_generated_at)}</span>
+            <span>{data.coverage_warning ?? "All requested weeks covered"}</span>
+            <small>{data.projection_note} Use Refresh in the header to reload predictions.</small>
+          </p>
+        )}
+
+        <section className={`chip-next-decision${nextDecision ? ` status-${nextDecision.status}` : ""}`} aria-live="polite">
+          <div className="chip-next-decision-copy">
+            <span className="kicker">This week&apos;s chip decision</span>
+            <h2>{nextDecision ? CHIP_LABELS[nextDecision.chip] : data ? "No chip stands out this week" : "No chip data yet"}</h2>
+            <p>
+              {nextDecision?.reasons[0] ?? (data
+                ? (data.inventory_source === "unknown"
+                  ? "Open Manage my chips and mark which chips you still have; suggestions stay provisional until then. "
+                  : "") + "Only Triple Captain has a measured gain over your best normal week. Bench Boost, Free Hit and Wildcard show raw evidence only."
+                : "Adjust the horizon or add a complete squad to calculate a decision.")}
+            </p>
+            {data && (
+              <small className="chip-decision-context">
+                {data.projection_mode === "fixture_signal" || !data.has_squad ? "Fixture signal" : "Player projections"} · {data.inventory_source === "local_user_reported" ? "chips entered by you" : "chips not entered"}
+              </small>
+            )}
+            {nextDecision?.warnings.map((warning) => <small key={warning}>{warning}</small>)}
+            {nextDecision && data && <WhyThisChoice recommendation={nextDecision} data={data} />}
+          </div>
+          {nextDecision && (
+            <div className={`chip-decision-score status-${nextDecision.status}`}>
+              <ChipIcon id={nextDecision.chip} size="large" />
+              <strong>
+                {nextDecision.gw
+                  ? `GW${nextDecision.gw}`
+                  : nextDecision.candidate_gw
+                    ? `Candidate GW${nextDecision.candidate_gw}`
+                    : "Hold"}
+              </strong>
+              <span>{STATUS_LABELS[nextDecision.status]}</span>
+              {nextDecision.projected_gain != null && <small>+{num(nextDecision.projected_gain, 1)} extra points vs your normal captain</small>}
+              {nextDecision.fixture_signal_index != null && <small>Fixture index {num(nextDecision.fixture_signal_index, 1)}</small>}
+            </div>
+          )}
+        </section>
+
+        <div className="chip-advisor-grid">
+          {orderedRecommendations.filter((rec) => rec.chip !== nextDecision?.chip).map((rec) => (
+            <article key={rec.chip} className={`chip-advisor-card status-${rec.status}`}>
+              <div className="chip-advisor-header">
+                <div className="chip-advisor-name">
+                  <ChipIcon id={rec.chip} />
+                  {CHIP_LABELS[rec.chip]}
+                </div>
+                <span className={`chip-conf status-${rec.status}`}>{STATUS_LABELS[rec.status]}</span>
+              </div>
+              <div>
+                <div className={`chip-advisor-target${rec.status === "hold" ? " hold" : ""}`}>
+                  {rec.gw ? `GW${rec.gw}` : rec.candidate_gw ? `Candidate GW${rec.candidate_gw}` : rec.status}
+                </div>
+                <p className="chip-advisor-sub">
+                  {rec.status === "consider" ? "Above the policy margin" : rec.status === "watch" ? "Candidate week" : rec.status === "compare" ? "Trade-off with another chip" : STATUS_LABELS[rec.status]}
+                </p>
+              </div>
+              <p className="chip-advisor-desc">{rec.reasons[0]}</p>
+              {rec.projected_gain != null && <p className="chip-advisor-gain">Extra points vs your normal captain +{num(rec.projected_gain, 1)}</p>}
+              {rec.projected_gain == null && rec.raw_signal != null && (
+                <p className="chip-advisor-note">Raw evidence: {num(rec.raw_signal, 1)} {RAW_SIGNAL_LABELS[rec.raw_signal_kind] ?? ""}. Not a gain over your best normal week.</p>
+              )}
+              {rec.fixture_signal_index != null && <p className="chip-advisor-note">Fixture signal index {num(rec.fixture_signal_index, 1)} (not points)</p>}
+              <WhyThisChoice recommendation={rec} data={data!} />
+              <div className="chip-advisor-footer">{CHIP_DESCRIPTIONS[rec.chip]}</div>
+            </article>
+          ))}
+        </div>
+
+        <details className="chip-manage">
+          <summary>Manage my chips <small>{inventory ? "entered on this device" : "not entered"}</small></summary>
         <section className={`chip-inventory inventory-${inventory ? "synced" : "not-synced"}`} aria-label="Chip inventory">
           <div>
-            <span className="kicker">Manager inventory</span>
-            <h2>{inventory ? "Saved on this device" : "Chip history not saved"}</h2>
+            <span className="kicker">Entered by you · not linked to FPL</span>
+            <h2>{inventory ? "Chips you entered on this device" : "Chip history not entered"}</h2>
             <p>
               {inventory
                 ? "Mark a chip used as you play it. An unused first-half chip is shown Expired automatically once GW19 passes -- no private FPL account data is connected, and this device is the only place this is saved."
-                : "Recommendations are provisional until you mark the two half-season sets as available. No private FPL account data is connected."}
+                : "Suggestions stay provisional until you mark the two half-season sets. Nothing here is verified against your FPL account."}
             </p>
           </div>
           <span className={`chip-inventory-state state-${inventory ? "synced" : "not-synced"}`}>
-            {inventory ? "Saved" : "Not saved"}
+            {inventory ? "Entered" : "Not entered"}
           </span>
           <button type="button" className="btn secondary sm" onClick={() => setInventory(inventory ? null : blankInventory())}>
-            {inventory ? "Reset to not saved" : "Mark chips available"}
+            {inventory ? "Clear my chip entries" : "Mark chips available"}
           </button>
           {inventory && (
             <div className="chip-inventory-grid">
@@ -604,81 +729,9 @@ export default function ChipsPage() {
           )}
         </section>
 
-        {fetching && <Loading label="Calculating schedule matrices and fixture difficulty…" />}
+        </details>
 
-        {fetchError && (
-          <div className="chip-error">
-            <span>{fetchError}</span>
-            <button
-              type="button"
-              className="btn sm"
-              onClick={() => void loadChips(useSquad ? squadElements : [], effectiveHorizon)}
-            >
-              Retry
-            </button>
-          </div>
-        )}
-
-        <section className={`chip-next-decision${nextDecision ? ` status-${nextDecision.status}` : ""}`} aria-live="polite">
-          <div className="chip-next-decision-copy">
-            <span className="kicker">Next chip decision</span>
-            <h2>{nextDecision ? CHIP_LABELS[nextDecision.chip] : "No chip data yet"}</h2>
-            <p>
-              {nextDecision?.reasons[0] ?? "Adjust the horizon or add a complete squad to calculate a decision."}
-            </p>
-            {nextDecision && data && (
-              <small className="chip-decision-context">
-                {data.projection_mode === "fixture_signal" || !data.has_squad ? "Fixture signal" : "Player projections"} · {data.inventory_sync_state === "synced" ? "inventory saved" : "inventory not saved"}
-              </small>
-            )}
-            {nextDecision?.warnings.map((warning) => <small key={warning}>{warning}</small>)}
-            {nextDecision && data && <WhyThisChoice recommendation={nextDecision} data={data} />}
-          </div>
-          {nextDecision && (
-            <div className={`chip-decision-score status-${nextDecision.status}`}>
-              <ChipIcon id={nextDecision.chip} size="large" />
-              <strong>
-                {nextDecision.status === "play" && nextDecision.gw
-                  ? `GW${nextDecision.gw}`
-                  : nextDecision.candidate_gw
-                    ? `Candidate GW${nextDecision.candidate_gw}`
-                    : "Hold"}
-              </strong>
-              <span>{nextDecision.status}</span>
-              {nextDecision.projected_gain != null && <small>+{num(nextDecision.projected_gain, 1)} projected pts</small>}
-              {nextDecision.fixture_signal_index != null && <small>Fixture index {num(nextDecision.fixture_signal_index, 1)}</small>}
-            </div>
-          )}
-        </section>
-
-        <div className="chip-advisor-grid">
-          {orderedRecommendations.filter((rec) => rec.chip !== nextDecision?.chip).map((rec) => (
-            <article key={rec.chip} className={`chip-advisor-card status-${rec.status}`}>
-              <div className="chip-advisor-header">
-                <div className="chip-advisor-name">
-                  <ChipIcon id={rec.chip} />
-                  {CHIP_LABELS[rec.chip]}
-                </div>
-                <span className={`chip-conf ${rec.confidence} status-${rec.status}`}>{rec.status}</span>
-              </div>
-              <div>
-                <div className={`chip-advisor-target${rec.status === "hold" ? " hold" : ""}`}>
-                  {rec.gw ? `GW${rec.gw}` : rec.candidate_gw ? `Candidate GW${rec.candidate_gw}` : rec.status}
-                </div>
-                <p className="chip-advisor-sub">
-                  {rec.status === "play" ? "Policy margin met" : rec.status === "watch" ? "Candidate week" : rec.status}
-                </p>
-              </div>
-              <p className="chip-advisor-desc">{rec.reasons[0]}</p>
-              {rec.projected_gain != null && <p className="chip-advisor-gain">Projected gain +{num(rec.projected_gain, 1)} pts</p>}
-              {rec.fixture_signal_index != null && <p className="chip-advisor-note">Fixture signal index {num(rec.fixture_signal_index, 1)} (not points)</p>}
-              <WhyThisChoice recommendation={rec} data={data!} />
-              <div className="chip-advisor-footer">{CHIP_DESCRIPTIONS[rec.chip]}</div>
-            </article>
-          ))}
-        </div>
-
-        {data && <ChipOpportunityMatrix rows={data.rows} recommendations={data.recommendations} projectionMode={data.projection_mode} hasSquad={data.has_squad} />}
+        {data && <ChipOpportunityMatrix rows={data.rows} primary={data.primary_decision} projectionMode={data.projection_mode} hasSquad={data.has_squad} />}
 
         <div className="chip-heatmap-section">
           <div className="sub-head">
@@ -701,6 +754,7 @@ export default function ChipsPage() {
                   <th>Blank Teams</th>
                   <th>Avg FDR</th>
                   <th>Signal</th>
+                  <th>Projection</th>
                 </tr>
               </thead>
               <tbody>
@@ -770,6 +824,12 @@ export default function ChipsPage() {
                         <span className={signalClass}>
                           {signal}
                         </span>
+                      </td>
+                      <td>
+                        {row.projection_state === "complete" ? "Complete"
+                          : row.projection_state === "partial" ? "Partial"
+                            : row.projection_state === "fixture_only" ? "Fixtures only"
+                              : "No confirmed fixtures"}
                       </td>
                     </tr>
                   );
