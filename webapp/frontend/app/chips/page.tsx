@@ -52,6 +52,23 @@ const PROJECTION_STATE_LABELS: Record<string, string> = {
   unknown: "No confirmed fixtures",
 };
 
+const BAR_STRIP_MAX_WEEKS = 8;
+
+// A small, meaningful window for the per-card BarStrip: the next few
+// upcoming eligible weeks, plus the assigned ("best") and current ("now")
+// weeks even if they'd otherwise fall outside that window.
+function pickBarWeeks(candidates: number[], now: number, best: number | null): number[] {
+  const upcoming = candidates.filter((gw) => gw >= now).sort((a, b) => a - b);
+  let picked = upcoming.slice(0, BAR_STRIP_MAX_WEEKS);
+  if (best != null && candidates.includes(best) && !picked.includes(best)) {
+    picked = [...picked, best];
+  }
+  if (candidates.includes(now) && !picked.includes(now)) {
+    picked = [...picked, now];
+  }
+  return Array.from(new Set(picked)).sort((a, b) => a - b);
+}
+
 function formatGeneratedAt(value: string | null): string {
   if (!value) return "time unknown";
   const date = new Date(value);
@@ -695,7 +712,12 @@ export default function ChipsPage() {
         <div className="chip-advisor-grid stagger">
           {orderedRecommendations.filter((rec) => rec.chip !== heroRec?.chip).map((rec, index) => {
             const nowGain = data ? rec.gains_by_week[String(data.current_gameweek)] ?? null : null;
-            const barItems = rec.candidate_gameweeks.map((gw) => ({
+            // The full picture lives in the gain heatmap below; this strip is
+            // a quick glance, so it shows a handful of upcoming weeks rather
+            // than every eligible week to GW38 -- cramming 20-30 bars into a
+            // card-width chart made every label overlap into an unreadable mess.
+            const barWeeks = data?.has_squad ? pickBarWeeks(rec.candidate_gameweeks, data.current_gameweek, rec.gw) : [];
+            const barItems = barWeeks.map((gw) => ({
               key: String(gw),
               label: `GW${gw}`,
               value: rec.gains_by_week[String(gw)] ?? null,

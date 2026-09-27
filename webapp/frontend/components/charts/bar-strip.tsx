@@ -14,6 +14,11 @@ function barColor(item: BarStripItem): string {
   return "rgba(255,255,255,.28)";
 }
 
+// Past this many bars, a persistent label under every column overlaps its
+// neighbours and reads as noise -- the exact value is still available via
+// the tooltip, so labels are dropped rather than shrunk into garbage.
+const MAX_LABELLED_ITEMS = 10;
+
 export function BarStrip({ items, height = 44 }: { readonly items: BarStripItem[]; readonly height?: number }) {
   const values = items.map((item) => item.value).filter((value): value is number => value != null);
   const maxAbs = Math.max(...values.map((value) => Math.abs(value)), 1);
@@ -21,6 +26,7 @@ export function BarStrip({ items, height = 44 }: { readonly items: BarStripItem[
   const zeroY = hasNegative ? height / 2 : height;
   const barMax = hasNegative ? height / 2 : height;
   const barWidth = `calc((100% - ${(items.length - 1) * 2}px) / ${items.length})`;
+  const showLabels = items.length <= MAX_LABELLED_ITEMS;
 
   return (
     <div
@@ -55,7 +61,7 @@ export function BarStrip({ items, height = 44 }: { readonly items: BarStripItem[
                       }}
                     />
                   )}
-                  <span className="bar-strip-label">{item.label}</span>
+                  {showLabels && <span className="bar-strip-label">{item.label}</span>}
                 </div>
               }
             />
