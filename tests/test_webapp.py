@@ -464,32 +464,35 @@ def test_chips_response_matches_the_frontend_contract() -> None:
     assert response.status_code == 200
     data = response.get_json()
     assert data["ok"] is True
-    assert data["contract_version"] == app_module.opt.CHIPS_CONTRACT_VERSION
+    assert data["contract_version"] == app_module.opt.CHIPS_CONTRACT_VERSION == 4
     required_top_level = {
         "first_gw", "last_gw", "any_dgw", "any_bgw", "has_squad", "rows",
-        "recommendations", "current_gameweek", "projection_mode",
-        "inventory_source", "primary_decision", "projection_semantics",
-        "projection_note", "scheduled_gameweeks",
+        "week_states", "recommendations", "chip_plan", "current_gameweek",
+        "projection_mode", "inventory_source", "primary_decision",
+        "projection_semantics", "projection_note", "scheduled_gameweeks",
         "projection_source", "projection_generated_at", "projection_gameweeks",
         "requested_horizon", "evaluated_horizon", "coverage_warning",
         "data_quality", "methodology_version", "decision_policy",
+        "free_transfers_used",
     }
     assert required_top_level <= data.keys()
     assert isinstance(data["projection_gameweeks"], list)
+    assert isinstance(data["chip_plan"], list)
 
     for row in data["rows"]:
         assert {"gw", "matches", "dgw_teams", "blank_teams", "avg_fdr",
-                "projected_gain", "raw_signal", "fixture_signal_index",
-                "projection_state"} <= row.keys()
+                "fixture_signal", "projection_state"} <= row.keys()
 
     for rec in data["recommendations"]:
         assert {"chip", "label", "status", "candidate_gameweeks", "gw",
-                "candidate_gw", "projected_gain", "fixture_signal_index",
-                "alternatives", "decision_policy", "reasons", "warnings",
-                "raw_signal", "raw_signal_kind", "inventory_windows"} <= rec.keys()
-        assert rec["status"] in {"watch", "consider", "hold", "unavailable", "compare"}
+                "gain", "discounted_gain", "close_call", "use_or_lose",
+                "gains_by_week", "evidence", "reasons", "warnings",
+                "inventory_windows"} <= rec.keys()
+        assert rec["status"] in {"play_now", "planned", "hold", "unavailable", "no_squad"}
         assert "confidence" not in rec
-        assert {"minimum_projected_gain", "uncertainty_note", "basis"} <= rec["decision_policy"].keys()
+        assert "fixture_signal_index" not in rec
+        assert {"min_gain", "close_call_margin", "future_reliability",
+                "wildcard_window", "uncertainty_note", "basis"} <= data["decision_policy"].keys()
 
 
 def test_chips_reject_two_chips_planned_for_one_gameweek() -> None:

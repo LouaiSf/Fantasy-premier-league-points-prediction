@@ -296,7 +296,7 @@ def test_load_predictions_uses_earliest_gw_and_sums_double_fixtures(tmp_path) ->
     ]).to_csv(path, index=False)
 
     current = load_predictions(str(path))
-    horizon_players, points, gameweeks = load_horizon(str(path))
+    horizon_players, points, _p_plays, gameweeks = load_horizon(str(path))
 
     assert set(current['GW']) == {5}
     assert current.set_index('element')['predicted_points'].to_dict() == {1: 4.5, 2: 3.0}
@@ -329,18 +329,25 @@ def test_cli_chip_advice_loads_and_aligns_horizon_matrix(tmp_path, monkeypatch, 
             'first_gw': 1, 'last_gw': 2, 'any_dgw': False, 'any_bgw': False,
             'projection_mode': 'model_projection', 'projection_gameweeks': [1, 2],
             'coverage_warning': None, 'unmapped_teams': [], 'rows': [],
-            'recommendations': [],
+            'recommendations': [], 'chip_plan': [],
         }
 
+    import chip_engine as chip_engine_module
+
     monkeypatch.setattr(optimise_module, 'PREDICTIONS', str(prediction_path))
-    monkeypatch.setattr(optimise_module, 'compute_chips', capture_inputs)
+    monkeypatch.setattr(chip_engine_module, 'compute_chips', capture_inputs)
 
     chip_advice(None, 'test-season', 1, 2, players)
 
     assert received['future_points'].to_numpy().tolist() == [[3.0, 4.0], [2.0, 8.0]]
     assert received['projection_generated_at'] is not None
 
-def test_single_gameweek_matrix_cannot_become_future_player_gain(monkeypatch, tmp_path):
+def test_single_covered_gameweek_still_gives_a_squad_specific_plan(monkeypatch, tmp_path):
+    # Contract v4 (chip_engine.build_point_matrix) deliberately no longer
+    # requires the export to cover the whole requested horizon before
+    # trusting it: a single covered gameweek is enough to project the squad,
+    # extrapolating the rest. See test_chip_advisor.py for the full A2/A6
+    # regression coverage of that behaviour.
     from test_chip_advisor import market, synced_inventory, write_season
     from optimise import compute_chips
 
@@ -355,13 +362,10 @@ def test_single_gameweek_matrix_cannot_become_future_player_gain(monkeypatch, tm
         inventory=synced_inventory(), future_points=only_current,
     )
 
-    assert data['projection_mode'] == 'fixture_signal'
-    assert data['evaluated_horizon'] == 1
-    assert 'covers 1 of 4' in data['coverage_warning']
-    assert all(rec['projected_gain'] is None for rec in data['recommendations'])
-    assert all(rec['fixture_signal_index'] is not None for rec in data['recommendations'])
-    assert all(rec['status'] != 'play' for rec in data['recommendations'])
-    assert all(rec['evidence'] is None for rec in data['recommendations'])
+    assert data['projection_mode'] == 'model_projection'
+    assert data['has_squad'] is True
+    assert data['week_states'][1] == 'projected'
+    assert data['week_states'][2] == 'extrapolated'
 
 
 def test_fixed_squad_gets_xi_ordered_bench_and_two_armbands() -> None:

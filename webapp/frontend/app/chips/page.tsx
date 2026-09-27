@@ -10,6 +10,8 @@ import { Skeleton } from "@/components/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { ChipIcon } from "@/components/chips/chip-icon";
 import { ChipOpportunityMatrix } from "@/components/chips/chip-opportunity-matrix";
+import { ChipPlanTimeline } from "@/components/chips/chip-plan-timeline";
+import { BarStrip } from "@/components/charts/bar-strip";
 import { CountUp } from "@/components/motion/count-up";
 import { m, AnimatePresence } from "motion/react";
 import { CHIP_IDS, type ChipId, type ChipInventory, type ChipRecommendation, type ChipRow, type ChipsResult, type ChipState, type ChipStatus } from "@/lib/types";
@@ -35,18 +37,19 @@ const CHIP_DESCRIPTIONS: Record<ChipId, string> = {
 };
 
 const STATUS_LABELS: Record<ChipStatus, string> = {
-  consider: "Consider",
-  compare: "Compare",
-  watch: "Watch",
+  play_now: "Play now",
+  planned: "Planned",
   hold: "Hold",
   unavailable: "Unavailable",
+  no_squad: "Fixtures only",
 };
 
-const RAW_SIGNAL_LABELS: Record<string, string> = {
-  extra_captain_points: "extra captain points",
-  gross_bench_points: "gross bench points",
-  raw_lineup_delta: "raw lineup difference",
-  rebuild_potential_vs_static_squad: "rebuild potential vs a frozen squad",
+const PROJECTION_STATE_LABELS: Record<string, string> = {
+  projected: "Projected",
+  extrapolated: "Extrapolated",
+  no_fixtures: "No fixtures",
+  complete: "Complete",
+  unknown: "No confirmed fixtures",
 };
 
 function formatGeneratedAt(value: string | null): string {
@@ -110,11 +113,6 @@ function normalizeStoredState(state: ChipState): ChipState {
 
 function nextInventoryState(state: ChipState): ChipState {
   return state === "unused" ? "used" : "unused";
-}
-
-function captainFixtureLabel(fixtures: number): string {
-  if (fixtures === 2) return "Double gameweek";
-  return `${fixtures} ${fixtures === 1 ? "fixture" : "fixtures"}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -298,48 +296,50 @@ function WhyThisChoice({ recommendation, data }: { recommendation: ChipRecommend
   return (
     <details className="chip-method chip-why">
       <summary>Why this choice</summary>
-      <p>{recommendation.formula ?? "No player-level calculation is available for this candidate."}</p>
-      {evidence?.chip === "triple_captain" && evidence.captain && (
+      {evidence?.chip === "triple_captain" && (
         <p>
-          {evidence.captain.name} ({evidence.captain.team}) projects {num(evidence.captain.projected_points ?? 0, 1)} points across {captainFixtureLabel(evidence.captain.fixtures)}.
-          Normal captain total: {num(evidence.normal_captain_total, 1)}; Triple Captain total: {num(evidence.triple_captain_total ?? 0, 1)}; extra points from the chip: {num(evidence.incremental_gain ?? 0, 1)}. Projections already include the chance of playing.
+          {evidence.captain.name} ({evidence.captain.team}, {evidence.captain.position}) projects {num(evidence.captain.projected_points, 1)} points
+          as the extra copy of the armband. Projections already include the chance of playing.
         </p>
       )}
       {evidence?.chip === "bench_boost" && (
         <>
           <ul>{evidence.ordered_bench.map((player) => (
-            <li key={player.element}>{player.player}: {num(player.points, 1)} pts, {player.available ? "available" : "unavailable"}</li>
+            <li key={player.element}>{player.player}: {num(player.points, 1)} pts</li>
           ))}</ul>
-          <p>Gross bench projection: {num(evidence.gross_bench_points, 1)} points. This is not a net Bench Boost gain: the points a bench player would score anyway, and the outfield substitutions of a normal week, are not netted off.</p>
+          <p>
+            Gross bench projection {num(evidence.bench_total, 1)}, minus {num(evidence.expected_autosub_points, 1)} points
+            the bench would score anyway through a normal week&apos;s autosubs.
+          </p>
         </>
       )}
       {evidence?.chip === "free_hit" && (
         <p>
-          Current total {num(evidence.current_xi_captain_total, 1)}; optimized one-week total {num(evidence.optimized_xi_captain_total ?? 0, 1)}; raw lineup difference {num(evidence.raw_lineup_delta ?? 0, 1)} points across {evidence.changed_player_count} changed players. This is not a chip gain: the transfers you could make without a chip are not subtracted.
+          A one-week squad projects {num(evidence.free_hit_total, 1)} points, against {num(evidence.no_chip_total, 1)} for
+          the best transfer you could make instead with {evidence.no_chip_free_transfers} free transfer{evidence.no_chip_free_transfers === 1 ? "" : "s"}
+          {" "}({evidence.changed_player_count} changed player{evidence.changed_player_count === 1 ? "" : "s"} on the one-week squad).
         </p>
       )}
       {evidence?.chip === "wildcard" && (
-        <>
-          <p>
-            Frozen current squad {num(evidence.current_cumulative_total, 1)}; rebuilt squad {num(evidence.optimized_cumulative_total, 1)} across {evidence.horizon_length} weeks and {evidence.changed_player_count} changed players. This is rebuild potential against a squad that never transfers, not the gain from playing a Wildcard.
-          </p>
-          <p>Weekly differences: {Object.entries(evidence.weekly_deltas).map(([gw, gain]) => "GW" + gw + " " + num(gain, 1)).join(" · ")}.</p>
-        </>
-      )}
-      {recommendation.alternatives.length > 0 && (
         <p>
-          Top candidates: {recommendation.alternatives.map((candidate) => (
-            "GW" + candidate.gw + " " + (
-              candidate.projected_gain != null ? "+" + num(candidate.projected_gain, 1) + " pts"
-                : candidate.raw_signal != null ? num(candidate.raw_signal, 1) + " (" + (RAW_SIGNAL_LABELS[recommendation.raw_signal_kind] ?? "raw evidence") + ")"
-                  : "fixture index " + num(candidate.fixture_signal_index ?? 0, 1))
-          )).join(" · ")}.
-          {recommendation.runner_up_gameweek != null && recommendation.gap_to_runner_up != null
-            ? " Runner-up GW" + recommendation.runner_up_gameweek + "; gap " + num(recommendation.gap_to_runner_up, 1) + "."
-            : ""}
+          Rebuilding the squad projects {evidence.wildcard_total != null ? num(evidence.wildcard_total, 1) : "—"} points
+          across GW{evidence.window_gameweeks[0]}–GW{evidence.window_gameweeks[evidence.window_gameweeks.length - 1]}
+          {evidence.truncated ? " (season ends before a full 6-week window)" : ""}, against the best you could do with rolling free
+          transfers over the same weeks ({evidence.changed_player_count} changed players).
         </p>
       )}
-      <p>Source: {data.projection_source}; coverage: {data.projection_gameweeks.length ? data.projection_gameweeks.map((gw) => "GW" + gw).join(", ") : "none"}. Inventory: {data.inventory_source === "local_user_reported" ? "entered by you on this device" : "not entered"}. {recommendation.decision_policy.uncertainty_note}</p>
+      {recommendation.candidate_gameweeks.length > 0 && (
+        <p>
+          Every eligible week: {recommendation.candidate_gameweeks.map((gw) => {
+            const value = recommendation.gains_by_week[String(gw)];
+            return "GW" + gw + " " + (value != null ? "+" + num(value, 1) : "—");
+          }).join(" · ")}.
+        </p>
+      )}
+      <p>
+        Source: {data.projection_source}; coverage: {data.projection_gameweeks.length ? data.projection_gameweeks.map((gw) => "GW" + gw).join(", ") : "none"}.
+        Inventory: {data.inventory_source === "local_user_reported" ? "entered by you on this device" : "not entered"}. {data.decision_policy.uncertainty_note}
+      </p>
       {recommendation.warnings.map((warning) => <p key={warning}>{warning}</p>)}
     </details>
   );
@@ -350,7 +350,6 @@ export default function ChipsPage() {
   const [data, setData] = React.useState<ChipsResult | null>(null);
   const [fetching, setFetching] = React.useState(false);
   const [fetchError, setFetchError] = React.useState<string | null>(null);
-  const [horizon, setHorizon] = React.useState<number>(8);
   const [useSquad, setUseSquad] = React.useState<boolean>(true);
   const [inventory, setInventory] = React.useState<ChipInventory | null>(null);
   const [inventoryLoaded, setInventoryLoaded] = React.useState(false);
@@ -401,21 +400,10 @@ export default function ChipsPage() {
     [storedSquad?.freeTransfersSource, setFreeTransfers],
   );
 
-  const maxPossibleHorizon = Math.max(1, 38 - (snapshot?.gameweek ?? 1) + 1);
-  const effectiveHorizon = Math.min(horizon, maxPossibleHorizon);
-  // The preset options plus whatever's left of the season, so a horizon
-  // near GW38 (where maxPossibleHorizon can be smaller than every preset)
-  // still has a matching <option> instead of leaving the select's value
-  // -- and effectiveHorizon -- with nothing to bind to.
-  const horizonOptions = React.useMemo(() => {
-    const presets = [4, 6, 8, 10, 12, 16].filter((h) => h <= maxPossibleHorizon);
-    if (!presets.includes(maxPossibleHorizon)) presets.push(maxPossibleHorizon);
-    return presets;
-  }, [maxPossibleHorizon]);
   const requestIdRef = React.useRef(0);
 
   const loadChips = React.useCallback(
-    async (squadIds: number[], h: number) => {
+    async (squadIds: number[]) => {
       const requestId = ++requestIdRef.current;
       setFetching(true);
       setFetchError(null);
@@ -423,7 +411,6 @@ export default function ChipsPage() {
       try {
         const res = await api.chips({
           elements: hasFullSquad ? squadIds : undefined,
-          horizon: h,
           chip_inventory: inventory ? effectiveInventory(inventory, snapshot?.gameweek ?? null) : undefined,
           scheduled_gameweeks: scheduledGameweeks,
           last_free_hit_gameweek: lastFreeHitGameweek,
@@ -433,6 +420,7 @@ export default function ChipsPage() {
           selling_prices_tenths: hasFullSquad
             ? sellingPricesTenthsForSquad(squadPlayers, storedSquad?.finance ?? null)
             : undefined,
+          free_transfers: hasFullSquad ? storedSquad?.freeTransfers : undefined,
         });
         if (requestId !== requestIdRef.current) return;
         if (res && res.ok) {
@@ -456,10 +444,10 @@ export default function ChipsPage() {
     if (!snapshot?.prediction_available || !inventoryLoaded) return;
     const elements = useSquad ? squadElements : [];
     const timer = window.setTimeout(() => {
-      void loadChips(elements, effectiveHorizon);
+      void loadChips(elements);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [snapshot?.prediction_available, inventoryLoaded, useSquad, squadElements, effectiveHorizon, loadChips]);
+  }, [snapshot?.prediction_available, inventoryLoaded, useSquad, squadElements, loadChips]);
 
   React.useEffect(() => {
     if (!snapshot?.season) return;
@@ -574,11 +562,22 @@ export default function ChipsPage() {
   const orderedRecommendations = CHIP_IDS.map((chip) => recsByChip.get(chip)).filter(
     (rec): rec is ChipRecommendation => rec != null,
   );
-  // The backend names at most one current-week candidate. Without one there is
-  // no lead card: an arbitrary first chip would look like a recommendation.
-  const nextDecision = data?.primary_decision
+  // The backend names at most one play-now candidate. Without one, fall back
+  // to the plan's best (future) week so the hero always says something.
+  const playNow = data?.primary_decision
     ? recsByChip.get(data.primary_decision.chip) ?? null
     : null;
+  const bestPlanned = !playNow && data?.chip_plan.length
+    ? recsByChip.get(
+        [...data.chip_plan].sort(
+          (a, b) => (b.discounted_gain ?? -Infinity) - (a.discounted_gain ?? -Infinity),
+        )[0].chip,
+      ) ?? null
+    : null;
+  const heroRec = playNow ?? bestPlanned ?? null;
+  const squadReasonNeeded = squadNames.length < 15
+    ? `Needs 15 players (you have ${squadNames.length})`
+    : undefined;
 
   return (
     <section className="page chips-page" aria-label="Chip advisor">
@@ -588,58 +587,46 @@ export default function ChipsPage() {
             <span className="badge lime">Chip planning desk</span>
             <h1 className="display-hero">Chip Advisor</h1>
             <p>
-              {data && data.projection_mode === "model_projection" && data.data_quality === "complete_horizon"
-                ? "Player projections with candidate weeks, inventory state, and supporting evidence."
-                : "Fixture signals only; projected point gains unavailable."}
+              {data && data.has_squad
+                ? "A squad-specific, horizon-independent chip plan through the end of the season."
+                : "Fixture signals only; build a 15-player squad in My Team for a player-based plan."}
             </p>
           </div>
 
           <div className="section-head-actions">
-            <div className="filter-row">
-              <label
-                htmlFor="chips-horizon"
-                className="kicker kicker-row"
+            <div className="chip-mode-toggle" role="group" aria-label="Evaluation mode">
+              <button
+                type="button"
+                className={`btn sm${useSquad ? " active" : ""}`}
+                onClick={() => setUseSquad(true)}
+                disabled={squadNames.length < 15}
+                title={squadReasonNeeded ?? "Evaluate with your active 15-player squad"}
               >
-                Horizon:
-                <select
-                  id="chips-horizon"
-                  value={effectiveHorizon}
-                  onChange={(e) => setHorizon(Number(e.target.value))}
-                  className="ctrl-select"
-                >
-                  {horizonOptions.map((h) => (
-                    <option key={h} value={h}>{h} Gameweeks</option>
-                  ))}
-                </select>
-              </label>
+                My squad
+              </button>
+              <button
+                type="button"
+                className={`btn sm${!useSquad ? " active" : ""}`}
+                onClick={() => setUseSquad(false)}
+                title="League-wide fixture signals only, no squad required"
+              >
+                Fixtures only
+              </button>
             </div>
-
-            <button
-              type="button"
-              className={`btn sm ${useSquad ? "" : "ghost"}`}
-              onClick={() => setUseSquad((prev) => !prev)}
-              title={
-                squadNames.length === 15
-                  ? "Evaluate with your active 15-player squad"
-                  : "Build a squad in My Team for squad-specific advice"
-              }
-            >
-              {useSquad && squadNames.length === 15 ? "Squad Tailored" : "League Generic"}
-            </button>
           </div>
         </header>
 
-        {useSquad && squadNames.length < 15 && (
+        {useSquad && squadReasonNeeded && (
           <div className="chip-squad-notice">
             <span className="chip-squad-notice-icon" aria-hidden="true">i</span>
             <span>
-              Your squad has {squadNames.length}/15 players. Using league-wide fixture signals.
-              Head to <strong>My Team</strong> to complete your squad for tailored analysis.
+              {squadReasonNeeded}. Using league-wide fixture signals.
+              Head to <strong>My Team</strong> to complete your squad for a squad-specific plan.
             </span>
           </div>
         )}
 
-        {fetching && <Loading label="Calculating schedule matrices and fixture difficulty…" />}
+        {fetching && <Loading label="Calculating the chip plan…" />}
 
         {fetchError && (
           <div className="chip-error">
@@ -647,7 +634,7 @@ export default function ChipsPage() {
             <button
               type="button"
               className="btn sm"
-              onClick={() => void loadChips(useSquad ? squadElements : [], effectiveHorizon)}
+              onClick={() => void loadChips(useSquad ? squadElements : [])}
             >
               Retry
             </button>
@@ -657,77 +644,93 @@ export default function ChipsPage() {
         {data && (
           <p className="chip-data-bar" role="status">
             <b>GW{data.first_gw}–{data.last_gw}</b>
-            <span>{data.projection_mode === "model_projection" && data.has_squad ? "Player projections" : "Fixture signal only"}</span>
+            <span>{data.has_squad ? "Player projections" : "Fixture signal only"}</span>
             <span>Generated {formatGeneratedAt(data.projection_generated_at)}</span>
-            <span>{data.coverage_warning ?? "All requested weeks covered"}</span>
             <small>{data.projection_note} Use Refresh in the header to reload predictions.</small>
           </p>
         )}
 
-        <section className={`chip-next-decision${nextDecision ? ` status-${nextDecision.status}` : ""}`} aria-live="polite">
+        <section className={`chip-next-decision${heroRec ? ` status-${heroRec.status}` : ""}`} aria-live="polite">
           <div className="chip-next-decision-copy">
             <span className="kicker">This week&apos;s chip decision</span>
-            <h2>{nextDecision ? CHIP_LABELS[nextDecision.chip] : data ? "No chip stands out this week" : "No chip data yet"}</h2>
+            <h2>
+              {playNow
+                ? `Play ${CHIP_LABELS[playNow.chip]}`
+                : bestPlanned
+                  ? `No chip this week: best plan uses ${CHIP_LABELS[bestPlanned.chip]} in GW${bestPlanned.gw}`
+                  : data
+                    ? "No chip stands out this week"
+                    : "No chip data yet"}
+            </h2>
             <p>
-              {nextDecision?.reasons[0] ?? (data
+              {heroRec?.reasons[0] ?? (data
                 ? (data.inventory_source === "unknown"
-                  ? "Open Manage my chips and mark which chips you still have; suggestions stay provisional until then. "
-                  : "") + "Only Triple Captain has a measured gain over your best normal week. Bench Boost, Free Hit and Wildcard show raw evidence only."
-                : "Adjust the horizon or add a complete squad to calculate a decision.")}
+                  ? "Open Manage my chips and mark which chips you still have; suggestions stay provisional until then."
+                  : "Build a complete squad in My Team to calculate a decision.")
+                : "Build a complete squad in My Team to calculate a decision.")}
             </p>
             {data && (
               <small className="chip-decision-context">
-                {data.projection_mode === "fixture_signal" || !data.has_squad ? "Fixture signal" : "Player projections"} · {data.inventory_source === "local_user_reported" ? "chips entered by you" : "chips not entered"}
+                {data.has_squad ? "Player projections" : "Fixture signal"} · {data.inventory_source === "local_user_reported" ? "chips entered by you" : "chips not entered"}
               </small>
             )}
-            {nextDecision?.warnings.map((warning) => <small key={warning}>{warning}</small>)}
-            {nextDecision && data && <WhyThisChoice recommendation={nextDecision} data={data} />}
+            {heroRec?.close_call && <small className="chip-close-call-badge">Close call vs the alternative week</small>}
+            {heroRec?.warnings.map((warning) => <small key={warning}>{warning}</small>)}
+            {heroRec && data && <WhyThisChoice recommendation={heroRec} data={data} />}
           </div>
-          {nextDecision && (
-            <div className={`chip-decision-score status-${nextDecision.status}`}>
-              <ChipIcon id={nextDecision.chip} size="large" />
-              <strong>
-                {nextDecision.gw
-                  ? `GW${nextDecision.gw}`
-                  : nextDecision.candidate_gw
-                    ? `Candidate GW${nextDecision.candidate_gw}`
-                    : "Hold"}
-              </strong>
-              <span>{STATUS_LABELS[nextDecision.status]}</span>
-              {nextDecision.projected_gain != null && <small>+<CountUp value={nextDecision.projected_gain} decimals={1} /> extra points vs your normal captain</small>}
-              {nextDecision.fixture_signal_index != null && <small>Fixture index {num(nextDecision.fixture_signal_index, 1)}</small>}
+          {heroRec && (
+            <div className={`chip-decision-score status-${heroRec.status}`}>
+              <ChipIcon id={heroRec.chip} size="large" />
+              <strong>{heroRec.gw ? `GW${heroRec.gw}` : STATUS_LABELS[heroRec.status]}</strong>
+              <span>{STATUS_LABELS[heroRec.status]}</span>
+              {heroRec.gain != null && <small>+<CountUp value={heroRec.gain} decimals={1} /> extra points vs your best normal week</small>}
             </div>
           )}
         </section>
 
+        {data && (data.rows?.length ?? 0) > 0 && (
+          <ChipPlanTimeline rows={data.rows} chipPlan={data.chip_plan} currentGameweek={data.current_gameweek} />
+        )}
+
         <div className="chip-advisor-grid stagger">
-          {orderedRecommendations.filter((rec) => rec.chip !== nextDecision?.chip).map((rec, index) => (
-            <article key={rec.chip} className={`chip-advisor-card lift status-${rec.status}`} style={{ "--i": index } as React.CSSProperties}>
-              <div className="chip-advisor-header">
-                <div className="chip-advisor-name">
-                  <ChipIcon id={rec.chip} />
-                  {CHIP_LABELS[rec.chip]}
+          {orderedRecommendations.filter((rec) => rec.chip !== heroRec?.chip).map((rec, index) => {
+            const nowGain = data ? rec.gains_by_week[String(data.current_gameweek)] ?? null : null;
+            const barItems = rec.candidate_gameweeks.map((gw) => ({
+              key: String(gw),
+              label: `GW${gw}`,
+              value: rec.gains_by_week[String(gw)] ?? null,
+              state: (gw === data?.current_gameweek ? "now" : gw === rec.gw ? "best" : "default") as "now" | "best" | "default",
+            }));
+            return (
+              <article key={rec.chip} className={`chip-advisor-card lift status-${rec.status}`} style={{ "--i": index } as React.CSSProperties}>
+                <div className="chip-advisor-header">
+                  <div className="chip-advisor-name">
+                    <ChipIcon id={rec.chip} />
+                    {CHIP_LABELS[rec.chip]}
+                  </div>
+                  <span className={`chip-conf status-${rec.status}`}>
+                    {STATUS_LABELS[rec.status]}
+                    {rec.close_call && " · Close call"}
+                  </span>
                 </div>
-                <span className={`chip-conf status-${rec.status}`}>{STATUS_LABELS[rec.status]}</span>
-              </div>
-              <div>
-                <div className={`chip-advisor-target${rec.status === "hold" ? " hold" : ""}`}>
-                  {rec.gw ? `GW${rec.gw}` : rec.candidate_gw ? `Candidate GW${rec.candidate_gw}` : rec.status}
+                <div>
+                  <div className={`chip-advisor-target${rec.status === "hold" ? " hold" : ""}`}>
+                    {rec.gw ? `GW${rec.gw}` : STATUS_LABELS[rec.status]}
+                  </div>
+                  {rec.gain != null && (
+                    <p className="chip-advisor-sub">
+                      Now {nowGain != null ? num(nowGain, 1) : "—"} vs best +<CountUp value={rec.gain} decimals={1} />
+                    </p>
+                  )}
                 </div>
-                <p className="chip-advisor-sub">
-                  {rec.status === "consider" ? "Above the policy margin" : rec.status === "watch" ? "Candidate week" : rec.status === "compare" ? "Trade-off with another chip" : STATUS_LABELS[rec.status]}
-                </p>
-              </div>
-              <p className="chip-advisor-desc">{rec.reasons[0]}</p>
-              {rec.projected_gain != null && <p className="chip-advisor-gain">Extra points vs your normal captain +{num(rec.projected_gain, 1)}</p>}
-              {rec.projected_gain == null && rec.raw_signal != null && (
-                <p className="chip-advisor-note">Raw evidence: {num(rec.raw_signal, 1)} {RAW_SIGNAL_LABELS[rec.raw_signal_kind] ?? ""}. Not a gain over your best normal week.</p>
-              )}
-              {rec.fixture_signal_index != null && <p className="chip-advisor-note">Fixture signal index {num(rec.fixture_signal_index, 1)} (not points)</p>}
-              <WhyThisChoice recommendation={rec} data={data!} />
-              <div className="chip-advisor-footer">{CHIP_DESCRIPTIONS[rec.chip]}</div>
-            </article>
-          ))}
+                {barItems.length > 0 && <BarStrip items={barItems} height={36} />}
+                <p className="chip-advisor-desc">{rec.reasons[0]}</p>
+                {rec.use_or_lose && <p className="chip-advisor-note">Few eligible weeks remain this half: use it or lose it.</p>}
+                <WhyThisChoice recommendation={rec} data={data!} />
+                <div className="chip-advisor-footer">{CHIP_DESCRIPTIONS[rec.chip]}</div>
+              </article>
+            );
+          })}
         </div>
 
         <details className="chip-manage">
@@ -843,7 +846,7 @@ export default function ChipsPage() {
           {inventory && (
             <PlannedChipsPanel
               plannedChips={plannedChips}
-              maxGw={maxPossibleHorizon + (snapshot.gameweek ?? 1) - 1}
+              maxGw={38}
               currentGw={snapshot.gameweek ?? 1}
               onAdd={addPlannedChip}
               onRemove={removePlannedChip}
@@ -853,15 +856,21 @@ export default function ChipsPage() {
 
         </details>
 
-        {data && <ChipOpportunityMatrix rows={data.rows} primary={data.primary_decision} projectionMode={data.projection_mode} hasSquad={data.has_squad} />}
+        {data && (
+          <ChipOpportunityMatrix
+            recommendations={data.recommendations}
+            chipPlan={data.chip_plan}
+            currentGameweek={data.current_gameweek}
+            hasSquad={data.has_squad}
+          />
+        )}
 
         <div className="chip-heatmap-section">
           <div className="sub-head">
             <h3>Fixture context</h3>
             <span className="rule" />
             <small>
-              Fixture signal GW{data?.first_gw ?? snapshot.gameweek}–GW
-              {data?.last_gw ?? ((snapshot.gameweek ?? 1) + effectiveHorizon - 1)}
+              GW{data?.first_gw ?? snapshot.gameweek}–GW{data?.last_gw ?? 38}
             </small>
           </div>
 
@@ -947,12 +956,7 @@ export default function ChipsPage() {
                           {signal}
                         </span>
                       </td>
-                      <td>
-                        {row.projection_state === "complete" ? "Complete"
-                          : row.projection_state === "partial" ? "Partial"
-                            : row.projection_state === "fixture_only" ? "Fixtures only"
-                              : "No confirmed fixtures"}
-                      </td>
+                      <td>{PROJECTION_STATE_LABELS[row.projection_state] ?? row.projection_state}</td>
                     </tr>
                   );
                 })}

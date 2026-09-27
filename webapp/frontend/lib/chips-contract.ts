@@ -3,7 +3,7 @@ import { CHIP_IDS, CHIPS_CONTRACT_VERSION, type ChipsResult } from "./types";
 export const CHIPS_CONTRACT_ERROR =
   "Chip advice server is out of date. Restart the Flask API and retry.";
 
-const CHIP_STATUSES = ["watch", "consider", "hold", "unavailable", "compare"];
+const CHIP_STATUSES = ["play_now", "planned", "hold", "unavailable", "no_squad"];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -29,10 +29,13 @@ function isStringOrNull(value: unknown): value is string | null {
   return value === null || typeof value === "string";
 }
 
-function isDecisionPolicy(value: unknown): boolean {
+function isPlanPolicy(value: unknown): boolean {
   return (
     isRecord(value) &&
-    typeof value.minimum_projected_gain === "number" &&
+    isRecord(value.min_gain) &&
+    typeof value.close_call_margin === "number" &&
+    typeof value.future_reliability === "number" &&
+    typeof value.wildcard_window === "number" &&
     typeof value.uncertainty_note === "string" &&
     typeof value.basis === "string"
   );
@@ -40,7 +43,7 @@ function isDecisionPolicy(value: unknown): boolean {
 
 function isChipKeyedNumberMap(value: unknown): boolean {
   if (!isRecord(value)) return false;
-  return CHIP_IDS.every((chip) => !(chip in value) || isNumberOrNull(value[chip]));
+  return CHIP_IDS.every((chip) => !(chip in value) || typeof value[chip] === "number");
 }
 
 function isValidRow(value: unknown): boolean {
@@ -51,9 +54,7 @@ function isValidRow(value: unknown): boolean {
     typeof value.dgw_teams === "number" &&
     typeof value.blank_teams === "number" &&
     typeof value.avg_fdr === "number" &&
-    isChipKeyedNumberMap(value.projected_gain) &&
-    isChipKeyedNumberMap(value.raw_signal) &&
-    isChipKeyedNumberMap(value.fixture_signal_index) &&
+    isChipKeyedNumberMap(value.fixture_signal) &&
     typeof value.projection_state === "string"
   );
 }
@@ -66,16 +67,26 @@ function isValidRecommendation(value: unknown): boolean {
     typeof value.chip === "string" &&
     isArray(value.candidate_gameweeks) &&
     isNumberOrNull(value.gw) &&
-    isNumberOrNull(value.candidate_gw) &&
-    isNumberOrNull(value.projected_gain) &&
-    isNumberOrNull(value.fixture_signal_index) &&
-    isArray(value.alternatives) &&
-    isDecisionPolicy(value.decision_policy) &&
+    isNumberOrNull(value.gain) &&
+    isNumberOrNull(value.discounted_gain) &&
+    typeof value.close_call === "boolean" &&
+    typeof value.use_or_lose === "boolean" &&
+    isRecord(value.gains_by_week) &&
     isArray(value.reasons) &&
     isArray(value.warnings) &&
-    isNumberOrNull(value.raw_signal) &&
     isArray(value.inventory_windows) &&
     CHIP_STATUSES.includes(value.status as never)
+  );
+}
+
+function isValidPlanEntry(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.chip === "string" &&
+    typeof value.gw === "number" &&
+    isNumberOrNull(value.gain) &&
+    isNumberOrNull(value.discounted_gain) &&
+    typeof value.status === "string"
   );
 }
 
@@ -98,8 +109,11 @@ export function parseChipsResult(value: unknown): ChipsResult {
     typeof value.has_squad !== "boolean" ||
     !isArray(value.rows) ||
     !value.rows.every(isValidRow) ||
+    !isRecord(value.week_states) ||
     !isArray(value.recommendations) ||
     !value.recommendations.every(isValidRecommendation) ||
+    !isArray(value.chip_plan) ||
+    !value.chip_plan.every(isValidPlanEntry) ||
     typeof value.current_gameweek !== "number" ||
     typeof value.projection_mode !== "string" ||
     (value.inventory_source !== "local_user_reported" && value.inventory_source !== "unknown") ||
@@ -115,7 +129,8 @@ export function parseChipsResult(value: unknown): ChipsResult {
     !isStringOrNull(value.coverage_warning) ||
     typeof value.data_quality !== "string" ||
     typeof value.methodology_version !== "string" ||
-    !isDecisionPolicy(value.decision_policy) ||
+    !isPlanPolicy(value.decision_policy) ||
+    typeof value.free_transfers_used !== "number" ||
     (value.unmapped_teams !== undefined && !isStringArray(value.unmapped_teams))
   ) {
     throw new Error(CHIPS_CONTRACT_ERROR);

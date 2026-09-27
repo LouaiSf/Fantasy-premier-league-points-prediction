@@ -253,6 +253,7 @@ export const api = {
     last_free_hit_gameweek?: number | null;
     bank?: number;
     selling_prices_tenths?: Record<number, number>;
+    free_transfers?: number;
   }) => parseChipsResult(await postJson<unknown>("/api/chips", body)),
 };
 

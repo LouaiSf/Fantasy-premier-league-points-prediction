@@ -27,6 +27,7 @@ import datetime
 import subprocess
 import threading
 import time
+from collections import OrderedDict
 from pathlib import Path
 from types import MappingProxyType
 from typing import Mapping
@@ -385,24 +386,33 @@ def _build_snapshot() -> dict:
 
     future_points = None
     everyone_future_points = None
+    future_p_plays = None
+    everyone_future_p_plays = None
     future_gameweeks = []
     try:
-        horizon_players, horizon_points, future_gameweeks = opt.load_horizon(
+        horizon_players, horizon_points, horizon_p_plays, future_gameweeks = opt.load_horizon(
             path, drop_unavailable=False)
         identity = 'element' if 'element' in players.columns and 'element' in horizon_players.columns else 'name'
         horizon_points.index = horizon_players[identity].to_list()
+        horizon_p_plays.index = horizon_players[identity].to_list()
         # Projections for every player, so an owned player who is currently
         # injured or suspended still has a row when a chip is scored.
         everyone_future_points = horizon_points.reindex(everyone[identity].to_list())
         everyone_future_points.index = everyone.index
+        everyone_future_p_plays = horizon_p_plays.reindex(everyone[identity].to_list())
+        everyone_future_p_plays.index = everyone.index
         future_points = horizon_points.reindex(players[identity].to_list())
         future_points.index = players.index
+        future_p_plays = horizon_p_plays.reindex(players[identity].to_list())
+        future_p_plays.index = players.index
     except SystemExit:
         future_gameweeks = []
 
     return {**snapshot, 'players': players, 'everyone': everyone,
             'future_points': future_points,
             'everyone_future_points': everyone_future_points,
+            'future_p_plays': future_p_plays,
+            'everyone_future_p_plays': everyone_future_p_plays,
             'future_gameweeks': future_gameweeks}
 
 
@@ -483,22 +493,31 @@ def chip_market(s: Mapping, squad: pd.DataFrame | None):
     """
     players = s['players']
     future_points = s.get('future_points')
+    future_p_plays = s.get('future_p_plays')
     if squad is None or 'element' not in squad.columns or 'element' not in players.columns:
-        return players, future_points
+        return players, future_points, future_p_plays
     missing = squad[~squad['element'].isin(players['element'])]
     if missing.empty:
-        return players, future_points
+        return players, future_points, future_p_plays
     everyone = s['everyone']
     extra = everyone[everyone['element'].isin(missing['element'])]
     combined = pd.concat([players, extra], ignore_index=True)
     if future_points is None:
-        return combined, None
-    extra_future = s.get('everyone_future_points')
-    if extra_future is None:
-        return combined, None
-    rows = extra_future.loc[extra.index].copy()
-    base = future_points.reset_index(drop=True)
-    return combined, pd.concat([base, rows.reset_index(drop=True)], ignore_index=True)
+        return combined, None, None
+
+    def _extended(base: pd.DataFrame | None, everyone_key: str) -> pd.DataFrame | None:
+        extra_matrix = s.get(everyone_key)
+        if base is None or extra_matrix is None:
+            return None
+        rows = extra_matrix.loc[extra.index].copy()
+        reset_base = base.reset_index(drop=True)
+        return pd.concat([reset_base, rows.reset_index(drop=True)], ignore_index=True)
+
+    return (
+        combined,
+        _extended(future_points, 'everyone_future_points'),
+        _extended(future_p_plays, 'everyone_future_p_plays'),
+    )
 
 
 def fail(message: str, status: int = 400, code: str = 'invalid_request', **extra):
@@ -1071,29 +1090,82 @@ def api_chips():
                                      lo=1, hi=38, integer=True)
     bank = contracts.number(body, 'bank', None, lo=0, hi=100,
                             range_message='bank must be between 0.0m and 100.0m')
+    free_transfers = contracts.number(body, 'free_transfers', None, lo=0, hi=5, integer=True,
+                                      range_message='free_transfers must be between 0 and 5')
 
     owned = (None if squad is None or 'element' not in squad.columns
              else {int(element) for element in squad['element']})
     selling_prices = contracts.selling_prices(body, owned)
 
-    players, future_points = chip_market(s, squad)
+    players, future_points, future_p_plays = chip_market(s, squad)
     try:
-        data = _compute_chips(s, squad, horizon, players, future_points, inventory,
-                              scheduled, last_free_hit, bank, selling_prices)
+        data = _compute_chips_cached(s, squad, horizon, players, future_points, future_p_plays,
+                                     inventory, scheduled, last_free_hit, bank, selling_prices,
+                                     free_transfers)
     except ValueError as exc:
         return fail(str(exc), code='invalid_squad')
     data['ok'] = True
     return jsonify(data)
 
 
-def _compute_chips(s, squad, horizon, players, future_points, inventory,
-                   scheduled, last_free_hit, bank, selling_prices):
+# The chip plan is expensive to compute cold (several MILP solves per
+# candidate week across a whole half-season) but the *plan itself* doesn't
+# depend on the display-only `horizon` argument -- so the cache key omits it,
+# and every horizon a manager toggles through reuses the one computation.
+_CHIPS_CACHE: 'OrderedDict[tuple, dict]' = OrderedDict()
+_CHIPS_CACHE_LIMIT = 16
+
+
+def _chips_cache_key(s, squad, inventory, scheduled, last_free_hit, bank, selling_prices,
+                     free_transfers):
+    elements = (
+        None if squad is None or 'element' not in squad.columns
+        else tuple(sorted(int(e) for e in squad['element']))
+    )
+    inventory_key = None
+    if isinstance(inventory, dict):
+        inventory_key = tuple(
+            (half, tuple(sorted((inventory.get(half) or {}).items())))
+            for half in ('first_half', 'second_half')
+        )
+    selling_key = None if selling_prices is None else tuple(sorted(selling_prices.items()))
+    return (
+        s.get('mtime'), elements, inventory_key, tuple(sorted(scheduled)),
+        last_free_hit, bank, selling_key, free_transfers,
+    )
+
+
+def _compute_chips_cached(s, squad, horizon, players, future_points, future_p_plays, inventory,
+                          scheduled, last_free_hit, bank, selling_prices, free_transfers):
+    key = _chips_cache_key(s, squad, inventory, scheduled, last_free_hit, bank, selling_prices,
+                           free_transfers)
+    cached = _CHIPS_CACHE.get(key)
+    if cached is not None:
+        _CHIPS_CACHE.move_to_end(key)
+    else:
+        cached = _compute_chips(s, squad, horizon, players, future_points, future_p_plays,
+                                inventory, scheduled, last_free_hit, bank, selling_prices,
+                                free_transfers)
+        _CHIPS_CACHE[key] = cached
+        if len(_CHIPS_CACHE) > _CHIPS_CACHE_LIMIT:
+            _CHIPS_CACHE.popitem(last=False)
+
+    data = {**cached, 'requested_horizon': horizon}
+    first_gw = s['gameweek']
+    data['evaluated_horizon'] = sum(
+        gw in cached['projection_gameweeks'] for gw in range(first_gw, first_gw + horizon))
+    return data
+
+
+def _compute_chips(s, squad, horizon, players, future_points, future_p_plays, inventory,
+                   scheduled, last_free_hit, bank, selling_prices, free_transfers):
     return opt.compute_chips(
         squad, s['season'], s['gameweek'], horizon, players,
         inventory=inventory,
         scheduled_gameweeks=scheduled,
         last_free_hit_gameweek=last_free_hit,
         future_points=future_points,
+        future_p_plays=future_p_plays,
         projection_generated_at=(
             datetime.datetime.fromtimestamp(s['mtime'], tz=datetime.timezone.utc).isoformat()
             if s.get('mtime') else None
@@ -1101,6 +1173,7 @@ def _compute_chips(s, squad, horizon, players, future_points, inventory,
         bank=bank,
         selling_prices=selling_prices,
         root=ROOT,
+        free_transfers=free_transfers,
     )
 
 

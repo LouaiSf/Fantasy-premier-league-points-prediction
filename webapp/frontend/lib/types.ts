@@ -329,6 +329,14 @@ export interface WatchlistResult {
   no_history_total?: number;
 }
 
+export const CHIP_IDS = ["triple_captain", "bench_boost", "free_hit", "wildcard"] as const;
+export type ChipId = (typeof CHIP_IDS)[number];
+export type ChipState = "unused" | "used" | "expired";
+/** contract v4: every chip now has a real, comparable gain, so the status
+ * vocabulary describes a plan rather than a raw-evidence "watch". */
+export type ChipStatus = "play_now" | "planned" | "hold" | "unavailable" | "no_squad";
+export type ProjectionState = "projected" | "extrapolated" | "no_fixtures" | "complete" | "unknown";
+
 export interface ChipRow {
   gw: number;
   matches: number;
@@ -337,29 +345,24 @@ export interface ChipRow {
   avg_fdr: number;
   squad_playing?: number;
   squad_blanks?: number;
-  /** Gain over the best no-chip alternative. Only Triple Captain has one today. */
-  projected_gain: Partial<Record<ChipId, number | null>>;
-  /** Raw supporting values in different units per chip; not comparable gains. */
-  raw_signal: Partial<Record<ChipId, number | null>>;
-  fixture_signal_index: Partial<Record<ChipId, number | null>>;
-  projection_state: "complete" | "partial" | "fixture_only" | "unknown";
+  /** Fixture-only heuristic, always present -- points-shaped evidence when
+   * there's a squad to project comes from `gains_by_week` on each chip. */
+  fixture_signal: Record<ChipId, number>;
+  projection_state: ProjectionState;
 }
-
-export const CHIP_IDS = ["triple_captain", "bench_boost", "free_hit", "wildcard"] as const;
-export type ChipId = (typeof CHIP_IDS)[number];
-export type ChipState = "unused" | "used" | "expired";
-export type ChipStatus = "watch" | "consider" | "hold" | "unavailable" | "compare";
 
 export interface ChipInventory {
   first_half: Record<ChipId, ChipState>;
   second_half: Record<ChipId, ChipState>;
 }
 
-export interface ChipDecisionPolicy {
-  minimum_projected_gain: number;
+export interface ChipPlanPolicy {
+  min_gain: Record<ChipId, number>;
+  close_call_margin: number;
+  future_reliability: number;
+  wildcard_window: number;
   uncertainty_note: string;
   basis: string;
-  strongest_status: "consider";
   calibration_version: string | null;
 }
 
@@ -370,41 +373,31 @@ export interface ChipCaptainEvidence {
     name: string;
     team: string;
     position: string;
-    projected_points: number | null;
-    fixtures: number;
-    available: boolean;
-  } | null;
-  normal_captain_total: number;
-  triple_captain_total: number | null;
-  incremental_gain: number | null;
+    projected_points: number;
+  };
 }
 
 export interface ChipBenchEvidence {
   chip: "bench_boost";
   ordered_bench: ChipBenchPlayer[];
   bench_total: number;
-  gross_bench_points: number;
+  expected_autosub_points: number;
 }
 
 export interface ChipFreeHitEvidence {
   chip: "free_hit";
-  current_xi_captain_total: number;
-  optimized_xi_captain_total: number | null;
-  raw_lineup_delta: number | null;
-  current_xi_total: number;
-  optimized_xi_total: number | null;
-  current_captain_points: number | null;
-  optimized_captain_points: number | null;
+  free_hit_total: number;
+  no_chip_total: number;
+  no_chip_free_transfers: number;
   changed_player_count: number;
+  xi: { player: string; element: number | string }[];
 }
 
 export interface ChipWildcardEvidence {
   chip: "wildcard";
-  rebuild_potential_vs_static_squad: number;
-  current_cumulative_total: number;
-  optimized_cumulative_total: number;
-  weekly_deltas: Record<string, number>;
-  horizon_length: number;
+  window_gameweeks: number[];
+  truncated: boolean;
+  wildcard_total: number | null;
   changed_player_count: number;
 }
 
@@ -414,40 +407,6 @@ export type ChipEvidence =
   | ChipFreeHitEvidence
   | ChipWildcardEvidence;
 
-export interface ChipAlternative {
-  chip: ChipId;
-  gw: number;
-  inventory_set: "first_half" | "second_half";
-  projected_gain: number | null;
-  raw_signal: number | null;
-  fixture_signal_index: number | null;
-  evidence: ChipEvidence | null;
-}
-
-export interface ChipRecommendationBase {
-  label: string;
-  status: ChipStatus;
-  projection_mode: "fixture_signal" | "model_projection";
-  candidate_gameweeks: number[];
-  gw: number | null;
-  candidate_gw: number | null;
-  projected_gain: number | null;
-  gain_kind: string | null;
-  raw_signal: number | null;
-  raw_signal_kind: string;
-  fixture_signal_index: number | null;
-  alternatives: ChipAlternative[];
-  runner_up_gameweek: number | null;
-  gap_to_runner_up: number | null;
-  decision_policy: ChipDecisionPolicy;
-  reasons: string[];
-  warnings: string[];
-  inventory_set: "first_half" | "second_half";
-  inventory_windows: ChipInventoryWindow[];
-  expires_after_gameweek: number;
-  formula?: string;
-}
-
 export interface ChipInventoryWindow {
   half: "first_half" | "second_half";
   state: ChipState | "unknown";
@@ -455,14 +414,20 @@ export interface ChipInventoryWindow {
   gameweeks: number[];
 }
 
-export interface ChipPrimaryDecision {
-  chip: ChipId;
+export interface ChipRecommendationBase {
   label: string;
-  gw: number;
   status: ChipStatus;
-  projected_gain: number | null;
-  gain_kind: string | null;
-  reason: string;
+  gw: number | null;
+  /** Points vs the best no-chip alternative that same week, at the assigned `gw`. */
+  gain: number | null;
+  discounted_gain: number | null;
+  close_call: boolean;
+  use_or_lose: boolean;
+  candidate_gameweeks: number[];
+  gains_by_week: Record<string, number>;
+  reasons: string[];
+  warnings: string[];
+  inventory_windows: ChipInventoryWindow[];
 }
 
 export type ChipRecommendation =
@@ -475,11 +440,25 @@ export interface ChipBenchPlayer {
   player: string;
   element: number | string;
   points: number;
-  available: boolean;
 }
 
+export interface ChipPlanEntry {
+  chip: ChipId;
+  gw: number;
+  gain: number | null;
+  discounted_gain: number | null;
+  status: ChipStatus;
+}
 
-export const CHIPS_CONTRACT_VERSION = 3;
+export interface ChipPrimaryDecision {
+  chip: ChipId;
+  label: string;
+  gw: number;
+  gain: number;
+  reason: string;
+}
+
+export const CHIPS_CONTRACT_VERSION = 4;
 
 export interface ChipsResult {
   ok: boolean;
@@ -490,11 +469,15 @@ export interface ChipsResult {
   any_bgw: boolean;
   has_squad: boolean;
   rows: ChipRow[];
+  week_states: Record<string, ProjectionState>;
   recommendations: ChipRecommendation[];
+  chip_plan: ChipPlanEntry[];
   unmapped_teams?: string[];
   current_gameweek: number;
   projection_mode: "fixture_signal" | "model_projection";
-  /** Chip inventory is entered by the manager on this device, never synced from FPL. */
+  /** Chip inventory is entered by the manager (directly, or via an FPL
+   * account sync on the client) -- the backend only knows whether *some*
+   * inventory was supplied, not its ultimate source. */
   inventory_source: "local_user_reported" | "unknown";
   primary_decision: ChipPrimaryDecision | null;
   projection_semantics: "expected_points_including_appearance";
@@ -508,6 +491,7 @@ export interface ChipsResult {
   coverage_warning: string | null;
   data_quality: "complete_horizon" | "fixture_signal_only";
   methodology_version: string;
-  decision_policy: ChipDecisionPolicy;
+  decision_policy: ChipPlanPolicy;
+  free_transfers_used: number;
 }
 

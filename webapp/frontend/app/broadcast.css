@@ -1852,6 +1852,7 @@
   .chip-score--none{background:rgba(255,255,255,.35)}
   .chip-score--empty{color:var(--muted-mid);background:rgba(255,255,255,.04)}
   .chip-score.is-recommended{outline:3px solid var(--cyan);outline-offset:-3px}
+  .chip-swatch.is-recommended{background:rgba(255,255,255,.35);outline:2px solid var(--cyan);outline-offset:-2px}
   .chip-method{margin-bottom:var(--space-16);padding:var(--space-4) var(--space-5);border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.03);color:var(--muted-light)}
   .chip-method summary{cursor:pointer;color:var(--white);font:800 12px var(--display);letter-spacing:.08em;text-transform:uppercase}
   .chip-why{margin:0;padding:10px 12px;border-color:rgba(255,255,255,.1);background:rgba(0,0,0,.16)}
@@ -1933,14 +1934,33 @@
   .chip-inventory > .btn{grid-column:2;grid-row:1;align-self:end}
   .chip-squad-notice-icon{color:var(--gold);font:900 14px var(--display)}
   .chip-decision-context{color:var(--muted-mid)!important}
-  .chip-decision-score.status-watch{color:var(--gold)}
-  .chip-decision-score.status-play{color:var(--lime)}
-  .chip-decision-score.status-hold{color:var(--muted-light)}
-  .chip-next-decision.status-watch{background:linear-gradient(120deg,rgba(255,212,90,.14),rgba(255,255,255,.04));border-left-color:var(--gold)}
-  .chip-next-decision.status-hold{background:rgba(255,255,255,.035);border-left-color:var(--muted-mid)}
+  .chip-decision-score.status-play_now{color:var(--lime)}
+  .chip-decision-score.status-planned{color:var(--gold)}
+  .chip-decision-score.status-hold,.chip-decision-score.status-no_squad{color:var(--muted-light)}
+  .chip-next-decision.status-planned{background:linear-gradient(120deg,rgba(255,212,90,.14),rgba(255,255,255,.04));border-left-color:var(--gold)}
+  .chip-next-decision.status-hold,.chip-next-decision.status-no_squad{background:rgba(255,255,255,.035);border-left-color:var(--muted-mid)}
   .chip-next-decision.status-unavailable{background:rgba(255,255,255,.025);border-left-color:var(--pink)}
-  .chip-advisor-card.status-watch .chip-advisor-gain{color:var(--gold)}
-  .chip-advisor-card.status-hold .chip-advisor-gain,.chip-advisor-card.status-unavailable .chip-advisor-gain{color:var(--muted-light)}
+  .chip-advisor-card.status-planned .chip-advisor-sub{color:var(--gold)}
+  .chip-advisor-card.status-hold .chip-advisor-sub,.chip-advisor-card.status-unavailable .chip-advisor-sub,.chip-advisor-card.status-no_squad .chip-advisor-sub{color:var(--muted-light)}
+  .chip-conf.status-play_now{color:var(--lime)}
+  .chip-conf.status-planned{color:var(--gold)}
+  .chip-close-call-badge{display:inline-block;margin-top:6px;padding:3px 8px;background:rgba(255,212,90,.14);color:var(--gold);font:800 var(--type-micro) var(--data);letter-spacing:.08em;text-transform:uppercase}
+  .chip-mode-toggle{display:inline-flex;border:1px solid rgba(255,255,255,.18)}
+  .chip-mode-toggle .btn{border-radius:0;background:transparent;box-shadow:none}
+  .chip-mode-toggle .btn.active{background:var(--lime);color:var(--night-950)}
+  .chip-mode-toggle .btn:disabled{opacity:.4;cursor:not-allowed}
+  .chip-timeline-scroll{overflow-x:auto;margin:var(--space-5) 0;padding-bottom:6px}
+  .chip-timeline{display:flex;gap:2px;min-width:max-content}
+  .chip-timeline-cell{display:flex;flex-direction:column;align-items:center;gap:2px;width:40px;padding:6px 2px;background:rgba(255,255,255,.05);flex:none}
+  .chip-timeline-cell.state-extrapolated{background:repeating-linear-gradient(45deg,rgba(255,255,255,.05),rgba(255,255,255,.05) 4px,rgba(255,255,255,.09) 4px,rgba(255,255,255,.09) 8px)}
+  .chip-timeline-cell.state-no_fixtures,.chip-timeline-cell.state-unknown{opacity:.35}
+  .chip-timeline-cell.is-now{outline:2px solid var(--lime);outline-offset:-2px}
+  .chip-timeline-cell.is-half-start{border-left:2px solid var(--gold)}
+  .chip-timeline-gw{font:700 var(--type-micro) var(--data);color:var(--muted-light)}
+  .chip-timeline-markers{display:flex;gap:2px;min-height:12px}
+  .chip-timeline-dgw{color:var(--lime);font:800 var(--type-micro) var(--data)}
+  .chip-timeline-bgw{color:var(--pink);font:800 var(--type-micro) var(--data)}
+  .chip-timeline-cell .chip-icon{width:20px;height:20px}
   .chip-advisor-bench{margin:0;color:var(--muted-light);font:600 var(--type-micro)/1.35 var(--data)}
   .chip-row-gw{font-weight:800}
   .chip-count{color:var(--muted-mid)}
