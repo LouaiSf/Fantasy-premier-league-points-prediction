@@ -86,6 +86,7 @@ export default function WatchlistPage() {
 
   const renderPlayerCard = (
     player: WatchlistPlayer,
+    index: number,
     tagClass: "value" | "diff" | "trap" | "new",
     tagLabel: string,
   ) => {
@@ -99,7 +100,8 @@ export default function WatchlistPage() {
       <button
         key={`${player.element ?? player.name}-${tagLabel}`}
         type="button"
-        className="watch-card"
+        className="watch-card lift"
+        style={{ "--i": index } as React.CSSProperties}
         onClick={() => fullPlayer && openProfile(fullPlayer)}
       >
         <div className="watch-photo-wrap">
@@ -255,9 +257,9 @@ export default function WatchlistPage() {
               <p className="watch-section-desc">
                 Budget stretchers who yield the highest projected output per million spent.
               </p>
-              <div className="watch-grid">
-                {valList.map((player) =>
-                  renderPlayerCard(player, "value", `${num(player.points_per_million, 2)} PPM`),
+              <div className="watch-grid stagger">
+                {valList.map((player, index) =>
+                  renderPlayerCard(player, index, "value", `${num(player.points_per_million, 2)} PPM`),
                 )}
                 {valList.length === 0 && (
                   <p className="empty-copy">No matching players found.</p>
@@ -277,9 +279,9 @@ export default function WatchlistPage() {
               <p className="watch-section-desc">
                 Low-ownership assets capable of propelling your rank without templates.
               </p>
-              <div className="watch-grid">
-                {diffList.map((player) =>
-                  renderPlayerCard(player, "diff", `${num(player.selected_by, 1)}% own`),
+              <div className="watch-grid stagger">
+                {diffList.map((player, index) =>
+                  renderPlayerCard(player, index, "diff", `${num(player.selected_by, 1)}% own`),
                 )}
                 {diffList.length === 0 && (
                   <p className="empty-copy">No matching differentials found.</p>
@@ -299,9 +301,9 @@ export default function WatchlistPage() {
               <p className="watch-section-desc">
                 Expensive assets whose current fixture/projection profile does not justify premium allocation.
               </p>
-              <div className="watch-grid">
-                {overList.map((player) =>
-                  renderPlayerCard(player, "trap", `${num(player.points_per_million, 2)} PPM`),
+              <div className="watch-grid stagger">
+                {overList.map((player, index) =>
+                  renderPlayerCard(player, index, "trap", `${num(player.points_per_million, 2)} PPM`),
                 )}
                 {overList.length === 0 && (
                   <p className="empty-copy">No overpriced players found.</p>
@@ -321,9 +323,9 @@ export default function WatchlistPage() {
               <p className="watch-section-desc">
                 Players with no prior model history. Their projections lean on position baselines, so treat them as less reliable.
               </p>
-              <div className="watch-grid">
-                {noHistList.map((player) =>
-                  renderPlayerCard(player, "new", "No model history"),
+              <div className="watch-grid stagger">
+                {noHistList.map((player, index) =>
+                  renderPlayerCard(player, index, "new", "No model history"),
                 )}
                 {noHistList.length === 0 && (
                   <p className="empty-copy">No players with limited model history have predictions.</p>

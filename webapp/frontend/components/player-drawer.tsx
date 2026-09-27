@@ -113,9 +113,9 @@ export function PlayerDrawer() {
   return (
     <DialogPrimitive.Root open={Boolean(player)} onOpenChange={(open) => !open && closeProfile()}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Backdrop className={`scrim${player ? " is-open" : ""}`} />
+        <DialogPrimitive.Backdrop className="scrim" />
         <DialogPrimitive.Popup
-          className={`drawer${player ? " is-open" : ""}`}
+          className="drawer"
           aria-labelledby="drawerName"
         >
           {player && (

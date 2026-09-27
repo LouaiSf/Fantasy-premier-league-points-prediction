@@ -1,5 +1,6 @@
 "use client";
 
+import type * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
 import { PlayerMarker } from "@/components/team/player-marker";
 import { previewSquad } from "@/lib/squad";
@@ -71,18 +72,19 @@ export function Pitch({ result: resultProp, compact }: PitchProps = {}) {
         <div className="spot bottom" />
       </div>
       <div className="formation">
-        {LINES.map((position) => {
+        {LINES.map((position, lineIndex) => {
           const line = xi.filter((player) => player.position === position);
           if (!line.length) return null;
           return (
-            <div className="player-line" key={position}>
+            <div className="player-line" key={position} style={{ "--line": lineIndex } as React.CSSProperties}>
               {line.map((player) => (
-                <PlayerMarker
-                  key={player.element}
-                  player={player}
-                  isCaptain={player.element === captainId}
-                  isViceCaptain={player.element === viceCaptainId}
-                />
+                <div className="marker-slot" key={player.element}>
+                  <PlayerMarker
+                    player={player}
+                    isCaptain={player.element === captainId}
+                    isViceCaptain={player.element === viceCaptainId}
+                  />
+                </div>
               ))}
             </div>
           );

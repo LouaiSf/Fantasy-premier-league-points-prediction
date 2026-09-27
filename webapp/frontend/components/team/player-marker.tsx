@@ -32,7 +32,7 @@ export function PlayerMarker({
         {predictionAvailable ? num(player.predicted_points) : num(player.form)}
       </div>
       {isCaptain && (
-        <div className="pm-badge" aria-label="Captain">
+        <div className="pm-badge" aria-label="Captain" key={player.element}>
           C
         </div>
       )}

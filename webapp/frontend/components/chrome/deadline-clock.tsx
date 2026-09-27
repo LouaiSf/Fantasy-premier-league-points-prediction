@@ -29,6 +29,24 @@ function formatCountdown(ms: number, gw: number | null): string {
   return `${hours}h ${minutes}m`;
 }
 
+interface CountdownTick {
+  readonly value: number;
+  readonly text: string;
+}
+
+function countdownTicks(ms: number): CountdownTick[] {
+  if (ms <= 0) return [];
+  const totalMinutes = Math.floor(ms / 60000);
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+  const ticks: CountdownTick[] = [];
+  if (days > 0) ticks.push({ value: days, text: `${days}d` });
+  ticks.push({ value: hours, text: `${hours}h` });
+  ticks.push({ value: minutes, text: `${minutes}m` });
+  return ticks;
+}
+
 export function DeadlineClock() {
   const { snapshot } = useApp();
   const [now, setNow] = React.useState(() => Date.now());
@@ -59,9 +77,18 @@ export function DeadlineClock() {
   return (
     <div className={`deadline${urgent ? " urgent" : ""}`} aria-live="polite">
       <strong className="deadline-context">GW{snapshot?.gameweek} {inProgress ? "matchday" : "deadline"}</strong>
-      <span>{formatCountdown(remaining, snapshot?.gameweek ?? null)}</span>
+      <span>
+        {inProgress
+          ? formatCountdown(remaining, snapshot?.gameweek ?? null)
+          : countdownTicks(remaining).flatMap((tick, index) => [
+              index > 0 ? <React.Fragment key={`sep${index}`}> </React.Fragment> : null,
+              <span key={`${index}-${tick.value}`} className="tick">
+                {tick.text}
+              </span>,
+            ])}
+      </span>
       <div className="deadline-tension" aria-hidden="true">
-        <i style={{ width: `${tension}%` }} />
+        <i style={{ transform: `scaleX(${tension / 100})` }} />
       </div>
     </div>
   );

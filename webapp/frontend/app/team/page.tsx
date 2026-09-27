@@ -15,6 +15,7 @@ import { ManagerSearch } from "@/components/team/manager-search";
 import { TeamPlan } from "@/components/team/team-plan";
 import { DeadlineBoard } from "@/components/team/deadline-board";
 import { DataPortability } from "@/components/team/data-portability";
+import { CountUp } from "@/components/motion/count-up";
 import type { TransferResult, TransferRow } from "@/lib/types";
 
 // The FPL budget every manager starts a season with.
@@ -238,11 +239,11 @@ export default function TeamPage() {
           </div>
           <div className="cell">
             <span>Market value</span>
-            <strong>{preview ? money(marketValue) : "--"}</strong>
+            <strong>{preview ? <CountUp value={marketValue} decimals={1} prefix="£" suffix="m" /> : "--"}</strong>
           </div>
           <div className="cell">
             <span>XI projection</span>
-            <strong>{preview && predictionAvailable ? num(xiPoints) : "N/A"}</strong>
+            <strong>{preview && predictionAvailable && xiPoints != null ? <CountUp value={xiPoints} decimals={1} /> : "N/A"}</strong>
           </div>
           <div className="cell">
             <span>Predictions</span>
@@ -289,7 +290,7 @@ export default function TeamPage() {
               <h2>Matchday read</h2>
               <div className="rail-stat">
                 <span>Starting XI projection</span>
-                <strong>{preview && predictionAvailable ? num(xiPoints) : "N/A"}</strong>
+                <strong>{preview && predictionAvailable && xiPoints != null ? <CountUp value={xiPoints} decimals={1} /> : "N/A"}</strong>
               </div>
               <div className="rail-stat">
                 <span>Formation</span>

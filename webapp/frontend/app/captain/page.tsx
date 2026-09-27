@@ -9,6 +9,8 @@ import { money, num } from "@/lib/format";
 import type { PlayerRecord, TeamRecord } from "@/lib/types";
 import { Loading } from "@/components/loading";
 import { ModelInfo } from "@/components/model-info";
+import { CountUp } from "@/components/motion/count-up";
+import { m } from "motion/react";
 
 function captainScore(player: PlayerRecord, predictionAvailable: boolean): number {
   return predictionAvailable ? Number(player.predicted_points ?? 0) : Number(player.form ?? 0);
@@ -148,7 +150,7 @@ export default function CaptainPage() {
             <div className="cap-metrics">
               <div className="bug">
                 <span>{predictionAvailable ? "Projection" : "Form"}</span>
-                <strong>{num(captainScore(lead, predictionAvailable))}</strong>
+                <strong><CountUp value={captainScore(lead, predictionAvailable)} decimals={1} /></strong>
               </div>
               <div className="bug">
                 <span>Ownership</span>
@@ -200,17 +202,19 @@ export default function CaptainPage() {
           </p>
         )}
 
-        <div className="runway">
+        <div className="runway stagger">
           {ranked.map((player, index) => {
             const fixture = nextFixture(teamByName.get(player.team), snapshot.gameweek);
             const risk = riskFor(player);
             const isSelected = lead?.element === player.element;
             return (
-              <div
+              <m.div
                 key={player.element}
+                layout="position"
+                transition={{ layout: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } }}
                 role="button"
                 tabIndex={0}
-                className={`cand${index === 0 ? " is-lead" : ""}${isSelected ? " is-selected" : ""}`}
+                className={`cand lift${index === 0 ? " is-lead" : ""}${isSelected ? " is-selected" : ""}`}
                 style={{ ...clubStyle(player.team), "--i": index } as React.CSSProperties}
                 aria-pressed={isSelected}
                 onClick={() => setSelectedElement(player.element)}
@@ -250,14 +254,14 @@ export default function CaptainPage() {
                     <b>{num(player.form)}</b>
                   </div>
                   <div className="meter">
-                    <i style={{ width: `${Math.min(100, Number(player.form) * 10)}%` }} />
+                    <i style={{ "--v": Math.min(100, Number(player.form) * 10) / 100 } as React.CSSProperties} />
                   </div>
                   <div className="meter-label">
                     <span>ICT</span>
                     <b>{num(player.ict_index)}</b>
                   </div>
                   <div className="meter">
-                    <i style={{ width: `${Math.min(100, Number(player.ict_index))}%` }} />
+                    <i style={{ "--v": Math.min(100, Number(player.ict_index)) / 100 } as React.CSSProperties} />
                   </div>
                 </span>
                 <span className="cand-right">
@@ -276,7 +280,7 @@ export default function CaptainPage() {
                     Profile
                   </button>
                 </span>
-              </div>
+              </m.div>
             );
           })}
           {!ranked.length && <p className="picker-empty">No available candidates in this pool.</p>}

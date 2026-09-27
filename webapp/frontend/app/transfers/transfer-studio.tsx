@@ -14,6 +14,8 @@ import { validateSquad } from "@/lib/squad";
 import type { PlayerRecord, SquadResult, TransferResult, TransferRow } from "@/lib/types";
 import { Loading } from "@/components/loading";
 import { ModelInfo } from "@/components/model-info";
+import { CountUp } from "@/components/motion/count-up";
+import { m, AnimatePresence } from "motion/react";
 
 const OUT_FILTERS = ["ALL", "GK", "DEF", "MID", "FWD", "FLAG"] as const;
 const IN_FILTERS = ["ALL", "GK", "DEF", "MID", "FWD"] as const;
@@ -27,12 +29,12 @@ function nameOf(player: PlayerRecord | undefined): string {
 function score(result: SquadResult): number {
   return result.xi_points + Number(result.captain?.predicted_points ?? 0);
 }
-function PlayerRow({ player, selected, teamCode, onClick }: {
-  player: PlayerRecord; selected: boolean; teamCode?: number; onClick: () => void;
+function PlayerRow({ player, selected, teamCode, index, onClick }: {
+  player: PlayerRecord; selected: boolean; teamCode?: number; index: number; onClick: () => void;
 }) {
   return (
-    <button type="button" className={"prow" + (selected ? " is-picked" : "")}
-      data-player-id={player.element} onClick={onClick} style={clubStyle(player.team)}>
+    <button type="button" className={"prow lift" + (selected ? " is-picked" : "")}
+      data-player-id={player.element} onClick={onClick} style={{ ...clubStyle(player.team), "--i": index } as React.CSSProperties}>
       <span className="shot">
         <PlayerPhoto src={player.photo ?? undefined} alt={player.name} name={player.name} variant="card" loading="lazy" />
         {teamCode ? <ClubCrest className="badge-mini" code={teamCode} team={player.team} shortName={player.team_short} aria-hidden="true" /> : null}
@@ -381,19 +383,21 @@ export default function TransfersPage() {
                 {filter === "ALL" ? "All" : filter === "FLAG" ? "Flagged" : filter}</button>)}</div>
               <label className="search"><input type="search" placeholder="Search your squad" value={outQuery} onChange={(event) => setOutQuery(event.target.value)} /></label>
             </div>
-            <div className="desk-list">{outRows.map((player) => <PlayerRow key={player.element} player={player}
-              selected={player.element === pendingOut} teamCode={teamCodeByName.get(player.team)} onClick={() => pickOut(player)} />)}</div>
+            <div className="desk-list stagger">{outRows.map((player, index) => <PlayerRow key={player.element} player={player}
+              selected={player.element === pendingOut} teamCode={teamCodeByName.get(player.team)} index={index} onClick={() => pickOut(player)} />)}</div>
           </section>
 
           <section className="draft-panel" aria-label="Staged transfer draft">
             <div className="desk-head"><h2>Draft {draft.length} of {maxTransfers}</h2><span className="count">Unsaved plan</span></div>
             <p className="draft-finance">Bank after <b>{money(fromTenths(bankAfterTenths))}</b> · Hit <b>{hit} pts</b> · {draft.length} staged</p>
             <p className="finance-basis-note">{financeSummary.priceBasis === "estimated" ? "Selling prices are estimated from current market values because complete purchase prices were not available." : "Selling prices use your imported purchase prices and the official half-rise rule."}</p>
-            {draft.length ? <ol className="draft-list">{draft.map((pair, index) => {
+            {draft.length ? <ol className="draft-list"><AnimatePresence>{draft.map((pair, index) => {
               const out = byElement.get(pair.out_element); const inPlayer = byElement.get(pair.in_element);
               const sale = sellPrices[pair.out_element] ?? 0;
               const purchase = inPlayer ? toTenths(inPlayer.value_m) : 0;
-              return <li key={pair.out_element + "-" + pair.in_element} className="draft-row">
+              return <m.li key={pair.out_element + "-" + pair.in_element} className="draft-row"
+                layout="position" transition={{ layout: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } }}
+                exit={{ opacity: 0, x: -12 }}>
                 <span className="draft-ordinal">{index + 1}</span>
                 <div className="draft-pair">
                   <b>{nameOf(out)} <small>OUT · #{pair.out_element}</small></b>
@@ -402,8 +406,8 @@ export default function TransfersPage() {
                   <span>{inPlayer?.team_short} · buy {money(fromTenths(purchase))} · Δ {signed(fromTenths(sale - purchase))}</span>
                 </div>
                 <div className="draft-row-actions"><button type="button" onClick={() => editMove(index)}>Edit</button><button type="button" onClick={() => removeMove(index)}>Remove</button></div>
-              </li>;
-            })}</ol> : <p className="draft-empty">Choose an OUT player, then a same-position IN player to stage a move.</p>}
+              </m.li>;
+            })}</AnimatePresence></ol> : <p className="draft-empty">Choose an OUT player, then a same-position IN player to stage a move.</p>}
             {pendingOut !== null ? <div className="pending-move" aria-live="polite">
               <b>{editingIndex === null ? "Add move" : "Edit move " + (editingIndex + 1)}</b>
               <span>OUT: {nameOf(outgoing ?? undefined)} {outgoing ? "(" + outgoing.position + ")" : ""}</span>
@@ -432,8 +436,8 @@ export default function TransfersPage() {
                 {filter === "ALL" ? "All" : filter}</button>)}</div>
             </div>
             <p className="market-count">Showing {shownMarketRows.length} of {marketRows.length}</p>
-            <div className="desk-list">{shownMarketRows.map((player) => <PlayerRow key={player.element} player={player}
-              selected={player.element === pendingIn} teamCode={teamCodeByName.get(player.team)} onClick={() => pickIn(player)} />)}</div>
+            <div className="desk-list stagger">{shownMarketRows.map((player, index) => <PlayerRow key={player.element} player={player}
+              selected={player.element === pendingIn} teamCode={teamCodeByName.get(player.team)} index={index} onClick={() => pickIn(player)} />)}</div>
             {marketRows.length > marketLimit ? <button className="btn secondary sm market-more" type="button" onClick={() => setMarketLimit((value) => value + 200)}>More players</button> : null}
           </section>
         </div>
@@ -446,9 +450,11 @@ export default function TransfersPage() {
           </div>
           {resultTab === "scenarios" ? <div className="scenario-panel">
             {scenarios.length === 0 ? <p>Stage a legal draft and choose Save as scenario. Up to {MAX_SCENARIOS} scenarios are kept on this device and compared on the same prediction snapshot.</p> : <>
-              <ul className="scenario-list">{scenarios.map((scenario) => {
+              <ul className="scenario-list"><AnimatePresence>{scenarios.map((scenario) => {
                 const stale = scenarioStaleReason(scenario, fingerprint, currentSnapshot.prediction_timestamp);
-                return <li key={scenario.id} className={"scenario-item" + (stale ? " is-stale" : "")}>
+                return <m.li key={scenario.id} className={"scenario-item" + (stale ? " is-stale" : "")}
+                  layout="position" transition={{ layout: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } }}
+                  exit={{ opacity: 0, x: -12 }}>
                   <b>{scenario.name}</b>
                   <span>{scenario.pairs.length} move{scenario.pairs.length === 1 ? "" : "s"}: {scenario.pairs.map((pair) => nameOf(byElement.get(pair.out_element)) + " → " + nameOf(byElement.get(pair.in_element))).join("; ")}</span>
                   {stale ? <em>Stale: {stale}. Not included in the comparison.</em> : null}
@@ -456,8 +462,8 @@ export default function TransfersPage() {
                     <button type="button" className="text-button" disabled={Boolean(stale)} onClick={() => loadScenario(scenario)}>Load into draft</button>
                     <button type="button" className="text-button" onClick={() => persistScenarios(scenarios.filter((other) => other.id !== scenario.id))}>Remove</button>
                   </span>
-                </li>;
-              })}</ul>
+                </m.li>;
+              })}</AnimatePresence></ul>
               <button className="btn" type="button" disabled={comparing || !currentSnapshot.prediction_available} onClick={compareScenarios}>{comparing ? "Comparing…" : "Compare scenarios"}</button>
               {!currentSnapshot.prediction_available ? <p>Prediction data are unavailable, so points cannot be compared.</p> : null}
               {analysisError ? <p className="analysis-status is-error" role="alert">{analysisError}</p> : null}
@@ -478,8 +484,8 @@ export default function TransfersPage() {
               <><h2>My draft · {evaluation.hasPoints ? "projected lineup" : "legal squad and finance"}</h2>
                 <div className="draft-score-grid">
                   <div><span>Final bank</span><b>{money(fromTenths(bankAfterTenths))}</b></div>
-                  <div><span>Transfer hit</span><b>{hit} pts</b></div>
-                  {evaluation.hasPoints && finalGross !== null ? <div><span>Gross · net</span><b>{num(finalGross)} · {num(draftNet ?? 0)}</b></div> : null}
+                  <div><span>Transfer hit</span><b><CountUp value={hit} /> pts</b></div>
+                  {evaluation.hasPoints && finalGross !== null ? <div><span>Gross · net</span><b><CountUp value={finalGross} decimals={1} /> · <CountUp value={draftNet ?? 0} decimals={1} /></b></div> : null}
                   {evaluation.hasPoints && draftGain !== null ? <div><span>Gain vs 0-transfer baseline</span><b>{signed(draftGain)}</b></div> : null}
                 </div>
                 {!evaluation.hasPoints ? <p>Prediction data are unavailable, so no points gain is shown. Squad legality and finance are checked.</p> : null}

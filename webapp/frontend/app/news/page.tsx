@@ -330,7 +330,7 @@ export default function NewsPage() {
 
         {view === "desk" && rest.length > 0 && (
           <div className="wire-layout wire-layout--single">
-            <div className="wire-col">
+            <div className="wire-col stagger">
               <h3 className="col-title">
                 League wire<small>
                   {rest.length} of {allRest.length} stories
@@ -340,7 +340,7 @@ export default function NewsPage() {
                 <button
                   key={player.element}
                   type="button"
-                  className="wire-item"
+                  className="wire-item lift"
                   data-pri={player.status !== "a" ? "high" : "med"}
                   onClick={() => openProfile(player)}
                   style={{ "--i": idx } as React.CSSProperties}
@@ -391,12 +391,13 @@ export default function NewsPage() {
         )}
 
         {view === "cards" && rest.length > 0 && (
-          <div className="news-cards">
-            {rest.map((player) => (
+          <div className="news-cards stagger">
+            {rest.map((player, index) => (
               <button
                 key={player.element}
                 type="button"
                 className="news-card"
+                style={{ "--i": index } as React.CSSProperties}
                 onClick={() => openProfile(player)}
               >
                 <div className="news-card-art" style={clubStyle(player.team)}>

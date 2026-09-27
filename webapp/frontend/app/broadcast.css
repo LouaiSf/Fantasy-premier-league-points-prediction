@@ -113,8 +113,10 @@
   .deadline strong{display:block;font:700 var(--type-micro) var(--data);letter-spacing:.1em;color:var(--lime)}
   .deadline span{font:700 12px var(--data);font-variant-numeric:tabular-nums}
   .deadline.urgent{animation:deadlinePulse 1.6s ease-in-out infinite}
+  @keyframes tickIn{from{opacity:0;transform:translateY(-40%)}}
+  .tick{display:inline-block;animation:tickIn var(--motion-ui) var(--ease-out)}
   .deadline-tension{margin-top:4px;height:3px;width:100%;background:rgba(255,255,255,.16)}
-  .deadline-tension i{display:block;height:100%;width:30%;background:var(--gradient-fast);transition:width 1s linear}
+  .deadline-tension i{display:block;height:100%;width:100%;transform-origin:left;background:var(--gradient-fast);transition:transform 1s linear}
   @keyframes deadlinePulse{50%{box-shadow:0 0 0 5px rgba(233,0,82,.25);border-color:var(--pink)}}
   .sync-btn{display:inline-flex;align-items:center;gap:7px;min-height:44px;border:0;background:var(--lime);color:var(--ink);
     padding:0 14px;font-weight:750;cursor:pointer;transition:transform var(--motion-fast) var(--ease-out),filter var(--motion-fast)}
@@ -126,6 +128,12 @@
      single-page toggle this class only supplies the entrance animation. */
   .page{display:block;animation:pageIn var(--motion-panel) var(--ease-out) both}
   @keyframes pageIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  /* --- 3b. MOTION PRIMITIVES ----------------------------------------------- */
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .stagger>*{animation:rise var(--motion-panel) var(--ease-out) both;animation-delay:calc(min(var(--i,0),12) * 30ms)}
+  .lift{transition:transform var(--motion-ui) var(--ease-out),box-shadow var(--motion-ui)}
+  .lift:hover{transform:translateY(-2px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}
 
   /* --- 4. PRIMITIVES ------------------------------------------------------ */
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:46px;padding:0 var(--space-5);
@@ -175,7 +183,8 @@
 
   .meter{height:8px;background:rgba(255,255,255,.14);overflow:hidden;clip-path:polygon(0 0,100% 0,99% 100%,0 100%)}
   .meter.on-paper{background:rgba(33,0,37,.12)}
-  .meter i{display:block;height:100%;width:0;background:var(--meter-c,var(--lime));transition:width .6s var(--ease-out)}
+  .meter i{display:block;height:100%;width:100%;transform-origin:left;transform:scaleX(var(--v,0));
+    background:var(--meter-c,var(--lime));transition:transform .6s var(--ease-out)}
   .meter-label{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;font-size:11px;color:var(--muted-light)}
   .meter-label b{font:700 12px var(--data);color:var(--white)}
   .on-paper .meter-label{color:var(--muted-ink)}
@@ -230,10 +239,8 @@
 
   .toast{position:fixed;right:var(--space-6);bottom:var(--space-6);z-index:200;display:flex;align-items:center;gap:var(--space-3);
     max-width:380px;padding:var(--space-4) var(--space-5);background:var(--lime);color:var(--ink);font-weight:750;font-size:13px;
-    box-shadow:0 16px 50px rgba(0,0,0,.34);transform:translateY(150%);opacity:0;
-    clip-path:polygon(0 0,100% 0,calc(100% - 12px) 100%,0 100%);
-    transition:transform var(--motion-panel) var(--ease-snap),opacity var(--motion-ui)}
-  .toast.is-visible{transform:none;opacity:1}
+    box-shadow:0 16px 50px rgba(0,0,0,.34);
+    clip-path:polygon(0 0,100% 0,calc(100% - 12px) 100%,0 100%)}
   .toast svg{flex:none}
   .toast.alert{background:var(--pink);color:var(--white)}
 
@@ -310,6 +317,8 @@
   .zone-label{position:absolute;left:2px;top:50%;transform:translateY(-50%);writing-mode:vertical-rl;
     font:700 var(--type-micro) var(--data);letter-spacing:.1em;color:rgba(255,255,255,.42);pointer-events:none;z-index:2}
   .player-line{display:flex;justify-content:space-around;align-items:center;gap:var(--space-2);position:relative}
+  @keyframes markerIn{from{opacity:0;transform:translateY(10px) scale(.9)}to{opacity:1;transform:none}}
+  .marker-slot{animation:markerIn var(--motion-panel) var(--ease-out) both;animation-delay:calc(var(--line,0) * 60ms)}
   .player-line::before{content:"";position:absolute;left:-14px;right:-14px;top:50%;height:1px;background:rgba(255,255,255,.09)}
   .pm{position:relative;width:114px;padding:0;border:0;background:transparent;color:var(--white);text-align:center;cursor:pointer;
     transition:transform var(--motion-ui) var(--ease-out),filter var(--motion-ui)}
@@ -321,8 +330,10 @@
   .pm.is-selected .pm-bust{box-shadow:0 0 0 3px var(--lime),0 0 0 6px rgba(26,0,34,.85),0 0 22px rgba(0,255,135,.6)}
   .pm-pred{position:absolute;left:4px;top:2px;z-index:4;min-width:30px;padding:3px 4px;background:var(--night-900);color:var(--lime);
     font:800 11px var(--data);clip-path:polygon(0 0,100% 0,86% 100%,0 100%)}
+  @keyframes stamp{0%{opacity:0;transform:scale(1.6) rotate(-12deg)}60%{opacity:1;transform:scale(.92)}100%{transform:none}}
   .pm-badge{position:absolute;right:6px;top:-3px;z-index:5;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;
-    background:var(--gold);color:var(--ink);font:900 11px var(--data);border:2px solid var(--ink)}
+    background:var(--gold);color:var(--ink);font:900 11px var(--data);border:2px solid var(--ink);
+    animation:stamp var(--motion-panel) var(--ease-snap) both}
   .pm-badge.vice{background:var(--silver)}
   .pm-flag{position:absolute;right:6px;top:44px;z-index:5;display:grid;place-items:center;width:20px;height:20px;border-radius:50%;
     border:2px solid var(--night-900);font:900 var(--type-micro) var(--data);background:var(--yellow);color:var(--ink)}
@@ -374,12 +385,12 @@
 
   /* --- 6. PLAYER DRAWER --------------------------------------------------- */
   .scrim{position:fixed;inset:0;z-index:120;background:rgba(8,0,12,.66);backdrop-filter:blur(3px);
-    opacity:0;pointer-events:none;transition:opacity var(--motion-panel)}
-  .scrim.is-open{opacity:1;pointer-events:auto}
+    transition:opacity var(--motion-ui)}
+  .scrim[data-starting-style],.scrim[data-ending-style]{opacity:0}
   .drawer{position:fixed;top:0;right:0;bottom:0;z-index:130;width:min(580px,100%);display:flex;flex-direction:column;
-    background:var(--night-850);box-shadow:-30px 0 90px rgba(0,0,0,.55);transform:translateX(103%);visibility:hidden;
-    transition:transform var(--motion-stage) var(--ease-out),visibility var(--motion-stage)}
-  .drawer.is-open{transform:none;visibility:visible}
+    background:var(--night-850);box-shadow:-30px 0 90px rgba(0,0,0,.55);
+    transition:transform var(--motion-stage) var(--ease-out)}
+  .drawer[data-starting-style],.drawer[data-ending-style]{transform:translateX(100%)}
   .drawer-scroll{flex:1;overflow-y:auto;overscroll-behavior:contain}
   .drawer-hero{position:relative;min-height:250px;padding:var(--space-5) var(--space-6) var(--space-4);
     background:linear-gradient(132deg,var(--c1,#444) 0%,var(--c2,#111) 82%);overflow:hidden}
@@ -895,8 +906,8 @@
   .duel-row strong:last-of-type{text-align:right}
   .duel-label{text-align:center;font-size:11px;color:var(--muted-ink)}
   .duel-track{grid-column:1/-1;display:flex;height:9px;background:#e0d8e1}
-  @keyframes duelbarsGrow{from{width:0}to{width:var(--w,0%)}}
-  .duel-track i{display:block;height:100%;min-width:3px;
+  @keyframes duelbarsGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+  .duel-track i{display:block;height:100%;min-width:3px;width:var(--w,0%);transform-origin:left;
     animation:duelbarsGrow var(--motion-panel) var(--ease-out) both}
   .duel-track .duel-a{background:var(--pl-purple)}
   .duel-track .duel-b{background:var(--pink);animation-delay:60ms}
@@ -1286,6 +1297,8 @@
     .pm:hover,.btn:hover,.prow:hover,.cand:hover,.ptile:hover,.bench-player:hover{transform:none}
     .ticker-track{animation:none}
     .lane.is-live::before{animation:none}
+    .stagger>*,.marker-slot,.tick,.skel{animation:none!important}
+    .lift:hover{transform:none}
   }
 
   /* --- ADDITIONS: not in the original prototype, needed for the React build --- */

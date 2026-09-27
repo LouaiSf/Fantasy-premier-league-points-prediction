@@ -34,13 +34,15 @@ function LaneRow({
   player,
   priceLabel,
   priceValue,
+  index,
 }: {
   readonly player: PlayerRecord;
   readonly priceLabel: string;
   readonly priceValue: number;
+  readonly index: number;
 }) {
   return (
-    <div className="team-plan-lane-row">
+    <div className="team-plan-lane-row" style={{ "--i": index } as React.CSSProperties}>
       <span className="team-plan-lane-photo">
         <PlayerPhoto
           src={player.photo ?? undefined}
@@ -184,21 +186,22 @@ export function TeamPlan({
             <div className="team-plan-hold">Hold — no squad changes; lineup advice still refreshed.</div>
           ) : (
             <div className="team-plan-lane">
-              <div className="team-plan-lane-col is-out">
+              <div className="team-plan-lane-col is-out stagger">
                 <span className="team-plan-lane-label">Out</span>
-                {outPlayers.map((player) => (
+                {outPlayers.map((player, index) => (
                   <LaneRow
                     key={player.element}
                     player={player}
                     priceLabel="Sell"
                     priceValue={fromTenths(sellingPricesTenths[player.element] ?? 0)}
+                    index={index}
                   />
                 ))}
               </div>
-              <div className="team-plan-lane-col is-in">
+              <div className="team-plan-lane-col is-in stagger">
                 <span className="team-plan-lane-label">In</span>
-                {inPlayers.map((player) => (
-                  <LaneRow key={player.element} player={player} priceLabel="Buy" priceValue={player.value_m} />
+                {inPlayers.map((player, index) => (
+                  <LaneRow key={player.element} player={player} priceLabel="Buy" priceValue={player.value_m} index={index} />
                 ))}
               </div>
             </div>

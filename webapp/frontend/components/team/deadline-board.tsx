@@ -157,9 +157,9 @@ export function DeadlineBoard() {
           </div>
           <p role="status">{open === 0 ? "Everything listed is ready." : `${open} item${open === 1 ? "" : "s"} still open.`}</p>
         </div>
-        <ul className="deadline-list">
-          {rows.map((row) => (
-            <li key={row.key} className={`deadline-row is-${row.state}`}>
+        <ul className="deadline-list stagger">
+          {rows.map((row, index) => (
+            <li key={row.key} className={`deadline-row is-${row.state}`} style={{ "--i": index } as React.CSSProperties}>
               <span className="deadline-state">
                 <span aria-hidden="true">{row.state === "ready" ? "✓" : row.state === "review" ? "!" : "–"}</span>
                 {STATE_LABELS[row.state]}

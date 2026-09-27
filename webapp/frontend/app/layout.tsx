@@ -10,6 +10,7 @@ import "@fontsource/barlow-semi-condensed/700.css";
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider } from "@/components/providers/app-provider";
+import { MotionProvider } from "@/components/motion/motion-provider";
 import { CrestTicker } from "@/components/chrome/crest-ticker";
 import { MainNav } from "@/components/chrome/main-nav";
 import { PlayerDrawer } from "@/components/player-drawer";
@@ -45,16 +46,18 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body>
         <TooltipProvider>
           <AppProvider>
-            <a className="skip-link" href="#main">
-              Skip to content
-            </a>
-            <CrestTicker />
-            <MainNav />
-            <main id="main" tabIndex={-1}>
-              <ErrorBoundary>{children}</ErrorBoundary>
-            </main>
-            <PlayerDrawer />
-            <Toast />
+            <MotionProvider>
+              <a className="skip-link" href="#main">
+                Skip to content
+              </a>
+              <CrestTicker />
+              <MainNav />
+              <main id="main" tabIndex={-1}>
+                <ErrorBoundary>{children}</ErrorBoundary>
+              </main>
+              <PlayerDrawer />
+              <Toast />
+            </MotionProvider>
           </AppProvider>
         </TooltipProvider>
       </body>

@@ -9,6 +9,8 @@ import { Loading } from "@/components/loading";
 import { EmptyState } from "@/components/empty-state";
 import { ChipIcon } from "@/components/chips/chip-icon";
 import { ChipOpportunityMatrix } from "@/components/chips/chip-opportunity-matrix";
+import { CountUp } from "@/components/motion/count-up";
+import { m, AnimatePresence } from "motion/react";
 import { CHIP_IDS, type ChipId, type ChipInventory, type ChipRecommendation, type ChipRow, type ChipsResult, type ChipState, type ChipStatus } from "@/lib/types";
 import { CHIP_INVENTORY_KEY } from "@/lib/storage-keys";
 
@@ -230,20 +232,27 @@ function PlannedChipsPanel({
       </p>
       {plannedChips.length > 0 && (
         <ul className="chip-planned-list">
-          {plannedChips.map((planned) => (
-            <li key={`${planned.chip}-${planned.gw}`}>
-              <ChipIcon id={planned.chip} />
-              <span>{CHIP_LABELS[planned.chip]} · GW{planned.gw}</span>
-              <button
-                type="button"
-                className="btn ghost sm"
-                onClick={() => onRemove(planned.chip, planned.gw)}
-                aria-label={`Remove planned ${CHIP_LABELS[planned.chip]} for GW${planned.gw}`}
+          <AnimatePresence>
+            {plannedChips.map((planned) => (
+              <m.li
+                key={`${planned.chip}-${planned.gw}`}
+                layout="position"
+                transition={{ layout: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } }}
+                exit={{ opacity: 0, x: -12 }}
               >
-                Remove
-              </button>
-            </li>
-          ))}
+                <ChipIcon id={planned.chip} />
+                <span>{CHIP_LABELS[planned.chip]} · GW{planned.gw}</span>
+                <button
+                  type="button"
+                  className="btn ghost sm"
+                  onClick={() => onRemove(planned.chip, planned.gw)}
+                  aria-label={`Remove planned ${CHIP_LABELS[planned.chip]} for GW${planned.gw}`}
+                >
+                  Remove
+                </button>
+              </m.li>
+            ))}
+          </AnimatePresence>
         </ul>
       )}
       <form className="chip-planned-form" onSubmit={submit}>
@@ -618,15 +627,15 @@ export default function ChipsPage() {
                     : "Hold"}
               </strong>
               <span>{STATUS_LABELS[nextDecision.status]}</span>
-              {nextDecision.projected_gain != null && <small>+{num(nextDecision.projected_gain, 1)} extra points vs your normal captain</small>}
+              {nextDecision.projected_gain != null && <small>+<CountUp value={nextDecision.projected_gain} decimals={1} /> extra points vs your normal captain</small>}
               {nextDecision.fixture_signal_index != null && <small>Fixture index {num(nextDecision.fixture_signal_index, 1)}</small>}
             </div>
           )}
         </section>
 
-        <div className="chip-advisor-grid">
-          {orderedRecommendations.filter((rec) => rec.chip !== nextDecision?.chip).map((rec) => (
-            <article key={rec.chip} className={`chip-advisor-card status-${rec.status}`}>
+        <div className="chip-advisor-grid stagger">
+          {orderedRecommendations.filter((rec) => rec.chip !== nextDecision?.chip).map((rec, index) => (
+            <article key={rec.chip} className={`chip-advisor-card lift status-${rec.status}`} style={{ "--i": index } as React.CSSProperties}>
               <div className="chip-advisor-header">
                 <div className="chip-advisor-name">
                   <ChipIcon id={rec.chip} />
