@@ -18,6 +18,7 @@ from webapp.fpl_client import (
     UpstreamRateLimited,
     UpstreamUnavailable,
 )
+from webapp.manager_status import derive_chip_inventory, derive_free_transfers
 
 
 def _summary_json(summary) -> dict[str, object]:
@@ -265,6 +266,36 @@ def create_manager_blueprint(
                 }
                 for pick in lineup.picks
             ],
+        })
+
+    @blueprint.get("/<int:entry_id>/status")
+    def manager_status(entry_id: int):
+        try:
+            summary = client.get_entry(entry_id)
+            history = client.get_history(entry_id)
+        except FplClientError as exc:
+            return _error(exc)
+
+        last_played = max((entry.event for entry in history.current), default=None)
+        next_gw = (last_played + 1) if last_played is not None else (
+            (summary.current_event + 1) if summary.current_event else 1
+        )
+
+        chip_state = derive_chip_inventory(history.chips, next_gw)
+        free_transfers = derive_free_transfers(history.current, history.chips, next_gw)
+        latest = max(history.current, key=lambda entry: entry.event, default=None)
+
+        return jsonify({
+            "ok": True,
+            "entry_id": entry_id,
+            "gameweek": next_gw,
+            "chip_inventory": chip_state["chip_inventory"],
+            "last_free_hit_gameweek": chip_state["last_free_hit_gameweek"],
+            "free_transfers": free_transfers,
+            "bank": summary.bank if summary.bank is not None else (
+                latest.bank if latest is not None else None
+            ),
+            "source": "fpl_public",
         })
 
     return blueprint

@@ -75,6 +75,27 @@ class ManagerLineup:
 
 
 @dataclass(frozen=True, slots=True)
+class ChipPlayed:
+    name: str
+    event: int
+
+
+@dataclass(frozen=True, slots=True)
+class HistoryEntry:
+    event: int
+    event_transfers: int
+    event_transfers_cost: int
+    bank: float | None
+    value: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class ManagerHistory:
+    chips: tuple[ChipPlayed, ...]
+    current: tuple[HistoryEntry, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class LeagueStandingsEntry:
     entry_id: int
     manager_name: str
@@ -285,6 +306,34 @@ class FplClient:
                 picks=tuple(picks),
             )
         raise LineupNotFound(f"no public picks found for entry {entry_id}")
+
+    def get_history(self, entry_id: int) -> ManagerHistory:
+        if entry_id <= 0:
+            raise ManagerNotFound("public FPL entry IDs are positive")
+        url = self._url(f"entry/{entry_id}/history/")
+        data = self._get_json(url)
+        raw_chips = data.get("chips")
+        chips: list[ChipPlayed] = []
+        if isinstance(raw_chips, list):
+            for raw in raw_chips:
+                chip = _mapping(raw, "chips")
+                name = chip.get("name")
+                event = _optional_int(chip, "event")
+                if isinstance(name, str) and name and event is not None:
+                    chips.append(ChipPlayed(name=name, event=event))
+        raw_current = data.get("current")
+        current: list[HistoryEntry] = []
+        if isinstance(raw_current, list):
+            for raw in raw_current:
+                entry = _mapping(raw, "current")
+                current.append(HistoryEntry(
+                    event=_required_int(entry, "event"),
+                    event_transfers=_optional_int(entry, "event_transfers") or 0,
+                    event_transfers_cost=_optional_int(entry, "event_transfers_cost") or 0,
+                    bank=_optional_float(entry, "bank", 10.0),
+                    value=_optional_float(entry, "value", 10.0),
+                ))
+        return ManagerHistory(chips=tuple(chips), current=tuple(current))
 
     def search_text(self, query: str) -> tuple[ManagerSummary, ...]:
         configured_url = os.environ.get("FPL_MANAGER_SEARCH_URL", "").strip()

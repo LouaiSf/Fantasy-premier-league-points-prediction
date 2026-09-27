@@ -5,6 +5,7 @@ import type {
   LeagueNameSearchResult,
   ManagerLineup,
   ManagerSearchCandidate,
+  ManagerStatus,
   PlatformSnapshot,
   PlayerHistoryRecord,
   SquadResult,
@@ -171,6 +172,11 @@ export const api = {
   managerLineup: (entryId: number, gameweek?: number, signal?: AbortSignal) =>
     requestJson<ManagerLineup>(
       `/api/managers/${entryId}/lineup${gameweek ? `?gameweek=${gameweek}` : ""}`,
+      signal ? { signal } : undefined,
+    ),
+  managerStatus: (entryId: number, signal?: AbortSignal) =>
+    requestJson<ManagerStatus>(
+      `/api/managers/${entryId}/status`,
       signal ? { signal } : undefined,
     ),
   leagueStandings: (leagueId: number, page = 1) =>

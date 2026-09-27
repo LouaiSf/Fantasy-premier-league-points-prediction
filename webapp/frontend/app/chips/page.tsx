@@ -155,6 +155,23 @@ function readInventory(season: string): ChipInventory | null {
   }
 }
 
+type InventorySource = "fpl_sync" | "local_user_reported";
+
+function readInventorySource(season: string): InventorySource | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = window.localStorage.getItem(CHIP_INVENTORY_KEY);
+    if (!stored) return null;
+    const parsed: unknown = JSON.parse(stored);
+    if (!isRecord(parsed) || parsed.season !== season) return null;
+    return parsed.source === "fpl_sync" || parsed.source === "local_user_reported"
+      ? parsed.source
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function readLastFreeHitGameweek(season: string): number | null {
   if (typeof window === "undefined") return null;
   try {
@@ -329,7 +346,7 @@ function WhyThisChoice({ recommendation, data }: { recommendation: ChipRecommend
 }
 
 export default function ChipsPage() {
-  const { snapshot, loading, squadElements, squadNames, squadPlayers, storedSquad, financeSummary } = useApp();
+  const { snapshot, loading, squadElements, squadNames, squadPlayers, storedSquad, financeSummary, setFreeTransfers } = useApp();
   const [data, setData] = React.useState<ChipsResult | null>(null);
   const [fetching, setFetching] = React.useState(false);
   const [fetchError, setFetchError] = React.useState<string | null>(null);
@@ -351,6 +368,37 @@ export default function ChipsPage() {
   const scheduledGameweeks = React.useMemo(
     () => plannedChips.map((planned) => planned.gw),
     [plannedChips],
+  );
+  // Whether the current inventory came from an FPL account sync or from the
+  // manager toggling chips by hand -- a manual edit stops future auto-syncs
+  // from silently overwriting it until the manager asks to re-sync.
+  const [inventorySource, setInventorySource] = React.useState<InventorySource | null>(null);
+  const [syncState, setSyncState] = React.useState<"idle" | "loading" | "error">("idle");
+  const [syncedGameweek, setSyncedGameweek] = React.useState<number | null>(null);
+  const syncedEntryRef = React.useRef<number | null>(null);
+  const managerEntryId = storedSquad?.source === "manager" ? storedSquad.sourceEntryId ?? null : null;
+
+  const syncFromFpl = React.useCallback(
+    async (entryId: number) => {
+      setSyncState("loading");
+      try {
+        const status = await api.managerStatus(entryId);
+        setInventory({
+          first_half: { ...status.chip_inventory.first_half },
+          second_half: { ...status.chip_inventory.second_half },
+        });
+        setLastFreeHitGameweek(status.last_free_hit_gameweek);
+        setInventorySource("fpl_sync");
+        setSyncedGameweek(status.gameweek);
+        if (storedSquad?.freeTransfersSource !== "manual") {
+          setFreeTransfers(status.free_transfers, "fpl_sync");
+        }
+        setSyncState("idle");
+      } catch {
+        setSyncState("error");
+      }
+    },
+    [storedSquad?.freeTransfersSource, setFreeTransfers],
   );
 
   const maxPossibleHorizon = Math.max(1, 38 - (snapshot?.gameweek ?? 1) + 1);
@@ -421,6 +469,7 @@ export default function ChipsPage() {
       setInventory(stored);
       setLastFreeHitGameweek(readLastFreeHitGameweek(season));
       setPlannedChips(readPlannedChips(season));
+      setInventorySource(readInventorySource(season));
       setInventoryLoaded(true);
     }, 0);
     return () => window.clearTimeout(timer);
@@ -431,12 +480,27 @@ export default function ChipsPage() {
     if (typeof window !== "undefined" && inventory) {
       window.localStorage.setItem(
         CHIP_INVENTORY_KEY,
-        JSON.stringify({ ...inventory, season: snapshot.season, lastFreeHitGameweek, plannedChips }),
+        JSON.stringify({
+          ...inventory, season: snapshot.season, lastFreeHitGameweek, plannedChips,
+          source: inventorySource,
+        }),
       );
     } else if (typeof window !== "undefined") {
       window.localStorage.removeItem(CHIP_INVENTORY_KEY);
     }
-  }, [inventory, inventoryLoaded, snapshot?.season, lastFreeHitGameweek, plannedChips]);
+  }, [inventory, inventoryLoaded, snapshot?.season, lastFreeHitGameweek, plannedChips, inventorySource]);
+
+  // Auto-sync once per imported manager, as long as the manager hasn't
+  // manually overridden the inventory since. A manual edit (updateChipState,
+  // the Free Hit GW field) sets inventorySource to "local_user_reported" and
+  // that sticks until the manager explicitly clicks Re-sync.
+  React.useEffect(() => {
+    if (!inventoryLoaded || !managerEntryId) return;
+    if (inventorySource === "local_user_reported") return;
+    if (syncedEntryRef.current === managerEntryId) return;
+    syncedEntryRef.current = managerEntryId;
+    void syncFromFpl(managerEntryId);
+  }, [inventoryLoaded, managerEntryId, inventorySource, syncFromFpl]);
 
   function addPlannedChip(chip: ChipId, gw: number) {
     // Only one chip can be played in a gameweek, so a second plan for the
@@ -468,6 +532,7 @@ export default function ChipsPage() {
         },
       };
     });
+    setInventorySource("local_user_reported");
     // Marking Free Hit used usually happens right around when it's played;
     // default the GW field to today's rather than leaving it blank and
     // making the manager type a number they were just implicitly stating.
@@ -680,9 +745,54 @@ export default function ChipsPage() {
           <span className={`chip-inventory-state state-${inventory ? "synced" : "not-synced"}`}>
             {inventory ? "Entered" : "Not entered"}
           </span>
-          <button type="button" className="btn secondary sm" onClick={() => setInventory(inventory ? null : blankInventory())}>
+          <button
+            type="button"
+            className="btn secondary sm"
+            onClick={() => {
+              setInventory(inventory ? null : blankInventory());
+              setInventorySource(inventory ? null : "local_user_reported");
+            }}
+          >
             {inventory ? "Clear my chip entries" : "Mark chips available"}
           </button>
+          {managerEntryId != null && (
+            <div className="chip-sync-status">
+              {syncState === "loading" && <small>Syncing from FPL…</small>}
+              {syncState === "idle" && inventorySource === "fpl_sync" && (
+                <small>Synced from FPL{syncedGameweek != null ? ` · GW${syncedGameweek}` : ""}</small>
+              )}
+              {syncState === "error" && <small>Could not sync from FPL; showing entries from this device.</small>}
+              <button
+                type="button"
+                className="btn ghost sm"
+                onClick={() => {
+                  setInventorySource(null);
+                  syncedEntryRef.current = null;
+                  void syncFromFpl(managerEntryId);
+                }}
+              >
+                Re-sync from FPL
+              </button>
+            </div>
+          )}
+          <label className="chip-free-transfers-input" htmlFor="chip-free-transfers">
+            <span className="kicker">Free transfers</span>
+            <input
+              id="chip-free-transfers"
+              type="number"
+              min={0}
+              max={5}
+              value={storedSquad?.freeTransfers ?? ""}
+              placeholder="0-5"
+              onChange={(event) => {
+                const parsed = Number(event.target.value);
+                if (event.target.value !== "" && Number.isFinite(parsed)) {
+                  setFreeTransfers(parsed, "manual");
+                }
+              }}
+            />
+            {storedSquad?.freeTransfersSource === "fpl_sync" && <small>Synced from FPL</small>}
+          </label>
           {inventory && (
             <div className="chip-inventory-grid">
               {(["first_half", "second_half"] as const).map((half) => (
@@ -721,6 +831,7 @@ export default function ChipsPage() {
                         onChange={(event) => {
                           const parsed = Number(event.target.value);
                           setLastFreeHitGameweek(event.target.value === "" || Number.isNaN(parsed) ? null : parsed);
+                          setInventorySource("local_user_reported");
                         }}
                       />
                     </label>

@@ -34,6 +34,11 @@ interface AppState {
   squadNames: string[];
   squadPlayers: PlayerRecord[];
 
+  // Free transfers available for the upcoming gameweek, shared by the Chips
+  // page (Free Hit's no-chip baseline) and Transfer Studio. Persisted on the
+  // stored squad so either page can read or set it.
+  setFreeTransfers: (value: number, source: "fpl_sync" | "manual") => void;
+
   teamResult: SquadResult | null;
   // "reset" treats the result as a brand-new squad bought fresh against a
   // full £100.0m budget (auto-pick). "lineup" reorders/recaptains the same
@@ -469,6 +474,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [snapshot, persistSquad],
   );
 
+  const setFreeTransfers = React.useCallback(
+    (value: number, source: "fpl_sync" | "manual") => {
+      const clamped = Math.max(0, Math.min(5, Math.round(value)));
+      setStoredSquad((current) => {
+        if (!current) return current;
+        const next: StoredSquad = { ...current, freeTransfers: clamped, freeTransfersSource: source };
+        window.localStorage.setItem(SQUAD_STORAGE_KEY, JSON.stringify(next));
+        return next;
+      });
+    },
+    [],
+  );
+
   const squadPlayers = React.useMemo(() => {
     if (!snapshot) return [];
     const byElement = new Map(snapshot.players.map((player) => [player.element, player]));
@@ -502,6 +520,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     teamResult,
     setTeamResult,
     setImportedTeam,
+    setFreeTransfers,
     storedSquad,
     financeSummary,
     selectedPlayer,

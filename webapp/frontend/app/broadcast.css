@@ -1802,6 +1802,12 @@
   .chip-inventory-gw-input{display:flex;flex-direction:column;gap:4px;margin-top:6px}
   .chip-inventory-gw-input .kicker{font-size:var(--type-micro)}
   .chip-inventory-gw-input input{width:100%;background:var(--night-900);border:1px solid rgba(255,255,255,.2);color:var(--white);padding:6px 8px;font:700 12px/1 var(--data)}
+  .chip-sync-status{grid-column:1/-1;display:flex;align-items:center;gap:var(--space-3);margin-top:var(--space-3)}
+  .chip-sync-status small{color:var(--muted-light)}
+  .chip-free-transfers-input{grid-column:1/-1;display:flex;align-items:center;gap:var(--space-3);margin-top:var(--space-3)}
+  .chip-free-transfers-input .kicker{font-size:var(--type-micro)}
+  .chip-free-transfers-input input{width:64px;background:var(--night-900);border:1px solid rgba(255,255,255,.2);color:var(--white);padding:6px 8px;font:700 12px/1 var(--data)}
+  .chip-free-transfers-input small{color:var(--lime)}
   .chip-planned{grid-column:1/-1;margin-top:var(--space-4);padding-top:var(--space-4);border-top:1px solid rgba(255,255,255,.12)}
   .chip-planned-note{max-width:62ch;margin:4px 0 0;color:var(--muted-light);font-size:12px}
   .chip-planned-list{list-style:none;margin:var(--space-3) 0 0;padding:0;display:grid;gap:1px;max-width:520px}

@@ -216,6 +216,22 @@ export interface StoredSquad {
   sourceTeamName?: string;
   sourceGameweek?: number;
   finance?: SquadFinance;
+  /** Free transfers available for the upcoming gameweek (0-5), shared between
+   * the Chips page and Transfer Studio. `freeTransfersSource` records whether
+   * the number came from a synced FPL account or a manual override. */
+  freeTransfers?: number;
+  freeTransfersSource?: "fpl_sync" | "manual";
+}
+
+export interface ManagerStatus {
+  ok: true;
+  entry_id: number;
+  gameweek: number;
+  chip_inventory: ChipInventory;
+  last_free_hit_gameweek: number | null;
+  free_transfers: number;
+  bank: number | null;
+  source: "fpl_public";
 }
 
 export interface ManagerSearchCandidate {
