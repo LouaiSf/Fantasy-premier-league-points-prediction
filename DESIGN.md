@@ -1,6 +1,6 @@
 # FPL Assistant Broadcast Design System
 
-Version 1.3 — the definitive design vision for the 2026/27 match centre.
+Version 1.4 — the definitive design vision for the 2026/27 match centre.
 Scope: `fpl-assistant-prototype.html`, plus the production Next.js components listed in
 §5 "Production components" (`webapp/frontend/`), which consume the same tokens from
 `webapp/frontend/app/broadcast.css`. The rest of the production Flask interface is untouched
@@ -88,6 +88,16 @@ Tabular figures are enforced with `font-feature-settings: "tnum" 1, "lnum" 1` on
 `font-variant-numeric`, because the `font:` shorthand used throughout the stylesheet silently resets
 `font-variant-numeric` and would leave figures proportional.
 
+The Display, Product UI and Editorial faces are self-hosted via Fontsource (`@fontsource-variable/archivo`,
+`@fontsource-variable/inter`, `@fontsource-variable/newsreader`, `@fontsource/barlow-semi-condensed`),
+imported directly in `app/layout.tsx` rather than loaded from Google Fonts at runtime. Archivo Variable's
+width axis powers `.display-hero` (`"wdth" 112`, weight 900) on every page's `<h1>` and `.sub-head h3`
+(`"wdth" 100`, weight 800), so headlines keep the Archivo Black look while gaining real variable weights.
+
+**11px type floor.** `--type-micro` (`0.6875rem` / 11px) is the smallest text permitted anywhere in
+`broadcast.css`; the `.ghost-num` decorative numerals are the sole exception. Rules at the floor also cap
+`letter-spacing` at `.1em` so the larger glyphs still fit their original boxes.
+
 ### Scale
 
 | Level | Token | Size | Weight | Usage |
@@ -100,6 +110,8 @@ Tabular figures are enforced with `font-feature-settings: "tnum" 1, "lnum" 1` on
 | Body | `--type-body` | `0.9375rem` | 450 | Product copy |
 | Small | `--type-small` | `0.8125rem` | 550 | Supporting copy |
 | Caption | `--type-caption` | `0.6875rem` | 700 uppercase | Broadcast labels |
+| Mini | `--type-mini` | `0.75rem` | — | Secondary metadata, just above the floor |
+| Micro (floor) | `--type-micro` | `0.6875rem` (11px) | — | Smallest permitted text anywhere except `.ghost-num` |
 
 ## 4. Spacing & Layout
 
@@ -242,8 +254,9 @@ panels use hard gradient light and clipped graphic shapes rather than grey eleva
 - **Low-vision strategist** — 200% zoom; must read status and FDR without relying on hue.
 
 ### Accepted debt
-- Proprietary Premier League faces are referenced but not redistributed; open fallbacks are loaded.
-  Owner action: drop licensed WOFF2 files into `webapp/static/fonts/` and the named families take over.
+- Proprietary Premier League faces are referenced but not redistributed; open fallbacks are self-hosted
+  via Fontsource. Owner action: drop licensed WOFF2 files into `webapp/static/fonts/` and the named
+  families take over.
 - Crest and player photography come from the Premier League CDN for prototype purposes. Production
   publication requires the owner to confirm rights and host local optimised derivatives.
 - The prototype HTML uses seeded data. The production app reads live data: model projections and market prices from the Flask snapshot, public manager and league data from the FPL API, and the manager's squad, chip inventory, drafts and holds from this device's local storage. Fixture-signal figures are estimates, not results; nothing is synced with an FPL account.

@@ -95,7 +95,7 @@ export default function FixturesPage() {
             <p className="eyebrow lime">
               {gameweeks.length}-week horizon // GW{startGw}–{gameweeks[gameweeks.length - 1] ?? startGw}
             </p>
-            <h1>Fixture matrix</h1>
+            <h1 className="display-hero">Fixture matrix</h1>
           </div>
           <p>
             Difficulty and venue for every club in one field of colour, straight from the

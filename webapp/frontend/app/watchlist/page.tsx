@@ -170,7 +170,7 @@ export default function WatchlistPage() {
             <span className="badge cyan">
               Tactical Market Wire
             </span>
-            <h1>Watchlist &amp; Differentials</h1>
+            <h1 className="display-hero">Watchlist &amp; Differentials</h1>
             <p>
               Automated high-value targets, mini-league differentials, price traps, and newly promoted talent for GW{snapshot.gameweek}.
             </p>

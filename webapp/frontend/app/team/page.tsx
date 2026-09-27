@@ -212,7 +212,7 @@ export default function TeamPage() {
         <div className="shell hero-grid">
           <div className="hero-copy">
             <p className="eyebrow">Match centre</p>
-            <h1 className="hero-title">
+            <h1 className="hero-title display-hero">
               My<em>Team</em>
             </h1>
             <div className="hero-rule" aria-hidden="true" />

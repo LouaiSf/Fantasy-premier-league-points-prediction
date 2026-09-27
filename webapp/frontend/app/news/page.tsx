@@ -178,7 +178,7 @@ export default function NewsPage() {
             <p className="eyebrow alert">
               Team news // local desk
             </p>
-            <h1>Matchday wire</h1>
+            <h1 className="display-hero">Matchday wire</h1>
           </div>
           <p>
             Every availability note in the local FPL snapshot, ordered by what changes your

@@ -142,7 +142,7 @@ export default function TransfersPage() {
   if (loading || !snapshot) return <section className="page"><div className="shell"><Loading label="Loading season data…" /></div></section>;
   if (squadPlayers.length !== 15) return (
     <section className="page studio"><div className="shell shell--padded transfer-onboarding">
-      <span className="eyebrow alert">Decision room</span><h1>Build your squad first</h1>
+      <span className="eyebrow alert">Decision room</span><h1 className="display-hero">Build your squad first</h1>
       <p>Transfer Studio compares legal 15-player squads. Your saved team has {squadPlayers.length}/15 players.</p>
       <a className="btn" href="/team">Go to My Team</a>
     </div></section>
@@ -331,7 +331,7 @@ export default function TransfersPage() {
     <section className="page studio" aria-label="Transfer studio">
       <div className="shell-wide">
         <div className="section-head">
-          <div><p className="eyebrow alert">Decision room</p><h1>Transfer studio</h1></div>
+          <div><p className="eyebrow alert">Decision room</p><h1 className="display-hero">Transfer studio</h1></div>
           <p>Stage real moves, check the final squad and compare the best available options.</p>
           {snapshot.prediction_available ? <ModelInfo model={snapshot.model} timestamp={snapshot.prediction_timestamp} /> : null}
         </div>

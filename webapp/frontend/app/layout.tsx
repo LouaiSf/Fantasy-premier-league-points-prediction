@@ -1,5 +1,12 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import "@fontsource-variable/archivo/wdth.css";
+import "@fontsource-variable/inter/opsz.css";
+import "@fontsource-variable/newsreader/opsz.css";
+import "@fontsource-variable/newsreader/opsz-italic.css";
+import "@fontsource/barlow-semi-condensed/500.css";
+import "@fontsource/barlow-semi-condensed/600.css";
+import "@fontsource/barlow-semi-condensed/700.css";
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider } from "@/components/providers/app-provider";
@@ -34,18 +41,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             strategy="beforeInteractive"
           />
         )}
-        {/* eslint-disable @next/next/no-page-custom-font --
-            next/font/google fetches these at build time, which was
-            intermittently crashing the Turbopack build worker in this
-            environment (~50% of runs). Plain <link> tags in the root
-            layout head are a documented, reliable App Router alternative. */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:wght@500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;450;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,700;1,6..72,500;1,6..72,600&display=swap"
-          rel="stylesheet"
-        />
-        {/* eslint-enable @next/next/no-page-custom-font */}
       </head>
       <body>
         <TooltipProvider>

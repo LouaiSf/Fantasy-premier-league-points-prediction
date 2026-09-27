@@ -116,7 +116,7 @@ export default function CaptainPage() {
               </span>
             )}
             <span className="eyebrow">Armband desk</span>
-            <h1>
+            <h1 className="display-hero">
               Captain
               <span>&amp; Form</span>
             </h1>

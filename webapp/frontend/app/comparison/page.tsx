@@ -155,7 +155,7 @@ function ComparisonPageInner() {
             <p className="eyebrow cyan">
               Head to head
             </p>
-            <h1>Select the duel</h1>
+            <h1 className="display-hero">Select the duel</h1>
           </div>
           <p>
             Choose Player A and Player B from the local snapshot. The arena and category

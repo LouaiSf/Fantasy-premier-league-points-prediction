@@ -510,7 +510,7 @@ export default function ChipsPage() {
         <header className="section-head section-head--mt">
           <div>
             <span className="badge lime">Chip planning desk</span>
-            <h1>Chip Advisor</h1>
+            <h1 className="display-hero">Chip Advisor</h1>
             <p>
               {data && data.projection_mode === "model_projection" && data.data_quality === "complete_horizon"
                 ? "Player projections with candidate weeks, inventory state, and supporting evidence."
