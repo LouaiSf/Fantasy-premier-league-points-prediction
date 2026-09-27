@@ -12,7 +12,7 @@ import { money, num, signed } from "@/lib/format";
 import { isHeldWeek, isSavedScenario, isSavedTransferDraft, heldWeekKey, MAX_SCENARIOS, scenarioKey, scenarioStaleReason, squadFingerprint, transferDraftKey, type HeldWeek, type SavedScenario, type SavedTransferDraft, type TransferDraftPair } from "@/lib/transfer-planning";
 import { validateSquad } from "@/lib/squad";
 import type { PlayerRecord, SquadResult, TransferResult, TransferRow } from "@/lib/types";
-import { Loading } from "@/components/loading";
+import { Skeleton } from "@/components/skeleton";
 import { ModelInfo } from "@/components/model-info";
 import { CountUp } from "@/components/motion/count-up";
 import { m, AnimatePresence } from "motion/react";
@@ -141,7 +141,12 @@ export default function TransfersPage() {
     }
   }, [snapshot?.season, snapshot?.gameweek, fingerprint]);
 
-  if (loading || !snapshot) return <section className="page"><div className="shell"><Loading label="Loading season data…" /></div></section>;
+  if (loading || !snapshot) return <section className="page"><div className="shell">
+    <div className="skel-columns" style={{ "--cols": 2 } as React.CSSProperties}>
+      <Skeleton variant="row" count={8} />
+      <Skeleton variant="row" count={8} />
+    </div>
+  </div></section>;
   if (squadPlayers.length !== 15) return (
     <section className="page studio"><div className="shell shell--padded transfer-onboarding">
       <span className="eyebrow alert">Decision room</span><h1 className="display-hero">Build your squad first</h1>

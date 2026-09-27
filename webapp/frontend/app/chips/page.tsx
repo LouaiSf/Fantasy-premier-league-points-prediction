@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { num } from "@/lib/format";
 import { fromTenths, sellingPricesTenthsForSquad } from "@/lib/finance";
 import { Loading } from "@/components/loading";
+import { Skeleton } from "@/components/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { ChipIcon } from "@/components/chips/chip-icon";
 import { ChipOpportunityMatrix } from "@/components/chips/chip-opportunity-matrix";
@@ -480,7 +481,8 @@ export default function ChipsPage() {
     return (
       <section className="page">
         <div className="shell">
-          <Loading label="Loading season data…" />
+          <Skeleton variant="hero" />
+          <Skeleton variant="card" count={4} />
         </div>
       </section>
     );

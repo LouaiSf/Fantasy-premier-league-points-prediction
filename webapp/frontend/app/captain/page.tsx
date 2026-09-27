@@ -7,7 +7,7 @@ import { ClubCrest } from "@/components/club-crest";
 import { clubStyle } from "@/lib/club-colors";
 import { money, num } from "@/lib/format";
 import type { PlayerRecord, TeamRecord } from "@/lib/types";
-import { Loading } from "@/components/loading";
+import { Skeleton } from "@/components/skeleton";
 import { ModelInfo } from "@/components/model-info";
 import { CountUp } from "@/components/motion/count-up";
 import { m } from "motion/react";
@@ -60,7 +60,8 @@ export default function CaptainPage() {
     return (
       <section className="page">
         <div className="shell">
-          <Loading label="Loading season data…" />
+          <Skeleton variant="hero" />
+          <Skeleton variant="row" count={10} />
         </div>
       </section>
     );

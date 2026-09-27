@@ -7,7 +7,7 @@ import { ClubCrest } from "@/components/club-crest";
 import { clubStyle } from "@/lib/club-colors";
 import { num } from "@/lib/format";
 import type { PlayerRecord } from "@/lib/types";
-import { Loading } from "@/components/loading";
+import { Skeleton } from "@/components/skeleton";
 
 type Filter = "all" | "squad" | "injury" | "suspension" | "doubt";
 type View = "desk" | "cards";
@@ -124,7 +124,7 @@ export default function NewsPage() {
     return (
       <section className="page">
         <div className="shell">
-          <Loading label="Loading season data…" />
+          <Skeleton variant="row" count={8} />
         </div>
       </section>
     );

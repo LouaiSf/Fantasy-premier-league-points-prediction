@@ -7,6 +7,7 @@ import { ClubCrest } from "@/components/club-crest";
 import { money, num } from "@/lib/format";
 import { api } from "@/lib/api";
 import { Loading } from "@/components/loading";
+import { Skeleton } from "@/components/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import type { WatchlistPlayer, WatchlistResult } from "@/lib/types";
 
@@ -51,7 +52,11 @@ export default function WatchlistPage() {
     return (
       <section className="page">
         <div className="shell">
-          <Loading label="Loading season data…" />
+          <div className="skel-columns" style={{ "--cols": 3 } as React.CSSProperties}>
+            <Skeleton variant="row" count={8} />
+            <Skeleton variant="row" count={8} />
+            <Skeleton variant="row" count={8} />
+          </div>
         </div>
       </section>
     );

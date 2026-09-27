@@ -4,7 +4,7 @@ import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
 import { ClubCrest } from "@/components/club-crest";
 import type { FixtureRecord, TeamRecord } from "@/lib/types";
-import { Loading } from "@/components/loading";
+import { Skeleton } from "@/components/skeleton";
 
 // A gameweek can hold more than one fixture for a club. Keying a Map on the
 // gameweek keeps only the last of them, which silently hides the other from
@@ -68,7 +68,7 @@ export default function FixturesPage() {
     return (
       <section className="page">
         <div className="shell">
-          <Loading label="Loading season data…" />
+          <Skeleton variant="table" count={20} />
         </div>
       </section>
     );

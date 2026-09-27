@@ -9,7 +9,7 @@ import { previewSquad } from "@/lib/squad";
 import { Pitch } from "@/components/team/pitch";
 import { SquadEditor } from "@/components/team/squad-editor";
 import { PlayerPhoto } from "@/components/player-photo";
-import { Loading } from "@/components/loading";
+import { Skeleton } from "@/components/skeleton";
 import { ModelInfo } from "@/components/model-info";
 import { ManagerSearch } from "@/components/team/manager-search";
 import { TeamPlan } from "@/components/team/team-plan";
@@ -88,7 +88,8 @@ export default function TeamPage() {
     return (
       <section className="page">
         <div className="shell">
-          <Loading label="Loading season data…" />
+          <Skeleton variant="hero" />
+          <Skeleton variant="pitch" />
         </div>
       </section>
     );
