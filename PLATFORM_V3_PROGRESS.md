@@ -60,10 +60,25 @@ All four pushed to `origin/main`.
 - **`components/team/deadline-board.tsx`** still reads only the manager's own locally-planned chips (`plannedChips` in localStorage), not the engine's `chip_plan`. Functionally correct (nothing regressed), just not the richer "TC planned GW16" readout A5.7 describes.
 - **Cold-request latency (~8s at GW1-ish horizons).** Within the LRU-cached, threaded, market-reduced design described above; not further optimised. A squad already synced/loaded once per session pays this cost only when the squad, bank, prices, inventory or scheduled chips actually change.
 
+### Post-commit visual fix
+
+The initial A5 pass fed every eligible candidate week (up to ~33 for a GW1
+half) into each chip card's `BarStrip`, which crammed that many labelled bars
+into a card-width chart -- overlapping, unreadable labels, caught only once a
+real screenshot was taken (the accessibility-tree snapshot used during the
+original verification pass doesn't surface visual overlap). Fixed: the
+per-card strip now shows a small window of upcoming weeks (`pickBarWeeks` in
+`app/chips/page.tsx`, always including "now" and the plan's assigned week --
+the full picture already lives in the gain heatmap table below), and
+`BarStrip` itself drops per-bar labels past 10 items as a general safeguard
+for future consumers (Slice B/C will reuse it). Re-verified with real
+screenshots at 1440 and 375.
+
 ### Commits
 
 - `d6edcdea` -- chips: sync chip inventory and free transfers from a manager's FPL history (A1)
-- (this slice's A2-A6 commit follows)
+- `e41b686f` -- chips: squad-specific, horizon-independent chip plan (contract v4, A2-A6)
+- `28762d82` -- ui: fix chip advisor bar strips showing every gameweek to GW38
 
 ### Exact next action
 
