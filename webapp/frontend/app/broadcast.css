@@ -2262,3 +2262,30 @@
   .scenario-table th,.scenario-table td{padding:8px;border-bottom:1px solid rgba(255,255,255,.12);text-align:left}
   .scenario-table small{color:var(--cyan)}
   @media(max-width:560px){.result-tabs{flex-wrap:wrap}}
+
+  /* --- V0.4 SHARED SVG CHART KIT (components/charts/) --------------------- */
+  .bar-strip{position:relative;display:flex;align-items:flex-end;gap:2px;width:100%}
+  .bar-strip-zero{position:absolute;left:0;right:0;height:1px;background:rgba(255,255,255,.24)}
+  .bar-strip-col{position:relative;height:100%;display:flex;align-items:flex-end;justify-content:center}
+  .bar-strip-col:focus-visible{outline:0;box-shadow:var(--focus)}
+  .bar-strip-bar{position:absolute;width:100%;border-radius:1px}
+  .bar-strip-label{position:absolute;bottom:-16px;font:600 var(--type-micro) var(--data);color:var(--muted-mid);white-space:nowrap}
+
+  .delta-bar{display:flex;align-items:center;gap:var(--space-3)}
+  .delta-bar-track{position:relative;flex:1;height:8px;background:rgba(255,255,255,.1)}
+  .delta-bar-zero{position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:rgba(255,255,255,.3)}
+  .delta-bar-fill{position:absolute;top:0;bottom:0;left:50%}
+  .delta-bar-fill.is-positive{background:var(--lime)}
+  .delta-bar-fill.is-negative{background:var(--pink);left:auto;right:50%}
+  .delta-bar-value{font:700 var(--type-mini) var(--data);white-space:nowrap}
+  .delta-bar-value.is-positive{color:var(--lime)}
+  .delta-bar-value.is-negative{color:var(--pink)}
+
+  .scatter-svg{max-width:100%;height:auto}
+  .scatter-zero{stroke:rgba(255,255,255,.2);stroke-width:1}
+  .scatter-diagonal{stroke:rgba(255,255,255,.3);stroke-width:1;stroke-dasharray:4 4}
+  .scatter-axis-label{font:600 var(--type-micro) var(--data);fill:var(--muted-mid);text-transform:uppercase;letter-spacing:.08em}
+  .scatter-dot{fill:rgba(255,255,255,.5);cursor:pointer;transition:r var(--motion-fast) var(--ease-out)}
+  .scatter-dot:hover,.scatter-dot:focus-visible{fill:var(--lime)}
+  .scatter-dot:focus-visible{outline:0}
+  .scatter-dot.is-highlight{fill:var(--lime)}
