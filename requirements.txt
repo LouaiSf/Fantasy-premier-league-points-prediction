@@ -9,7 +9,7 @@ matplotlib>=3.7
 seaborn>=0.12
 
 # Squad optimisation (final.ipynb: build_best_predicted_team, suggest_transfers)
-pulp>=2.7
+pulp>=2.7,<4  # 4.0 removed direct LpVariable(...) construction, which optimise.py uses
 
 # Live FPL API pull (using_api.ipynb, advanced_fpl_models.ipynb)
 requests>=2.31
