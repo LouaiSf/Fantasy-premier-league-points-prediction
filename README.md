@@ -156,7 +156,7 @@ The site never trains or predicts. It serves one **immutable prediction artifact
 (sha256 of the CSV, when it was generated, season, gameweek range, the git commit,
 and a fingerprint of the model bundle that produced it). Commit both together.
 
-The models themselves (`saved_models/**/*.joblib`, ~13 MB) are gitignored, so a
+The models themselves (`saved_models/**/*.joblib`, ~23 MB) are gitignored, so a
 fresh clone **cannot regenerate predictions**, and that is deliberate: training and
 prediction are a separate job, run wherever the models live (a Colab/GPU session, or
 `scripts/refresh_pipeline.py` on a machine that has them), and their output is
@@ -231,6 +231,8 @@ python scripts/rebuild_merged_gw.py     # audit merged_gw.csv against its parts
 python scripts/build_dataset.py --write # -> all_seasons_data_final.csv
 python scripts/build_features.py        # -> all_seasons_data_featured.csv
 python scripts/train.py                 # -> saved_models/, model_metrics.json
+python scripts/train_availability.py    # -> the two-stage models predictions use
+python scripts/calibrate.py             # -> per-position calibration.json
 python scripts/predict_gameweek.py --season 2026-27 --horizon 12 --out predictions_next_gw.csv
 python scripts/optimise.py squad --budget 100        # best legal 15 + XI + captain
 python scripts/optimise.py transfers --squad example_squad.txt --free 1
@@ -322,6 +324,8 @@ scripts cannot drift from it.
 | `build_dataset.py` | merge every season into one frame with consistent columns |
 | `build_features.py` | lagged, rolling, opponent and availability features |
 | `train.py` | train, evaluate, save models, report feature importance |
+| `train_availability.py` | P(plays) and E[points \| plays] per position: scored on a season holdout, then refit on every season for prediction |
+| `calibrate.py` | per-position correction of E[points \| plays], fitted on the holdout models |
 | `baselines.py` | score heuristics on the identical test rows |
 | `ablate.py` | measure what one feature group is worth, holding all else fixed |
 | `predict_gameweek.py` | predict the upcoming gameweek from the live FPL API; rank every player |
@@ -404,12 +408,25 @@ python scripts/ablate.py --prefix minutes avail_ opponent_ bps ict_index
 python scripts/ablate.py --keep-only minutes avail_ total_points_ bps value ict_index
 ```
 
-**2026-27 is not in the shipped models yet.** Rolling features need five
-matches, and the models in `saved_models/` were trained (17 September) before
-the season had played five, so every 2026-27 row was dropped. Its rows from
-about GW5 on are usable now; the refresh pipeline never retrains, so they count
-once `build_features.py` and `train.py` are re-run. `build_dataset.py` picks up
-new season folders automatically, so that needs no code change.
+**The models that predict are refit on every season, the current one
+included.** `train_availability.py` measures its method on the season holdout
+(train 2016-17 to 2023-24, test 2024-25 and 2025-26), keeps that fit in
+`holdout/` for `calibrate.py`, then refits on everything for
+`predict_gameweek.py`. Until 18 October 2026 the served models were the holdout
+fit, so nothing after 2023-24 reached them. Newer seasons help:
+
+| trained through | scored on | R² | MAE | top-ranked player's actual points |
+|---|---|---|---|---|
+| 2023-24 | 2025-26 | 0.3262 | 0.9750 | 5.32 |
+| 2024-25 | 2025-26 | 0.3274 | 0.9723 | 5.42 |
+| 2023-24 | 2026-27, GW1-7 | 0.2728 | 1.2394 | 7.29 |
+| 2025-26 | 2026-27, GW1-7 | 0.2858 | 1.2286 | 7.71 |
+
+The refresh pipeline never retrains, so for new weeks to count re-run
+`build_features.py`, `train_availability.py` and `calibrate.py` every few
+gameweeks. `train.py`'s notebook models, which only feed the
+`predicted_points_single_stage` column, keep the fixed season split, and
+2026-27 sits outside its folds.
 
 ## Layout
 

@@ -82,8 +82,8 @@ MODEL_DIR = os.path.join('saved_models', 'direct')
 METRICS_OUT = 'calibration_metrics.json'
 POSITIONS = ('GK', 'DEF', 'MID', 'FWD')
 
-# The seasons no model in saved_models/ has trained on. Keep in step with
-# train_availability.py's TRAIN_SEASONS.
+# The seasons the holdout models in saved_models/ have not trained on. Keep in
+# step with train_availability.py's TRAIN_SEASONS.
 HOLDOUT_SEASONS = ('2024-25', '2025-26')
 
 # A correction is only fitted where the optimiser actually chooses. Fringe
@@ -104,8 +104,23 @@ MIN_SLOPE, MAX_SLOPE = 0.05, 1.50
 
 
 def load_position(position: str):
-    """The availability-half artifacts for one position."""
-    directory = os.path.join(MODEL_DIR, position)
+    """The availability-half artifacts for one position, as fitted out of sample.
+
+    train_availability.py refits the models that predict on every season,
+    HOLDOUT_SEASONS included, and keeps the fit it scored in holdout/. That copy
+    is the one to measure; the refit would report a model flattering itself.
+    """
+    directory = os.path.join(MODEL_DIR, position, 'holdout')
+    if not os.path.isdir(directory):
+        directory = os.path.join(MODEL_DIR, position)
+    meta_path = os.path.join(directory, 'availability_meta.json')
+    if os.path.exists(meta_path):
+        seen = set(json.load(open(meta_path, encoding='utf-8')).get('trained_on', []))
+        overlap = sorted(seen & set(HOLDOUT_SEASONS))
+        if overlap:
+            raise SystemExit(
+                f"{directory} was trained on {', '.join(overlap)}, so calibrating on it "
+                f"would be in-sample.\nRun: python scripts/train_availability.py")
     feat_path = os.path.join(directory, 'availability_features.json')
     if not os.path.exists(feat_path):
         return None

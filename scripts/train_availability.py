@@ -32,10 +32,21 @@ is that the notebook stays the definition of the direct models. The artifacts
 land in the same per-position directory and predict_gameweek.py picks them up
 when they are there, so an existing checkout keeps working unchanged.
 
+What is saved
+-------------
+Two fits per position. The holdout fit, trained on TRAIN_SEASONS and scored
+on TEST_SEASONS, is what every number above and in availability_metrics.json
+describes; it goes to <position>/holdout/, where calibrate.py measures it.
+The models predict_gameweek.py uses are then refit on every season in the
+data, the holdout seasons and the season in progress included, with the same
+features and settings. Each directory's availability_meta.json says what its
+models were trained on.
+
 Usage
 -----
     python scripts/train_availability.py
     python scripts/train_availability.py --no-save
+    python scripts/train_availability.py --no-save --train-through 2024-25 --test 2025-26
 """
 
 from __future__ import annotations
@@ -51,6 +62,8 @@ import pandas as pd
 
 IN_FILE = 'all_seasons_data_featured.csv'
 MODEL_DIR = os.path.join('saved_models', 'direct')
+HOLDOUT_DIR = 'holdout'
+META_FILE = 'availability_meta.json'
 METRICS_OUT = 'availability_metrics.json'
 POSITIONS = ('GK', 'DEF', 'MID', 'FWD')
 
@@ -132,46 +145,72 @@ def matrix(block: pd.DataFrame, feats: list) -> pd.DataFrame:
     return block[feats].replace([np.inf, -np.inf], np.nan).fillna(0)
 
 
-def train_position(position: str, frame: pd.DataFrame, save: bool) -> dict | None:
-    import joblib
+PARAMS = dict(n_estimators=400, learning_rate=0.05, num_leaves=31,
+              min_child_samples=40, subsample=0.8, colsample_bytree=0.7,
+              verbose=-1, random_state=0)
+
+
+def fit_pair(rows: pd.DataFrame, feats: list) -> tuple:
+    """(scaler, P(plays), E[points | plays]), all fitted on `rows` alone.
+
+    The scaler too: fitted on more than the rows the models learn from, it
+    leaks the spread of whatever they are later scored on.
+    """
     import lightgbm as lgb
-    from sklearn.metrics import mean_absolute_error, r2_score, roc_auc_score
     from sklearn.preprocessing import StandardScaler
 
+    X = matrix(rows, feats)
+    y = rows['total_points'].astype(float)
+    appeared = (rows['minutes'] > 0).values
+    scaler = StandardScaler().fit(X)
+    Z = scaler.transform(X)
+    availability = lgb.LGBMClassifier(**PARAMS).fit(Z, appeared.astype(int))
+    # The conditional model only ever sees players who were on the pitch, so
+    # it is free to describe a return rather than average one against the
+    # chance of there being no return at all.
+    conditional = lgb.LGBMRegressor(**PARAMS).fit(Z[appeared], y[appeared])
+    return scaler, availability, conditional
+
+
+def save_pair(out_dir: str, pair: tuple, feats: list, meta: dict) -> None:
+    import joblib
+
+    scaler, availability, conditional = pair
+    os.makedirs(out_dir, exist_ok=True)
+    joblib.dump(availability, os.path.join(out_dir, 'availability.joblib'))
+    joblib.dump(conditional, os.path.join(out_dir, 'conditional.joblib'))
+    joblib.dump(scaler, os.path.join(out_dir, 'availability_scaler.joblib'))
+    with open(os.path.join(out_dir, 'availability_features.json'), 'w', encoding='utf-8') as fh:
+        json.dump(feats, fh, indent=2)
+    with open(os.path.join(out_dir, META_FILE), 'w', encoding='utf-8') as fh:
+        json.dump(meta, fh, indent=2)
+
+
+def train_position(position: str, frame: pd.DataFrame, save: bool,
+                   train_seasons=TRAIN_SEASONS, test_seasons=TEST_SEASONS) -> dict | None:
+    from sklearn.metrics import mean_absolute_error, r2_score, roc_auc_score
+
     block = frame[frame['position'] == position]
-    train = block[block['season'].isin(TRAIN_SEASONS)]
-    test = block[block['season'].isin(TEST_SEASONS)]
+    train = block[block['season'].isin(train_seasons)]
+    test = block[block['season'].isin(test_seasons)]
     if train.empty or test.empty:
         print(f"  {position}: no rows in one of the folds; skipped")
         return None
 
     feats = features_for(position, frame)
-    X_train, X_test = matrix(train, feats), matrix(test, feats)
-    y_train, y_test = train['total_points'].astype(float), test['total_points'].astype(float)
-    played_train = (train['minutes'] > 0).astype(int)
+    y_test = test['total_points'].astype(float)
     played_test = (test['minutes'] > 0).astype(int)
 
-    # Fitted on the training fold alone, like every other scaler in this
-    # project -- a scaler fitted on all of it leaks the test seasons' spread.
-    scaler = StandardScaler().fit(X_train)
-    Z_train, Z_test = scaler.transform(X_train), scaler.transform(X_test)
-
-    params = dict(n_estimators=400, learning_rate=0.05, num_leaves=31,
-                  min_child_samples=40, subsample=0.8, colsample_bytree=0.7,
-                  verbose=-1, random_state=0)
-
-    availability = lgb.LGBMClassifier(**params).fit(Z_train, played_train)
+    holdout = fit_pair(train, feats)
+    scaler, availability, conditional = holdout
+    Z_test = scaler.transform(matrix(test, feats))
     p_play = availability.predict_proba(Z_test)[:, 1]
-
-    # The conditional model only ever sees players who were on the pitch, so
-    # it is free to describe a return rather than average one against the
-    # chance of there being no return at all.
-    appeared = (train['minutes'] > 0).values
-    conditional = lgb.LGBMRegressor(**params).fit(Z_train[appeared], y_train[appeared])
     p_cond = conditional.predict(Z_test)
 
     combined = p_play * p_cond
     metrics = {
+        'train_seasons': sorted(train['season'].unique()),
+        'test_seasons': sorted(test['season'].unique()),
         'n_features': len(feats),
         'train_rows': int(len(train)),
         'test_rows': int(len(test)),
@@ -189,13 +228,19 @@ def train_position(position: str, frame: pd.DataFrame, save: bool) -> dict | Non
 
     if save:
         out_dir = os.path.join(MODEL_DIR, position)
-        os.makedirs(out_dir, exist_ok=True)
-        joblib.dump(availability, os.path.join(out_dir, 'availability.joblib'))
-        joblib.dump(conditional, os.path.join(out_dir, 'conditional.joblib'))
-        joblib.dump(scaler, os.path.join(out_dir, 'availability_scaler.joblib'))
-        with open(os.path.join(out_dir, 'availability_features.json'), 'w',
-                  encoding='utf-8') as fh:
-            json.dump(feats, fh, indent=2)
+        # The fit the metrics above describe, kept for calibrate.py: it has to
+        # score models that never saw the seasons it fits on.
+        save_pair(os.path.join(out_dir, HOLDOUT_DIR), holdout, feats,
+                  {'trained_on': metrics['train_seasons'], 'rows': metrics['train_rows'],
+                   'tested_on': metrics['test_seasons']})
+        # The models that predict, refit on every season there is. The holdout
+        # fit is how good the method is; holding the newest seasons back from
+        # the model that forecasts next week would throw away the football
+        # most like it, including the season being forecast.
+        seasons = sorted(block['season'].unique())
+        save_pair(out_dir, fit_pair(block, feats), feats,
+                  {'trained_on': seasons, 'rows': int(len(block))})
+        metrics['saved_model'] = {'trained_on': seasons, 'rows': int(len(block))}
 
     return metrics
 
@@ -205,7 +250,19 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--no-save', action='store_true',
                     help='train and report, write nothing')
+    ap.add_argument('--train-through', metavar='SEASON', default=TRAIN_SEASONS[-1],
+                    help='a backtest: train on every season up to and including this one')
+    ap.add_argument('--test', nargs='+', metavar='SEASON', default=list(TEST_SEASONS),
+                    help='a backtest: score on these seasons instead')
     args = ap.parse_args()
+
+    backtest = (args.train_through, args.test) != (TRAIN_SEASONS[-1], list(TEST_SEASONS))
+    if backtest and not args.no_save:
+        # calibrate.py relies on the holdout copy never having seen
+        # its seasons, and only the default folds promise that.
+        raise SystemExit("--train-through/--test are for backtests; add --no-save")
+    if min(args.test) <= args.train_through:
+        raise SystemExit(f"test seasons must come after {args.train_through}")
 
     preflight()
 
@@ -218,12 +275,15 @@ def main() -> int:
     frame = pd.read_csv(IN_FILE, low_memory=False)
     frame = frame[frame['position'].isin(POSITIONS)]
     frame = frame.dropna(subset=['total_points', 'minutes'])
-    print(f"{len(frame):,} rows  |  train {'/'.join(TRAIN_SEASONS[:1])}"
-          f"..{TRAIN_SEASONS[-1]}  test {', '.join(TEST_SEASONS)}\n")
+    train_seasons = tuple(s for s in sorted(frame['season'].unique())
+                          if s <= args.train_through)
+    print(f"{len(frame):,} rows  |  train {train_seasons[0]}..{train_seasons[-1]}"
+          f"  test {', '.join(args.test)}\n")
 
     metrics = {}
     for position in POSITIONS:
-        result = train_position(position, frame, save=not args.no_save)
+        result = train_position(position, frame, save=not args.no_save,
+                                train_seasons=train_seasons, test_seasons=tuple(args.test))
         if result:
             metrics[position] = result
 
@@ -232,13 +292,15 @@ def main() -> int:
 
     print(f"\nfinished in {(time.time() - started) / 60:.1f} min")
 
+    if args.no_save:
+        return 0
+
     with open(METRICS_OUT, 'w', encoding='utf-8') as fh:
         json.dump(metrics, fh, indent=2)
     print(f"wrote {METRICS_OUT}")
-
-    if not args.no_save:
-        print(f"availability models written under {MODEL_DIR}/<position>/")
-        print("predict_gameweek.py uses them automatically when they are present.")
+    print(f"availability models written under {MODEL_DIR}/<position>/ (refit on every "
+          f"season), holdout copies under {MODEL_DIR}/<position>/{HOLDOUT_DIR}/")
+    print("predict_gameweek.py uses them automatically when they are present.")
     return 0
 
 
