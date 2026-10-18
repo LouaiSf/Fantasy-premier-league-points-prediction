@@ -192,20 +192,33 @@ def validate_predictions(path: str, season: str, horizon: int,
 
 
 def history_gameweeks_behind(season: str) -> int | None:
-    """How many fetched gameweeks the model's history has not seen yet."""
+    """How many fetched gameweeks the model's history does not match.
+
+    Compared row by row (gameweek, player), not by the highest gameweek. The
+    fetch only writes a match's rows once it has finished, so a gameweek fills
+    in over a weekend: a history built on Saturday and the data fetched on
+    Tuesday both end at the same gameweek, and checking the number alone would
+    keep serving predictions without Sunday's matches. Rows the fetch no longer
+    has count too.
+    """
     history_path = os.path.join(ROOT, 'all_seasons_data_final.csv')
     merged_path = os.path.join(ROOT, 'data', season, 'gws', 'merged_gw.csv')
     if not (os.path.exists(history_path) and os.path.exists(merged_path)):
         return None
     try:
-        history = pd.read_csv(history_path, usecols=['season', 'GW'], low_memory=False)
-        fetched = pd.read_csv(merged_path, usecols=['GW'], low_memory=False)
+        history = pd.read_csv(history_path, usecols=['season', 'GW', 'element'], low_memory=False)
+        fetched = pd.read_csv(merged_path, usecols=['GW', 'element'], low_memory=False)
     except Exception:
         return None
-    seen = history.loc[history['season'] == season, 'GW']
-    if fetched['GW'].dropna().empty:
+    fetched = fetched.dropna()
+    if fetched.empty:
         return None
-    return max(0, int(fetched['GW'].max()) - (int(seen.max()) if not seen.empty else 0))
+    seen = history.loc[history['season'] == season, ['GW', 'element']].dropna()
+    # (GW, element) -> rows; a double gameweek is two rows for one key.
+    have = seen.astype(int).value_counts()
+    want = fetched.astype(int).value_counts()
+    differs = want.sub(have, fill_value=0)
+    return int(differs[differs != 0].index.get_level_values('GW').nunique())
 
 
 MAX_OUTPUT_CHARS = 4000
@@ -291,7 +304,7 @@ def run_pipeline(season: str | None = None, horizon: int = DEFAULT_HORIZON,
         lag = history_gameweeks_behind(season) if rebuild else None
         if lag:
             step('history')
-            log(f'[2/5] model history is {lag} gameweek(s) behind; rebuilding it')
+            log(f'[2/5] model history is out of date in {lag} gameweek(s); rebuilding it')
             rebuild_history(log, runner)
         else:
             log('[2/5] model history is current' if rebuild else '[2/5] history rebuild skipped')
@@ -321,7 +334,7 @@ def run_pipeline(season: str | None = None, horizon: int = DEFAULT_HORIZON,
     warnings = [manifest_warning] if manifest_warning else []
     if behind:
         warnings.append(
-            f'The model history is {behind} gameweek(s) behind the fetched data, so '
+            f'The model history does not match the fetched data in {behind} gameweek(s), so '
             'form from those weeks is not in these predictions. Refresh it with '
             'scripts/build_dataset.py --write.')
     return {

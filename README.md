@@ -85,7 +85,9 @@ Needs `predictions_next_gw.csv` from `scripts/predict_gameweek.py`.
 and would otherwise go on serving last week's numbers. `scripts/refresh_pipeline.py`
 runs the whole chain and only swaps the result in once it has checked it:
 
-1. fetch current season data
+1. fetch current season data. A player's gameweek row is only written once their
+   club's match has finished, so a mid-gameweek fetch brings in the matches played
+   so far and nothing for the rest (not zero-minute rows that read as missed matches)
 2. run `predict_gameweek.py --horizon 12` into a temp file
 3. validate it: required columns, no blank points, the first gameweek matches the
    freshly fetched fixtures, every week of the horizon present, clubs match
@@ -105,7 +107,8 @@ Windows Task Scheduler and alert on a non-zero exit. From the site, the Refresh
 button fetches the data and then runs the same pipeline in the background
 (`POST /api/refresh/predictions`, poll `GET /api/refresh/status`).
 
-If `all_seasons_data_final.csv` lags the fetched data the pipeline runs
+If `all_seasons_data_final.csv` does not match the fetched data row for row (a new
+gameweek, or more of the current one played since the last build) the pipeline runs
 `build_dataset.py --write` first (about 30 s, and it keeps a `.prev` copy), since
 predictions are built from that history; `--no-rebuild-history` skips it. It never
 retrains models.
@@ -401,10 +404,12 @@ python scripts/ablate.py --prefix minutes avail_ opponent_ bps ict_index
 python scripts/ablate.py --keep-only minutes avail_ total_points_ bps value ict_index
 ```
 
-**2026-27 contributes nothing yet.** Only GW1 exists upstream, and rolling
-features need five matches, so every row is dropped. It will start counting
-around GW6. `build_dataset.py` picks up new season folders automatically, so
-that needs a fetch and no code change.
+**2026-27 is not in the shipped models yet.** Rolling features need five
+matches, and the models in `saved_models/` were trained (17 September) before
+the season had played five, so every 2026-27 row was dropped. Its rows from
+about GW5 on are usable now; the refresh pipeline never retrains, so they count
+once `build_features.py` and `train.py` are re-run. `build_dataset.py` picks up
+new season folders automatically, so that needs no code change.
 
 ## Layout
 

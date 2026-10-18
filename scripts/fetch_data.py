@@ -251,6 +251,27 @@ def news_first_seen(stats: pd.DataFrame) -> dict:
         since[player_id] = int(weeks[first])
     return since
 
+
+def unfinished_clubs(fixtures: pd.DataFrame, gw: int) -> set:
+    """Clubs with a match in this gameweek that has not finished yet.
+
+    olbauday writes a row for every player every gameweek, played or not, so a
+    fetch in the middle of a gameweek brings in a zero-minute row for every
+    club still to kick off. Those are not results. Every rolling feature reads
+    them as a missed match, the player drawer shows them as a 0, and once the
+    gameweek's number is in the history nothing marks it as half done. Rows for
+    these clubs are held back until the match is over; FPL sets `finished` once
+    bonus is confirmed, so they arrive final. A double gameweek waits for both
+    matches. A club with no match at all (a blank) is not in the set.
+    """
+    if fixtures.empty:
+        return set()
+    week = fixtures[fixtures['event'] == gw]
+    # Read as text: a fetched column can hold strings, and NaN is truthy.
+    pending = week[week['finished'].astype(str).str.lower() != 'true']
+    return set(pending['team_h'].astype(int)) | set(pending['team_a'].astype(int))
+
+
 def fetch_season_olbauday(local_season: str, force: bool) -> dict:
     """Download from olbauday/FPL-Core-Insights and write vaastav-format files."""
     print(f"\n{'=' * 72}\n{local_season} (source: olbauday)\n{'=' * 72}")
@@ -575,6 +596,11 @@ def fetch_season_olbauday(local_season: str, force: bool) -> dict:
 
             # Derive opponent_team and was_home from the fixture lookup.
             team_ids = gw_out['element'].map(player_id_to_team)
+            unplayed = team_ids.isin(unfinished_clubs(fixtures_out, gw))
+            if unplayed.any():
+                print(f"    GW{gw}: {int(unplayed.sum())} rows held back until "
+                      f"their match finishes")
+                gw_out, team_ids = gw_out[~unplayed].copy(), team_ids[~unplayed]
 
             _blank = (None, None, None, None, None, None)
 

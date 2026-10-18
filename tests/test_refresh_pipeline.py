@@ -329,6 +329,43 @@ def test_history_is_left_alone_when_current_or_opted_out(root, monkeypatch):
     assert report["warnings"], "a lagging history must still be reported"
 
 
+def write_rows(root, history: dict, fetched: dict):
+    """history / fetched: {GW: [element, ...]} for SEASON, plus one older season row."""
+    rows = [{"season": "2025-26", "GW": 38, "element": 1}]
+    rows += [{"season": SEASON, "GW": gw, "element": e} for gw, es in history.items() for e in es]
+    pd.DataFrame(rows).to_csv(root / "all_seasons_data_final.csv", index=False)
+    (root / "data" / SEASON / "gws").mkdir(exist_ok=True)
+    pd.DataFrame([{"GW": gw, "element": e} for gw, es in fetched.items() for e in es]).to_csv(
+        root / "data" / SEASON / "gws" / "merged_gw.csv", index=False)
+
+
+def test_history_matching_the_fetch_is_current(root):
+    write_rows(root, {1: [1, 2, 3], 2: [1, 2, 3]}, {1: [1, 2, 3], 2: [1, 2, 3]})
+    assert pipeline.history_gameweeks_behind(SEASON) == 0
+
+
+def test_a_gameweek_that_filled_in_since_the_rebuild_is_stale(root):
+    # Built mid-gameweek, fetched after it finished: same highest gameweek, so
+    # comparing that number alone would call this history current.
+    write_rows(root, {1: [1, 2, 3], 2: [1]}, {1: [1, 2, 3], 2: [1, 2, 3]})
+    assert pipeline.history_gameweeks_behind(SEASON) == 1
+
+
+def test_rows_the_fetch_no_longer_has_are_stale(root):
+    write_rows(root, {1: [1, 2, 3], 2: [1, 2, 3]}, {1: [1, 2, 3], 2: [1]})
+    assert pipeline.history_gameweeks_behind(SEASON) == 1
+
+
+def test_a_season_the_history_has_never_seen_is_stale_in_every_gameweek(root):
+    write_rows(root, {}, {1: [1, 2], 2: [1, 2]})
+    assert pipeline.history_gameweeks_behind(SEASON) == 2
+
+
+def test_a_double_gameweeks_second_match_is_stale(root):
+    write_rows(root, {1: [1, 2]}, {1: [1, 1, 2]})
+    assert pipeline.history_gameweeks_behind(SEASON) == 1
+
+
 def test_a_failed_history_rebuild_stops_before_predicting(root, monkeypatch):
     monkeypatch.setattr(pipeline, "history_gameweeks_behind", lambda _season: 1)
 
