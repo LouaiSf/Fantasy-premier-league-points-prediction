@@ -1,19 +1,19 @@
 {
   "artifact": "predictions_next_gw.csv",
-  "bytes": 1042345,
-  "code_commit": "1f8203ef3a2e19e8d0bf12edd44fd768c76b6453",
+  "bytes": 1037511,
+  "code_commit": "073d6c8d6004a6bb050e51006e585893306165ae",
   "first_gw": 7,
-  "generated_at": "2026-10-18T12:45:58.452692+00:00",
+  "generated_at": "2026-10-18T14:03:08.415891+00:00",
   "horizon": 12,
   "last_gw": 18,
   "model_bundle": {
     "directory": "saved_models",
-    "files": 35,
-    "sha256": "541ac980c366c59730218b19a8180ab59239066f32a04bbcbee8ef747bd99cef"
+    "files": 47,
+    "sha256": "3b0485a85aa85a85f7f1e55b6c4343049473215c214062ceb517699db5189a07"
   },
-  "players": 492,
-  "rows": 5904,
+  "players": 490,
+  "rows": 5880,
   "schema": 1,
   "season": "2026-27",
-  "sha256": "ade9eff586ad9f61276951edeaa3acacc213777072e443cb3f8a59c596fb974e"
+  "sha256": "bbea483cfe403e982c67c72bec1358ce2bf175bac4ad8e6d20c7048b72b0b94e"
 }
