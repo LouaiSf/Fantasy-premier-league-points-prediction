@@ -442,6 +442,8 @@ def test_platform_exposes_market_price_freshness() -> None:
     assert "market_prices_updated_at" in data
     assert data["market_prices_updated_at"] is not None
     assert isinstance(data["predictions_older_than_market"], bool)
+    # Null until scripts/fetch_fotmob.py has run, an ISO time after.
+    assert "fotmob_updated_at" in data
 
 
 def test_transfers_reject_boolean_element_ids() -> None:

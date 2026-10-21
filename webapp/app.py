@@ -128,6 +128,19 @@ def market_prices_path(season: str) -> str:
     return project_path('data', season, 'players_raw.csv')
 
 
+def fotmob_sync_path(season: str) -> str:
+    return project_path('data', season, 'fotmob', 'sync.json')
+
+
+def fotmob_updated_at(season: str) -> str | None:
+    """When scripts/fetch_fotmob.py last built this season's advanced stats."""
+    try:
+        with open(fotmob_sync_path(season), encoding='utf-8') as fh:
+            return json.load(fh).get('updated_at')
+    except (OSError, ValueError):
+        return None
+
+
 def latest_season() -> str | None:
     data_dir = project_path('data')
     if not os.path.isdir(data_dir):
@@ -685,7 +698,8 @@ def api_platform():
            _mtime_ns(project_path('data', season, 'teams.csv')),
            _mtime_ns(project_path('data', season, 'fixtures.csv')),
            _mtime_ns(market_prices_path(season)),
-           _mtime_ns(project_path('data', 'fpl_regions.json')))
+           _mtime_ns(project_path('data', 'fpl_regions.json')),
+           _mtime_ns(fotmob_sync_path(season)))
     cached = _platform_cache
     if cached is not None and (cached[0] == key or _maintenance):
         return jsonify(cached[1])
@@ -737,6 +751,8 @@ def api_platform():
         'market_prices_error': s.get('market_error'),
         'market_prices_updated_at': market_prices_updated_at,
         'predictions_older_than_market': predictions_older_than_market,
+        # FotMob advanced stats (xGOT, blocks, goals prevented...); null until scraped.
+        'fotmob_updated_at': fotmob_updated_at(season),
     })
     _platform_cache = (key, snapshot)
     return jsonify(snapshot)

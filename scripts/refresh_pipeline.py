@@ -6,6 +6,8 @@ a single gameweek, no way to run a multi-week chip plan at all. This runs the
 whole chain, and only ever swaps the result in once it has proved itself:
 
     1. fetch    current season data (fetch_data.py, olbauday, forced)
+                then, with --with-fotmob, FotMob advanced stats (fetch_fotmob.py);
+                that step is optional and never fails the run
     2. history  rebuild all_seasons_data_final.csv if it lags the fetched data
     3. predict  predict_gameweek.py --horizon N, written to a temp file
     4. validate the temp file against the data that was just fetched
@@ -21,6 +23,7 @@ Usage
     python scripts/refresh_pipeline.py --no-fetch       # data already fresh
     python scripts/refresh_pipeline.py --horizon 8 --season 2026-27
     python scripts/refresh_pipeline.py --no-rebuild-history
+    python scripts/refresh_pipeline.py --with-fotmob      # also xGOT, blocks, goals prevented...
 
 Exit status is 0 on success and 1 on failure, so it can be scheduled (cron,
 Windows Task Scheduler) and alert on the exit code.
@@ -36,6 +39,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime
+import json
 import math
 import os
 import subprocess
@@ -55,9 +59,11 @@ DEFAULT_HORIZON = 12
 LAST_GAMEWEEK = 38
 FETCH_TIMEOUT_S = 180
 HISTORY_TIMEOUT_S = 10 * 60
+# A first full season is ~19 minutes of polite scraping; a weekly run ~30 s.
+FOTMOB_TIMEOUT_S = 30 * 60
 PREDICT_TIMEOUT_S = 30 * 60
 # A run that died without releasing the lock must not block refreshes forever.
-LOCK_STALE_AFTER_S = PREDICT_TIMEOUT_S + FETCH_TIMEOUT_S + HISTORY_TIMEOUT_S + 60
+LOCK_STALE_AFTER_S = PREDICT_TIMEOUT_S + FETCH_TIMEOUT_S + HISTORY_TIMEOUT_S + FOTMOB_TIMEOUT_S + 60
 # A new export losing more than this share of the players the old one had
 # almost certainly means something upstream broke, not that they all retired.
 MAX_PLAYER_LOSS = 0.20
@@ -259,6 +265,32 @@ def fetch_season(season: str, log: Log = print, runner=subprocess.run) -> None:
          FETCH_TIMEOUT_S, log, runner)
 
 
+def fotmob_updated_at(season: str) -> str | None:
+    """When FotMob stats for the season were last built, from its sync.json."""
+    try:
+        with open(os.path.join(ROOT, 'data', season, 'fotmob', 'sync.json'), encoding='utf-8') as fh:
+            return json.load(fh).get('updated_at')
+    except (OSError, ValueError):
+        return None
+
+
+def fetch_fotmob(season: str, log: Log = print, runner=subprocess.run) -> str | None:
+    """Scrape FotMob advanced stats. Returns a warning instead of raising.
+
+    The predictions do not use these stats, so a FotMob outage, a layout
+    change or a low mapping rate must not cost a refresh. Exit status 2 means
+    the files were written but too few players mapped to FPL.
+    """
+    try:
+        _run('fotmob', [sys.executable, os.path.join(ROOT, 'scripts', 'fetch_fotmob.py'), '--season', season],
+             FOTMOB_TIMEOUT_S, log, runner)
+        return None
+    except PipelineError as exc:
+        since = fotmob_updated_at(season)
+        log(f'  fotmob step failed ({exc.message}); continuing')
+        return f'FotMob stats were not refreshed ({exc.message}); fotmob: stale since {since or "never"}.'
+
+
 def rebuild_history(log: Log = print, runner=subprocess.run) -> None:
     _run('history', [sys.executable, os.path.join(ROOT, 'scripts', 'build_dataset.py'), '--write'],
          HISTORY_TIMEOUT_S, log, runner)
@@ -281,6 +313,7 @@ def _write_manifest(target: str, season: str, horizon: int, summary: dict, log: 
 
 def run_pipeline(season: str | None = None, horizon: int = DEFAULT_HORIZON,
                  fetch: bool = True, rebuild: bool = True, out: str | None = None,
+                 with_fotmob: bool = False,
                  log: Log = print, on_step: Callable[[str], None] | None = None,
                  runner=subprocess.run) -> dict:
     """Run the whole chain. Returns a report; raises PipelineError on failure."""
@@ -298,6 +331,11 @@ def run_pipeline(season: str | None = None, horizon: int = DEFAULT_HORIZON,
             fetch_season(season, log, runner)
         else:
             log('[1/5] fetch skipped')
+        fotmob_warning = None
+        if with_fotmob:
+            step('fotmob')
+            log(f'[1/5] fetching {season} FotMob stats')
+            fotmob_warning = fetch_fotmob(season, log, runner)
 
         # The predictions are built from this history, not from the raw files
         # just fetched, so a lagging history means last week's form is missing.
@@ -331,7 +369,7 @@ def run_pipeline(season: str | None = None, horizon: int = DEFAULT_HORIZON,
                 os.remove(candidate)
 
     behind = history_gameweeks_behind(season)
-    warnings = [manifest_warning] if manifest_warning else []
+    warnings = [w for w in (fotmob_warning, manifest_warning) if w]
     if behind:
         warnings.append(
             f'The model history does not match the fetched data in {behind} gameweek(s), so '
@@ -348,6 +386,7 @@ def run_pipeline(season: str | None = None, horizon: int = DEFAULT_HORIZON,
         'history_gameweeks_behind': behind,
         'warnings': warnings,
         'fetched': fetch,
+        'fotmob_updated_at': fotmob_updated_at(season),
         'finished_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
         'seconds': round(time.time() - started, 1),
     }
@@ -362,11 +401,14 @@ def main() -> int:
     ap.add_argument('--no-rebuild-history', action='store_true',
                     help='do not rebuild all_seasons_data_final.csv when it lags the fetched data')
     ap.add_argument('--out', default=None, help=f'defaults to {opt.PREDICTIONS}')
+    ap.add_argument('--with-fotmob', action='store_true',
+                    help='also scrape FotMob advanced stats (never fails the run)')
     args = ap.parse_args()
     os.chdir(ROOT)
     try:
         report = run_pipeline(args.season, args.horizon, fetch=not args.no_fetch,
-                              rebuild=not args.no_rebuild_history, out=args.out)
+                              rebuild=not args.no_rebuild_history, out=args.out,
+                              with_fotmob=args.with_fotmob)
     except PipelineError as exc:
         print(f'FAILED at {exc.step}: {exc.message}\nThe previous predictions were not changed.',
               file=sys.stderr)

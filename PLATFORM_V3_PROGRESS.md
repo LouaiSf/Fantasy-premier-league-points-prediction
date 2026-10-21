@@ -82,4 +82,37 @@ screenshots at 1440 and 375.
 
 ### Exact next action
 
-Slice B — Effective ownership (EO) and rank exposure. See `PLATFORM_V3_PLAN.md` for the full spec.
+Slice B — Effective ownership (EO) and rank exposure. See `PLATFORM_V3_PLAN.md` for the full spec. (Superseded: C0 was done next at the user's request; see below.)
+
+## Slice C0: FotMob scraper (done out of order, ahead of B, at the user's request on 2026-10-21)
+
+### Implemented
+
+- `scripts/fetch_fotmob.py`: reads only public HTML pages (`__NEXT_DATA__`), checks robots.txt at start, refuses `/api/*` and `data.fotmob.com`, honest User-Agent, >= 3 s between requests, backoff on 429/5xx, abort after 3 consecutive failures. Finished matches are cached (`data/<season>/fotmob/raw/match_<id>.json.gz`) and never refetched.
+- Per player per match, 52 stat columns (the plan's list plus FotMob rating, big chances created/missed, touches, passes into final third, pass/cross/long-ball/dribble/duel success with attempts, fouls, errors leading to goals, clearances off the line, diving saves, high claims, sweeper actions, distance and top speed) and 8 shot columns from the shotmap (xG, npxG, xGOT, shots, on target, in box, blocked, goals; own goals excluded). Missing labels are NaN, never 0.
+- Outputs `player_match.csv`, `shots.csv`, `player_map.csv` and `sync.json` (coverage, map methods, source mismatches) per season. Not committed (`data/*/fotmob/` in `.gitignore`); `data/fotmob_overrides.csv` (season,fotmob_player_id,element) is committed and wins over the matcher.
+- `scripts/refresh_pipeline.py --with-fotmob`: optional, non-fatal step after fetch; a failure becomes a warning, `fotmob: stale since <time>`. `/api/platform` now returns `fotmob_updated_at`.
+
+### Deviations from the plan (all found against live data)
+
+- **Match URL.** The plan said fetch `pageUrl` with `#…` stripped. That URL's code names the club *pairing* and the fragment never reaches the server, so it served Forest v Leeds's League Cup tie instead of the GW1 league match, and two 28 Oct fixtures instead of GW3 results. Now `GET /match/<id>`, and `general.matchId` is checked before anything is cached. The plan text is corrected.
+- **Team of a player in a fixture** comes from `was_home` + `fixtures.csv`, not `merged_gw.team` (that is the export-time club in older seasons).
+- **Transferred players.** The live-season FPL export files a transferred player's earlier gameweeks under his new club's fixture (Ndiaye GW1-2 under Man City, Grealish under Everton). A gameweek-wide fallback matches on name + minutes + points (`map_method = "name+minutes+points (gw)"`).
+- **Two match-level states kept out of the coverage gate:** `awaiting_fpl` (FotMob has a result the local FPL data does not yet; maps on the next run after `fetch_data.py`) and `source_mismatch` (under 50% of a match's minutes verify; the sources describe different games, so it is left unmapped rather than joined).
+- Overrides are keyed by season too (element ids change each season).
+- Name normalisation casefolds first and handles letters NFKD does not split (Ø, ł, đ, æ, œ); "Ødegaard" was becoming "degaard".
+
+### Verification evidence
+
+- 2026-27 (70 finished matches to GW7): 100.0% of FotMob minutes mapped to an FPL element (1,992 name+minutes+points, 6 gameweek fallback, 6 minutes+points — all Yéremi/Yéremy Pino — 2 season-map, 1 name+minutes; 5 GW7 matches `awaiting_fpl`).
+- Cross-checks against FPL's own columns over the season so far: xG correlation 0.999, goals equal for 99.5% of players, recoveries correlation 0.999. GK xGOT faced vs the shots each keeper faced: 2 warnings (> 0.05) in ~140 keeper appearances.
+- `python -m pytest -q tests`: 376 passed (34 new in `tests/test_fetch_fotmob.py` on trimmed real pages in `tests/fixtures/fotmob/`, 2 new in `test_refresh_pipeline.py`).
+
+### Not done / caveats
+
+- Backfill of 2023-24, 2024-25, 2025-26 was started on 2026-10-21. Pages take ~7 s each, not 3 s (each is ~1 MB), so ~2.2 h for 1,140 matches; it resumes from cache if interrupted. Re-run `python scripts/fetch_fotmob.py --season 2026-27 --backfill 2023-24,2024-25,2025-26` to finish or rebuild.
+- Nothing reads these files yet: the Stats Lab (Slice C) and the model features (Slice D) are the consumers.
+
+### Exact next action
+
+Slice B (effective ownership), or Slice C (Stats Lab) now that its data exists. Check the backfill's coverage in each season's `data/<season>/fotmob/sync.json` first.

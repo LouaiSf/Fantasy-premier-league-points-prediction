@@ -1,0 +1,90 @@
+{
+ "fixtures": {
+  "allMatches": [
+   {
+    "round": "1",
+    "roundName": 1,
+    "pageUrl": "/matches/coventry-city-vs-arsenal/2tttz6#5795363",
+    "id": "5795363",
+    "home": {
+     "name": "Arsenal",
+     "shortName": "Arsenal",
+     "id": "9825"
+    },
+    "away": {
+     "name": "Coventry City",
+     "shortName": "Coventry",
+     "id": "8669"
+    },
+    "status": {
+     "utcTime": "2026-08-21T19:00:00Z",
+     "timezone": "UTC",
+     "finished": true,
+     "started": true,
+     "cancelled": false,
+     "awarded": false,
+     "scoreStr": "3 - 0",
+     "reason": {
+      "short": "FT",
+      "shortKey": "fulltime_short",
+      "long": "Full-Time",
+      "longKey": "finished"
+     }
+    }
+   },
+   {
+    "round": "8",
+    "roundName": 8,
+    "pageUrl": "/matches/ipswich-town-vs-nottingham-forest/3cc90b#5795491",
+    "id": "5795491",
+    "home": {
+     "name": "Ipswich Town",
+     "shortName": "Ipswich",
+     "id": "9902"
+    },
+    "away": {
+     "name": "Nottingham Forest",
+     "shortName": "Nottm Forest",
+     "id": "10203"
+    },
+    "status": {
+     "utcTime": "2026-10-23T19:00:00Z",
+     "timezone": "UTC",
+     "started": false,
+     "cancelled": false,
+     "finished": false
+    }
+   },
+   {
+    "round": "17",
+    "roundName": 17,
+    "pageUrl": "/matches/luton-town-vs-afc-bournemouth/2ea97q#4193691",
+    "id": "4193691",
+    "home": {
+     "name": "AFC Bournemouth",
+     "shortName": "Bournemouth",
+     "id": "8678"
+    },
+    "away": {
+     "name": "Luton Town",
+     "shortName": "Luton",
+     "id": "8346"
+    },
+    "status": {
+     "utcTime": "2023-12-16T15:00:00Z",
+     "timezone": "UTC",
+     "cancelled": true,
+     "started": true,
+     "finished": true,
+     "reason": {
+      "short": "Ab",
+      "shortKey": "aborted_short",
+      "long": "Abandoned",
+      "longKey": "aborted"
+     },
+     "scoreStr": "1 - 1"
+    }
+   }
+  ]
+ }
+}

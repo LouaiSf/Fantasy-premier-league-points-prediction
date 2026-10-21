@@ -157,6 +157,35 @@ def test_pipeline_can_skip_the_fetch(root):
     assert len(runner.commands) == 1
 
 
+def test_fotmob_runs_only_when_asked(root):
+    runner = FakeRunner()
+    run(root, runner)
+    assert not any(c[1].endswith("fetch_fotmob.py") for c in runner.commands)
+
+    runner = FakeRunner()
+    run(root, runner, with_fotmob=True)
+    names = [c[1].replace("\\", "/").rsplit("/", 1)[-1] for c in runner.commands]
+    assert names == ["fetch_data.py", "fetch_fotmob.py", "predict_gameweek.py"]
+
+
+def test_a_failed_fotmob_step_still_replaces_the_predictions(root):
+    sync = root / "data" / SEASON / "fotmob" / "sync.json"
+    sync.parent.mkdir(parents=True)
+    sync.write_text('{"updated_at": "2026-10-14T09:00:00+00:00"}')
+
+    class FotmobDown(FakeRunner):
+        def __call__(self, command, **kwargs):
+            if command[1].endswith("fetch_fotmob.py"):
+                self.commands.append(command)
+                return SimpleNamespace(returncode=1, stdout="", stderr="FotMob fetch failed: HTTP 503")
+            return super().__call__(command, **kwargs)
+
+    report = run(root, FotmobDown(), with_fotmob=True)
+    assert sorted(pd.read_csv(root / "predictions.csv")["GW"].unique()) == [6, 7, 8, 9]
+    assert any("fotmob: stale since 2026-10-14T09:00:00+00:00" in w for w in report["warnings"])
+    assert report["fotmob_updated_at"] == "2026-10-14T09:00:00+00:00"
+
+
 def test_failed_validation_leaves_the_previous_predictions_untouched(root):
     target = root / "predictions.csv"
     write(target, export(players=10, weeks=1))

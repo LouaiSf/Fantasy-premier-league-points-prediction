@@ -275,7 +275,7 @@ MIN_INTERVAL_S = 3.0; TIMEOUT_S = 30; RETRY_BACKOFF_S = (10, 30, 90)   # on 429/
 
 **League page.** `GET {BASE}/leagues/47/fixtures/premier-league?season=2026-2027` (season format `YYYY-YYYY`). Parse `__NEXT_DATA__` into `props.pageProps.fixtures.allMatches[]`. The fields used are `id`, `round`, `pageUrl` (strip `#…`), `home{id,name}`, `away{id,name}` and `status{utcTime,finished,cancelled}`. Keep only `finished and not cancelled` matches.
 
-**Match page.** `GET {BASE}{pageUrl}` gives `props.pageProps.content.shotmap.shots[]` and `props.pageProps.content.playerStats{}`. Cache pageProps only to `data/<season>/fotmob/raw/match_<id>.json.gz`. An already-cached match is never refetched.
+**Match page.** *(Corrected 2026-10-21: `pageUrl` with the `#…` stripped is wrong — its code names the club pairing and the fragment never reaches the server, so it serves a cup tie or a future meeting. Use `GET {BASE}/match/{id}` and check `general.matchId`.)* `GET {BASE}/match/{id}` gives `props.pageProps.content.shotmap.shots[]` and `props.pageProps.content.playerStats{}`. Cache pageProps only to `data/<season>/fotmob/raw/match_<id>.json.gz`. An already-cached match is never refetched.
 
 **Team map.** 2026-27 FotMob team id → FPL `teams.csv` name:
 ```python
