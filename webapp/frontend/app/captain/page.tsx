@@ -1,16 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { useApp } from "@/components/providers/app-provider";
-import { PlayerPhoto } from "@/components/player-photo";
-import { ClubCrest } from "@/components/club-crest";
-import { clubStyle } from "@/lib/club-colors";
-import { money, num } from "@/lib/format";
-import type { PlayerRecord, TeamRecord } from "@/lib/types";
-import { Skeleton } from "@/components/skeleton";
-import { ModelInfo } from "@/components/model-info";
-import { CountUp } from "@/components/motion/count-up";
 import { m } from "motion/react";
+import { useApp } from "@/components/providers/app-provider";
+import { money, num } from "@/lib/format";
+import { isFlagged, nextFixtureFor, whyLine } from "@/lib/why";
+import type { PlayerRecord } from "@/lib/types";
+import { Skeleton } from "@/components/skeleton";
+import { Face, Fdr, GateSign, PlateFact, Pos, Proj, Segmented, VerdictPlate } from "@/components/signage";
+import { Icon } from "@/components/icons";
 
 function captainScore(player: PlayerRecord, predictionAvailable: boolean): number {
   return predictionAvailable ? Number(player.predicted_points ?? 0) : Number(player.form ?? 0);
@@ -37,18 +35,13 @@ function compareCaptains(a: PlayerRecord, b: PlayerRecord, predictionAvailable: 
   return diff;
 }
 
-function riskFor(player: PlayerRecord): { label: string; level: "low" | "med" | "high" } {
+// Official status "available" says nothing about whether he starts, so only
+// a real doubt is ever named; the absence of one is not shown as a badge.
+function doubtLabel(player: PlayerRecord): string | null {
   const chance = player.chance_of_playing_next_round ?? 100;
-  if (player.status !== "a" || chance < 50) return { label: "High risk", level: "high" };
-  if (chance < 100) return { label: "Some doubt", level: "med" };
-  // Official status "available" says nothing about whether he starts, so this
-  // only reports the absence of an availability doubt.
-  return { label: "No official doubt", level: "low" };
-}
-
-function nextFixture(team: TeamRecord | undefined, gameweek: number | null) {
-  if (!team || gameweek == null) return null;
-  return team.fixtures.find((fixture) => fixture.gameweek === gameweek) ?? null;
+  if (player.status !== "a" || chance < 50) return "Big doubt";
+  if (chance < 100) return `${chance}% to play`;
+  return null;
 }
 
 export default function CaptainPage() {
@@ -59,10 +52,9 @@ export default function CaptainPage() {
   if (loading || !snapshot) {
     return (
       <section className="page">
-        <div className="shell">
-          <Skeleton variant="hero" />
-          <Skeleton variant="row" count={10} />
-        </div>
+        <div className="skel skel-sign" />
+        <Skeleton variant="hero" />
+        <Skeleton variant="row" count={8} />
       </section>
     );
   }
@@ -77,296 +69,189 @@ export default function CaptainPage() {
   const topPick = ranked[0] ?? null;
   const lead = (selectedElement != null && ranked.find((p) => p.element === selectedElement)) || topPick;
   const runnerUp = ranked.find((p) => p.element !== lead?.element) ?? null;
-  const teamByName = new Map(snapshot.teams.map((team) => [team.name, team]));
-  const leadTeam = lead ? teamByName.get(lead.team) : undefined;
-  const leadFixture = lead ? nextFixture(leadTeam, snapshot.gameweek) : null;
-  const leadRisk = lead ? riskFor(lead) : null;
+  const leadFixture = lead ? nextFixtureFor(snapshot, lead) : null;
+  const isTop = lead?.element === topPick?.element;
+  const unit = predictionAvailable ? "projected points" : "form";
 
   return (
-    <section className="page cap-page paper-scope" aria-label="Captain and form">
-      <div className="cap-hero" style={lead ? clubStyle(lead.team) : undefined}>
-        {lead && (
-          <>
-            {leadTeam && (
-              <ClubCrest
-                className="cap-crest"
-                code={leadTeam.code}
-                team={leadTeam.name}
-                shortName={leadTeam.short_name}
-                aria-hidden="true"
-              />
-            )}
-            <div className="cap-shot" aria-hidden="true">
-              <PlayerPhoto
-                src={lead.photo_large ?? lead.photo ?? undefined}
-                fallbackSrc={lead.photo ?? undefined}
-                alt={lead.name}
-                name={lead.name}
-                variant="hero"
-                width={250}
-                height={250}
-                loading="eager"
-                fetchPriority="high"
-              />
-            </div>
-          </>
-        )}
-        <div className="shell cap-inner">
-          <div className="cap-copy">
-            {lead && (
-              <span className="cap-armband" aria-label="Captain pick">
-                <span className="cap-marker-mark" aria-hidden="true">C</span> Captain pick
-              </span>
-            )}
-            <span className="eyebrow">Armband desk</span>
-            <h1 className="display-hero">
-              Captain
-              <span>&amp; Form</span>
-            </h1>
-            <p className="cap-quote">
-              {lead && lead.element === topPick?.element
-                ? `${lead.web_name} leads the ${pool === "squad" ? "squad" : "league"} pool on ${
-                    predictionAvailable ? "projected points" : "current form"
-                  }, at ${num(captainScore(lead, predictionAvailable))}.`
-                : lead
-                  ? `Your armband pick, at ${num(captainScore(lead, predictionAvailable))} ${
-                      predictionAvailable ? "projected points" : "form"
-                    }.`
-                  : "No available candidates in this pool yet."}
-            </p>
-            {lead && (
-              <div className="cap-tags">
-                <span className="solid">{lead.team}</span>
-                <span>{lead.position}</span>
-                {leadFixture && (
-                  <span>
-                    Next: {leadFixture.opponent} ({leadFixture.venue}) · FDR {leadFixture.difficulty}
-                  </span>
-                )}
-                {leadRisk && <span>{leadRisk.label}</span>}
-              </div>
-            )}
-          </div>
-          {lead && (
-            <div className="cap-metrics">
-              <div className="bug">
-                <span>{predictionAvailable ? "Projection" : "Form"}</span>
-                <strong><CountUp value={captainScore(lead, predictionAvailable)} decimals={1} /></strong>
-              </div>
-              <div className="bug">
-                <span>Ownership</span>
-                <strong>{num(lead.selected_by)}%</strong>
-              </div>
-              <div className="bug">
-                <span>Price</span>
-                <strong>{money(lead.value_m)}</strong>
-              </div>
-              <div className="bug">
-                <span>Club</span>
-                <strong>{lead.team_short}</strong>
-              </div>
-            </div>
-          )}
-          {predictionAvailable && (
-            <ModelInfo model={snapshot.model} timestamp={snapshot.prediction_timestamp} />
-          )}
-        </div>
-      </div>
+    <section className="page captain-page" aria-label="Captain">
+      <GateSign>
+        <Segmented
+          label="Who to choose from"
+          value={pool}
+          onChange={(value) => {
+            setPool(value);
+            setSelectedElement(null);
+          }}
+          options={[
+            { value: "squad", label: "My squad", disabled: squadPlayers.length === 0 },
+            { value: "all", label: "Everyone" },
+          ]}
+        />
+      </GateSign>
 
-      <div className="shell">
-        <div className="sub-head">
-          <h3>Captaincy shortlist</h3>
-          <span className="rule" />
-          <div className="mini-chips" role="group" aria-label="Candidate pool">
-            <button
-              type="button"
-              aria-pressed={pool === "squad"}
-              className={`mini-chip${pool === "squad" ? " is-active" : ""}`}
-              onClick={() => setPool("squad")}
-            >
-              My squad
-            </button>
-            <button
-              type="button"
-              aria-pressed={pool === "all"}
-              className={`mini-chip${pool === "all" ? " is-active" : ""}`}
-              onClick={() => setPool("all")}
-            >
-              All players
-            </button>
-          </div>
-        </div>
-
-        {!predictionAvailable && (
-          <p style={{ color: "var(--muted-ink)", fontSize: 13, marginTop: -8, marginBottom: 16 }}>
-            Prediction export unavailable — ranked by official FPL form only.
+      {lead ? (
+        <VerdictPlate
+          tone="spotlight"
+          label="Captain pick"
+          player={lead}
+          title={isTop ? <>Captain {lead.web_name}.</> : <>{lead.web_name} it is.</>}
+          body={
+            isTop
+              ? `${whyLine(lead, leadFixture)}. He tops ${pool === "squad" ? "your squad" : "the league"} on ${unit}${
+                  runnerUp ? `, ${num(captainScore(lead, predictionAvailable) - captainScore(runnerUp, predictionAvailable))} clear of ${runnerUp.web_name}` : ""
+                }.`
+              : `Your call. ${topPick?.web_name} is the top pick at ${num(captainScore(topPick!, predictionAvailable))}; ${lead.web_name} is on ${num(captainScore(lead, predictionAvailable))}.`
+          }
+          facts={
+            <>
+              <PlateFact label="This week">{num(captainScore(lead, predictionAvailable))} pts</PlateFact>
+              <PlateFact label="Opponent">
+                <Fdr fixture={leadFixture} />
+              </PlateFact>
+              <PlateFact label="Owned by">{num(lead.selected_by)}%</PlateFact>
+              <PlateFact label="Price">{money(lead.value_m)}</PlateFact>
+            </>
+          }
+          actions={
+            <>
+              <button className="btn btn--go" type="button" onClick={() => openProfile(lead)}>
+                See his profile <Icon name="arrow-right" size={18} />
+              </button>
+              {!isTop && (
+                <button className="btn btn--line" type="button" onClick={() => setSelectedElement(null)}>
+                  Back to the top pick
+                </button>
+              )}
+            </>
+          }
+        />
+      ) : (
+        <div className="empty-state">
+          <h2 className="empty-title">Nobody to choose from yet</h2>
+          <p className="empty-message">
+            {pool === "squad" ? "Add your 15 on My team, or switch to Everyone." : "No available outfield players in the data."}
           </p>
-        )}
+        </div>
+      )}
 
-        <div className="runway stagger">
-          {ranked.map((player, index) => {
-            const fixture = nextFixture(teamByName.get(player.team), snapshot.gameweek);
-            const risk = riskFor(player);
-            const isSelected = lead?.element === player.element;
-            return (
-              <m.div
-                key={player.element}
-                layout="position"
-                transition={{ layout: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } }}
-                role="button"
-                tabIndex={0}
-                className={`cand lift${index === 0 ? " is-lead" : ""}${isSelected ? " is-selected" : ""}`}
-                style={{ ...clubStyle(player.team), "--i": index } as React.CSSProperties}
-                aria-pressed={isSelected}
-                onClick={() => setSelectedElement(player.element)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    setSelectedElement(player.element);
-                  }
-                }}
-              >
-                <span className="cand-rank">{String(index + 1).padStart(2, "0")}</span>
-                <span className="shot">
-                  <PlayerPhoto src={player.photo ?? undefined} alt={player.name} name={player.name} variant="avatar" loading="lazy" />
-                </span>
-                <span className="cand-id">
-                  <b>
-                    {player.web_name || player.name}
-                    {player.has_prior_history === false && <span className="badge new" title="No prior model history: projection is less reliable">Limited history</span>}
-                  </b>
-                  <span className="muted">
-                    {player.team} · {player.position}
-                  </span>
-                </span>
-                <span className="cand-fix">
-                  <span className="muted">Next</span>
-                  {fixture ? (
-                    <span>
-                      {fixture.opponent} ({fixture.venue}) · FDR {fixture.difficulty}
-                    </span>
-                  ) : (
-                    <span>No fixture found</span>
-                  )}
-                </span>
-                <span className="cand-meters">
-                  <div className="meter-label">
-                    <span>Form</span>
-                    <b>{num(player.form)}</b>
-                  </div>
-                  <div className="meter">
-                    <i style={{ "--v": Math.min(100, Number(player.form) * 10) / 100 } as React.CSSProperties} />
-                  </div>
-                  <div className="meter-label">
-                    <span>ICT</span>
-                    <b>{num(player.ict_index)}</b>
-                  </div>
-                  <div className="meter">
-                    <i style={{ "--v": Math.min(100, Number(player.ict_index)) / 100 } as React.CSSProperties} />
-                  </div>
-                </span>
-                <span className="cand-right">
-                  <span className="proj">{num(captainScore(player, predictionAvailable))}</span>
-                  <span className="risk" data-risk={risk.level}>
-                    {risk.label}
-                  </span>
+      {!predictionAvailable && (
+        <p className="note note--warn">Projections aren&apos;t ready, so this ranks players on recent form instead.</p>
+      )}
+
+      {ranked.length > 0 && (
+        <section className="section" aria-label="Shortlist">
+          <div className="section-title">
+            <div>
+              <h2>The shortlist</h2>
+              <p>Tap a player to see him on the plate. Keepers are left out: doubling a clean sheet rarely beats an attacker.</p>
+            </div>
+          </div>
+          <ol className="panel runway">
+            {ranked.map((player, index) => {
+              const fixture = nextFixtureFor(snapshot, player);
+              const doubt = doubtLabel(player);
+              const selected = lead?.element === player.element;
+              return (
+                <m.li
+                  key={player.element}
+                  layout="position"
+                  transition={{ layout: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } }}
+                  className={`cand${selected ? " is-selected" : ""}`}
+                >
                   <button
                     type="button"
-                    className="cand-view"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openProfile(player);
-                    }}
+                    className="cand-main"
+                    aria-pressed={selected}
+                    onClick={() => setSelectedElement(player.element)}
                   >
-                    Profile
+                    <span className="cand-rank">{index + 1}</span>
+                    <Face player={player} />
+                    <span className="prow-name">
+                      <b>
+                        {player.web_name || player.name}
+                        {player.has_prior_history === false && <span className="badge badge--line">New to the league</span>}
+                      </b>
+                      <span className="why">{whyLine(player, fixture)}</span>
+                    </span>
+                    <Pos pos={player.position} />
+                    <Fdr fixture={fixture} compact />
+                    <span className="cand-form">
+                      <small>Form</small>
+                      <b>{num(player.form)}</b>
+                    </span>
+                    {doubt ? <span className="badge badge--warn">{doubt}</span> : <span aria-hidden="true" />}
+                    <Proj value={captainScore(player, predictionAvailable)} />
                   </button>
-                </span>
-              </m.div>
-            );
-          })}
-          {!ranked.length && <p className="picker-empty">No available candidates in this pool.</p>}
-        </div>
+                  <button
+                    type="button"
+                    className="cand-profile"
+                    aria-label={`${player.web_name} profile`}
+                    onClick={() => openProfile(player)}
+                  >
+                    <Icon name="chevron-right" size={20} />
+                  </button>
+                </m.li>
+              );
+            })}
+          </ol>
+        </section>
+      )}
 
-        {lead && runnerUp && (
-          <>
-            <div className="sub-head">
-              <h3>Captaincy battle</h3>
-              <span className="rule" />
-              <small>The top two candidates, head to head</small>
+      {lead && runnerUp && (
+        <section className="section" aria-label="Head to head">
+          <div className="section-title">
+            <div>
+              <h2>
+                {lead.web_name} or {runnerUp.web_name}?
+              </h2>
+              <p>The top two, side by side.</p>
             </div>
-            <div className="battle">
+          </div>
+          <div className="panel duel">
+            {[lead, runnerUp].map((player, side) => (
               <button
+                key={player.element}
                 type="button"
-                className="battle-pick"
-                style={clubStyle(lead.team)}
-                onClick={() => openProfile(lead)}
+                className={`duel-seat duel-seat--${side === 0 ? "a" : "b"}`}
+                onClick={() => openProfile(player)}
               >
-                <div className="shot">
-                  <PlayerPhoto
-                    src={lead.photo_large ?? lead.photo ?? undefined}
-                    fallbackSrc={lead.photo ?? undefined}
-                    alt={lead.name}
-                    name={lead.name}
-                    variant="card"
-                  />
-                </div>
-                <div className="battle-pick-copy">
-                  <span className="eyebrow">Rank 1</span>
-                  <h4>{lead.web_name}</h4>
-                </div>
+                <Face player={player} size="lg" />
+                <span>
+                  <b>{player.web_name}</b>
+                  <small>{player.team}</small>
+                </span>
               </button>
-              <div className="battle-data">
-                <h4>Head to head</h4>
-                {[
-                  ["Projection", captainScore(lead, predictionAvailable), captainScore(runnerUp, predictionAvailable), 1],
+            ))}
+            <div className="duel-rows">
+              {(
+                [
+                  ["This week", captainScore(lead, predictionAvailable), captainScore(runnerUp, predictionAvailable), 1],
                   ["Form", Number(lead.form), Number(runnerUp.form), 1],
-                  ["Ownership %", Number(lead.selected_by), Number(runnerUp.selected_by), 1],
-                  ["ICT index", Number(lead.ict_index), Number(runnerUp.ict_index), 1],
-                ].map(([label, a, b, digits]) => {
-                  const total = (Number(a) || 0) + (Number(b) || 0) || 1;
-                  return (
-                    <div className="duel-row" key={label as string}>
-                      <strong>{num(a, digits as number)}</strong>
-                      <span className="duel-label">{label}</span>
-                      <strong>{num(b, digits as number)}</strong>
-                      <div className="duel-track">
-                        <i
-                          className={`duel-a${Number(a) >= Number(b) ? " is-leader" : ""}`}
-                          style={{ "--w": `${(Number(a) / total) * 100}%` } as React.CSSProperties}
-                        />
-                        <i
-                          className={`duel-b${Number(b) > Number(a) ? " is-leader" : ""}`}
-                          style={{ "--w": `${(Number(b) / total) * 100}%` } as React.CSSProperties}
-                        />
+                  ["Points this season", lead.total_points, runnerUp.total_points, 0],
+                  ["Owned by (%)", Number(lead.selected_by), Number(runnerUp.selected_by), 1],
+                ] as const
+              ).map(([label, a, b, digits]) => {
+                const total = Math.abs(a) + Math.abs(b) || 1;
+                return (
+                  <div className="duel-row" key={label}>
+                    <b className={a >= b ? "is-lead" : undefined}>{num(a, digits)}</b>
+                    <div className="duel-mid">
+                      <span>{label}</span>
+                      <div className="duel-bars">
+                        <i className={a >= b ? "is-lead" : undefined} style={{ width: `${(Math.abs(a) / total) * 100}%` }} />
+                        <i className={b > a ? "is-lead" : undefined} style={{ width: `${(Math.abs(b) / total) * 100}%` }} />
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-              <button
-                type="button"
-                className="battle-pick"
-                style={clubStyle(runnerUp.team)}
-                onClick={() => openProfile(runnerUp)}
-              >
-                <div className="shot">
-                  <PlayerPhoto
-                    src={runnerUp.photo_large ?? runnerUp.photo ?? undefined}
-                    fallbackSrc={runnerUp.photo ?? undefined}
-                    alt={runnerUp.name}
-                    name={runnerUp.name}
-                    variant="card"
-                  />
-                </div>
-                <div className="battle-pick-copy">
-                  <span className="eyebrow">Rank 2</span>
-                  <h4>{runnerUp.web_name}</h4>
-                </div>
-              </button>
+                    <b className={b > a ? "is-lead" : undefined}>{num(b, digits)}</b>
+                  </div>
+                );
+              })}
             </div>
-          </>
-        )}
-      </div>
+          </div>
+          {isFlagged(lead) && <p className="note note--alert">Check the news on {lead.web_name} before the deadline.</p>}
+        </section>
+      )}
     </section>
   );
 }

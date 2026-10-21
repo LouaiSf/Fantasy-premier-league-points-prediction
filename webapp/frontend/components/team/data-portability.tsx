@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
+import { Icon } from "@/components/icons";
 import { downloadExportedData, importLocalData, ImportError } from "@/lib/data-portability";
 
 // This app has no account system -- the squad and chip data below live in
@@ -41,18 +42,18 @@ export function DataPortability() {
 
   return (
     <div className="data-portability">
-      <p>Your squad and chip data live in this browser only. Export a file to move them to another device.</p>
+      <p className="note">Your squad and chips are saved in this browser. Download a file to carry them to another device.</p>
       <div className="data-portability-actions">
-        <button type="button" className="btn secondary sm" onClick={handleExport}>
-          Export my data
+        <button type="button" className="btn btn--line btn--sm" onClick={handleExport}>
+          <Icon name="download" size={16} /> Download my data
         </button>
         <button
           type="button"
-          className="btn secondary sm"
+          className="btn btn--ghost btn--sm"
           onClick={() => fileInputRef.current?.click()}
           disabled={importing}
         >
-          {importing ? "Importing…" : "Import"}
+          <Icon name="upload" size={16} /> {importing ? "Loading…" : "Load a file"}
         </button>
         <input
           ref={fileInputRef}

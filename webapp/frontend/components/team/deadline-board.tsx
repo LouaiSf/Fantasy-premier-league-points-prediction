@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useApp } from "@/components/providers/app-provider";
 import { fromTenths } from "@/lib/finance";
 import { money } from "@/lib/format";
+import { Icon } from "@/components/icons";
 import { CHIP_INVENTORY_KEY } from "@/lib/storage-keys";
 import {
   heldWeekKey, isHeldWeek, isSavedTransferDraft, squadFingerprint, transferDraftKey,
@@ -98,82 +99,81 @@ export function DeadlineBoard() {
 
   const rows: BoardRow[] = [];
   rows.push(hasSquad
-    ? { key: "squad", label: "Squad", state: "ready", detail: "15 players saved on this device.", href: "/team", action: "Open" }
-    : { key: "squad", label: "Squad", state: "missing", detail: `${squadPlayers.length} of 15 players. Import your team or build one.`, href: "/team", action: "Set up" });
+    ? { key: "squad", label: "Squad", state: "ready", detail: "All 15 picked.", href: "/team", action: "Open" }
+    : { key: "squad", label: "Squad", state: "missing", detail: `${squadPlayers.length} of 15 picked. Bring in your FPL team or build one.`, href: "/team", action: "Set up" });
 
   if (!hasSquad) {
-    rows.push({ key: "captain", label: "Captain", state: "missing", detail: "Needs a complete squad.", href: "/captain", action: "Open" });
+    rows.push({ key: "captain", label: "Captain", state: "missing", detail: "Pick all 15 first.", href: "/captain", action: "Open" });
   } else if (!captain) {
-    rows.push({ key: "captain", label: "Captain", state: "missing", detail: "No captain is set for this squad.", href: "/captain", action: "Choose" });
+    rows.push({ key: "captain", label: "Captain", state: "missing", detail: "Nobody has the armband yet.", href: "/captain", action: "Choose" });
   } else if (flagged.some((player) => player.element === captain.element)) {
     rows.push({ key: "captain", label: "Captain", state: "review", detail: `${captain.web_name || captain.name} has an availability flag.`, href: "/captain", action: "Review" });
   } else {
-    rows.push({ key: "captain", label: "Captain", state: "ready", detail: `${captain.web_name || captain.name}, no official availability doubt.`, href: "/captain", action: "Open" });
+    rows.push({ key: "captain", label: "Captain", state: "ready", detail: `${captain.web_name || captain.name} has the armband.`, href: "/captain", action: "Open" });
   }
 
   if (facts.held) {
-    rows.push({ key: "transfers", label: "Transfers", state: "ready", detail: `Holding GW${gameweek} on this device.`, href: "/transfers", action: "Open" });
+    rows.push({ key: "transfers", label: "Transfers", state: "ready", detail: "Holding this week.", href: "/transfers", action: "Open" });
   } else if (facts.savedMoves) {
     rows.push({ key: "transfers", label: "Transfers", state: "review", detail: `A saved plan with ${facts.savedMoves} move${facts.savedMoves === 1 ? "" : "s"} is not applied to My Team.`, href: "/transfers", action: "Review" });
   } else {
-    rows.push({ key: "transfers", label: "Transfers", state: "missing", detail: "No hold or saved plan recorded for this gameweek.", href: "/transfers", action: "Plan" });
+    rows.push({ key: "transfers", label: "Transfers", state: "missing", detail: "Make a move, or decide to hold.", href: "/transfers", action: "Plan" });
   }
 
   if (facts.plannedThisWeek) {
     rows.push({ key: "chips", label: "Chips", state: "ready", detail: `${facts.plannedThisWeek} planned for GW${gameweek}.`, href: "/chips", action: "Open" });
   } else if (facts.inventoryEntered) {
-    rows.push({ key: "chips", label: "Chips", state: "ready", detail: "Chips entered; none planned this week.", href: "/chips", action: "Open" });
+    rows.push({ key: "chips", label: "Chips", state: "ready", detail: "None planned this week.", href: "/chips", action: "Open" });
   } else {
-    rows.push({ key: "chips", label: "Chips", state: "missing", detail: "You have not entered which chips you still have.", href: "/chips", action: "Enter" });
+    rows.push({ key: "chips", label: "Chips", state: "missing", detail: "Tell us which chips you have left.", href: "/chips", action: "Enter" });
   }
 
   rows.push(!hasSquad
-    ? { key: "money", label: "Bank and prices", state: "missing", detail: "Needs a complete squad.", href: "/team", action: "Open" }
+    ? { key: "money", label: "Money", state: "missing", detail: "Pick all 15 first.", href: "/team", action: "Open" }
     : financeSummary.priceBasis === "imported"
-      ? { key: "money", label: "Bank and prices", state: "ready", detail: `Bank ${money(fromTenths(financeSummary.bankTenths))}, official purchase prices.`, href: "/team", action: "Open" }
-      : { key: "money", label: "Bank and prices", state: "review", detail: `Bank ${money(fromTenths(financeSummary.bankTenths))}; selling prices are ${financeSummary.priceBasis}, not official.`, href: "/team", action: "Review" });
+      ? { key: "money", label: "Money", state: "ready", detail: `${money(fromTenths(financeSummary.bankTenths))} in the bank.`, href: "/team", action: "Open" }
+      : { key: "money", label: "Money", state: "review", detail: `${money(fromTenths(financeSummary.bankTenths))} in the bank; sale prices are estimates.`, href: "/team", action: "Review" });
 
   rows.push(!hasSquad
-    ? { key: "alerts", label: "Availability", state: "missing", detail: "Needs a complete squad.", href: "/news", action: "Open" }
+    ? { key: "alerts", label: "Availability", state: "missing", detail: "Pick all 15 first.", href: "/news", action: "Open" }
     : flagged.length
       ? { key: "alerts", label: "Availability", state: "review", detail: `${flagged.length} of your 15 flagged: ${flagged.slice(0, 3).map((player) => player.web_name || player.name).join(", ")}${flagged.length > 3 ? "…" : ""}.`, href: "/news", action: "Review" }
-      : { key: "alerts", label: "Availability", state: "ready", detail: "No official availability flags in your 15.", href: "/news", action: "Open" });
+      : { key: "alerts", label: "Availability", state: "ready", detail: "Everyone is fit.", href: "/news", action: "Open" });
 
   rows.push(!snapshot.prediction_available
-    ? { key: "data", label: "Data", state: "review", detail: "Predictions are unavailable for this snapshot.", href: "/team", action: "Open" }
+    ? { key: "data", label: "Latest data", state: "review", detail: "Projections aren't ready yet.", href: "/team", action: "Open" }
     : staleData
-      ? { key: "data", label: "Data", state: "review", detail: `Market prices last updated ${updatedAt?.toLocaleString()}; refresh before deciding.`, href: "/team", action: "Open" }
-      : { key: "data", label: "Data", state: "ready", detail: `Predictions ready${updatedAt ? `; prices updated ${updatedAt.toLocaleString()}` : ""}.`, href: "/team", action: "Open" });
+      ? { key: "data", label: "Latest data", state: "review", detail: "Prices are over a day old. Get the latest before you decide.", href: "/team", action: "Open" }
+      : { key: "data", label: "Latest data", state: "ready", detail: "Prices and projections are current.", href: "/team", action: "Open" });
 
   const open = rows.filter((row) => row.state !== "ready").length;
 
   return (
-    <div className="shell">
-      <section className="deadline-board" aria-label={`GW${gameweek ?? ""} deadline board`}>
-        <div className="deadline-board-head">
-          <div>
-            <span className="kicker">Deadline board</span>
-            <h2>GW{gameweek ?? "--"} checklist</h2>
-          </div>
-          <p role="status">{open === 0 ? "Everything listed is ready." : `${open} item${open === 1 ? "" : "s"} still open.`}</p>
+    <section className="panel deadline-board" aria-label={`Gameweek ${gameweek ?? ""} checklist`}>
+      <div className="panel-head">
+        <div>
+          <h2>Before the deadline</h2>
+          <p role="status">{open === 0 ? "You're all set." : `${open} thing${open === 1 ? "" : "s"} still to sort.`}</p>
         </div>
-        <ul className="deadline-list stagger">
-          {rows.map((row, index) => (
-            <li key={row.key} className={`deadline-row is-${row.state}`} style={{ "--i": index } as React.CSSProperties}>
-              <span className="deadline-state">
-                <span aria-hidden="true">{row.state === "ready" ? "✓" : row.state === "review" ? "!" : "–"}</span>
-                {STATE_LABELS[row.state]}
-              </span>
-              <div>
-                <b>{row.label}</b>
-                <span>{row.detail}</span>
-              </div>
-              <Link className="text-button" href={row.href}>{row.action}</Link>
-            </li>
-          ))}
-        </ul>
-        <p className="deadline-note">Based on what is saved on this device. It is not checked against your FPL account.</p>
-      </section>
-    </div>
+      </div>
+      <ul className="checklist stagger">
+        {rows.map((row, index) => (
+          <li key={row.key} className={`check is-${row.state}`} style={{ "--i": index } as React.CSSProperties}>
+            <span className="check-mark" aria-hidden="true">
+              {row.state === "ready" ? <Icon name="check" size={16} /> : row.state === "review" ? <Icon name="alert" size={16} /> : null}
+            </span>
+            <span className="check-copy">
+              <b>{row.label}</b>
+              <span>{row.detail}</span>
+              <span className="sr-only">{STATE_LABELS[row.state]}</span>
+            </span>
+            <Link className="check-go" href={row.href} aria-label={`${row.action}: ${row.label}`}>
+              {row.action}
+              <Icon name="chevron-right" size={16} />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

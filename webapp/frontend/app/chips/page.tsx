@@ -5,14 +5,14 @@ import { useApp } from "@/components/providers/app-provider";
 import { api } from "@/lib/api";
 import { num } from "@/lib/format";
 import { fromTenths, sellingPricesTenthsForSquad } from "@/lib/finance";
-import { Loading } from "@/components/loading";
 import { Skeleton } from "@/components/skeleton";
 import { EmptyState } from "@/components/empty-state";
+import { GateSign, PlateFact, Segmented, VerdictPlate } from "@/components/signage";
+import { Icon } from "@/components/icons";
 import { ChipIcon } from "@/components/chips/chip-icon";
 import { ChipOpportunityMatrix } from "@/components/chips/chip-opportunity-matrix";
 import { ChipPlanTimeline } from "@/components/chips/chip-plan-timeline";
 import { BarStrip } from "@/components/charts/bar-strip";
-import { CountUp } from "@/components/motion/count-up";
 import { m, AnimatePresence } from "motion/react";
 import { CHIP_IDS, type ChipId, type ChipInventory, type ChipRecommendation, type ChipRow, type ChipsResult, type ChipState, type ChipStatus } from "@/lib/types";
 import { CHIP_INVENTORY_KEY } from "@/lib/storage-keys";
@@ -44,13 +44,6 @@ const STATUS_LABELS: Record<ChipStatus, string> = {
   no_squad: "Fixtures only",
 };
 
-const PROJECTION_STATE_LABELS: Record<string, string> = {
-  projected: "Projected",
-  extrapolated: "Extrapolated",
-  no_fixtures: "No fixtures",
-  complete: "Complete",
-  unknown: "No confirmed fixtures",
-};
 
 const BAR_STRIP_MAX_WEEKS = 8;
 
@@ -69,11 +62,6 @@ function pickBarWeeks(candidates: number[], now: number, best: number | null): n
   return Array.from(new Set(picked)).sort((a, b) => a - b);
 }
 
-function formatGeneratedAt(value: string | null): string {
-  if (!value) return "time unknown";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "time unknown" : date.toLocaleString();
-}
 
 function blankInventory(): ChipInventory {
   return {
@@ -258,10 +246,9 @@ function PlannedChipsPanel({
 
   return (
     <div className="chip-planned">
-      <span className="kicker">Planned chips</span>
-      <p className="chip-planned-note">
-        A chip you&apos;ve already committed to for a specific future week. Recommendations won&apos;t suggest
-        a different chip for that same gameweek, since only one can be played per week.
+      <h3>Chips you&apos;ve already planned</h3>
+      <p className="note">
+        Lock a chip to a week and the plan won&apos;t suggest another chip for that week. Only one chip can be played per gameweek.
       </p>
       {plannedChips.length > 0 && (
         <ul className="chip-planned-list">
@@ -274,10 +261,10 @@ function PlannedChipsPanel({
                 exit={{ opacity: 0, x: -12 }}
               >
                 <ChipIcon id={planned.chip} />
-                <span>{CHIP_LABELS[planned.chip]} · GW{planned.gw}</span>
+                <span>{CHIP_LABELS[planned.chip]} in gameweek {planned.gw}</span>
                 <button
                   type="button"
-                  className="btn ghost sm"
+                  className="btn btn--ghost btn--sm"
                   onClick={() => onRemove(planned.chip, planned.gw)}
                   aria-label={`Remove planned ${CHIP_LABELS[planned.chip]} for GW${planned.gw}`}
                 >
@@ -289,12 +276,14 @@ function PlannedChipsPanel({
         </ul>
       )}
       <form className="chip-planned-form" onSubmit={submit}>
-        <select value={chip} onChange={(event) => setChip(event.target.value as ChipId)}>
+        <select className="select select--sm" value={chip} onChange={(event) => setChip(event.target.value as ChipId)}>
           {CHIP_IDS.map((id) => (
             <option key={id} value={id}>{CHIP_LABELS[id]}</option>
           ))}
         </select>
         <input
+          className="input input--sm"
+          aria-label="Gameweek"
           type="number"
           min={currentGw}
           max={maxGw}
@@ -302,62 +291,81 @@ function PlannedChipsPanel({
           value={gwInput}
           onChange={(event) => setGwInput(event.target.value)}
         />
-        <button type="submit" className="btn secondary sm">Add</button>
+        <button type="submit" className="btn btn--line btn--sm">Plan it</button>
       </form>
     </div>
   );
 }
 
-function WhyThisChoice({ recommendation, data }: { recommendation: ChipRecommendation; data: ChipsResult }) {
+// The API states its reasons in decision-policy terms ("above the 5.0-point
+// policy margin", "Best window GW7"). Rephrase them for a manager.
+function humanReason(text: string | undefined): string {
+  if (!text) return "";
+  return text
+    .replace(/,? ?above the [\d.]+-point (policy )?margin/gi, "")
+    .replace(/\(?(below|under) the [\d.]+-point (policy )?margin\)?/gi, "not quite enough to play it yet")
+    .replace(/Best window GW(\d+): \+?([\d.]+) points\.?/g, "Best in gameweek $1, worth about $2 extra points.")
+    .replace(/\bGW(\d+)/g, "gameweek $1")
+    .replace(/\s+\./g, ".")
+    .trim();
+}
+
+function WhyThisChoice({ recommendation }: { recommendation: ChipRecommendation }) {
   const evidence = recommendation.evidence;
   return (
-    <details className="chip-method chip-why">
-      <summary>Why this choice</summary>
-      {evidence?.chip === "triple_captain" && (
-        <p>
-          {evidence.captain.name} ({evidence.captain.team}, {evidence.captain.position}) projects {num(evidence.captain.projected_points, 1)} points
-          as the extra copy of the armband. Projections already include the chance of playing.
-        </p>
-      )}
-      {evidence?.chip === "bench_boost" && (
-        <>
-          <ul>{evidence.ordered_bench.map((player) => (
-            <li key={player.element}>{player.player}: {num(player.points, 1)} pts</li>
-          ))}</ul>
+    <details className="why-more">
+      <summary>
+        Why <Icon name="chevron-down" size={16} />
+      </summary>
+      <div className="why-more-body">
+        {evidence?.chip === "triple_captain" && (
           <p>
-            Gross bench projection {num(evidence.bench_total, 1)}, minus {num(evidence.expected_autosub_points, 1)} points
-            the bench would score anyway through a normal week&apos;s autosubs.
+            {evidence.captain.name} ({evidence.captain.team}) is expected to score {num(evidence.captain.projected_points, 1)} points, so a third armband adds about that much.
           </p>
-        </>
-      )}
-      {evidence?.chip === "free_hit" && (
-        <p>
-          A one-week squad projects {num(evidence.free_hit_total, 1)} points, against {num(evidence.no_chip_total, 1)} for
-          the best transfer you could make instead with {evidence.no_chip_free_transfers} free transfer{evidence.no_chip_free_transfers === 1 ? "" : "s"}
-          {" "}({evidence.changed_player_count} changed player{evidence.changed_player_count === 1 ? "" : "s"} on the one-week squad).
-        </p>
-      )}
-      {evidence?.chip === "wildcard" && (
-        <p>
-          Rebuilding the squad projects {evidence.wildcard_total != null ? num(evidence.wildcard_total, 1) : "—"} points
-          across GW{evidence.window_gameweeks[0]}–GW{evidence.window_gameweeks[evidence.window_gameweeks.length - 1]}
-          {evidence.truncated ? " (season ends before a full 6-week window)" : ""}, against the best you could do with rolling free
-          transfers over the same weeks ({evidence.changed_player_count} changed players).
-        </p>
-      )}
-      {recommendation.candidate_gameweeks.length > 0 && (
-        <p>
-          Every eligible week: {recommendation.candidate_gameweeks.map((gw) => {
-            const value = recommendation.gains_by_week[String(gw)];
-            return "GW" + gw + " " + (value != null ? "+" + num(value, 1) : "—");
-          }).join(" · ")}.
-        </p>
-      )}
-      <p>
-        Source: {data.projection_source}; coverage: {data.projection_gameweeks.length ? data.projection_gameweeks.map((gw) => "GW" + gw).join(", ") : "none"}.
-        Inventory: {data.inventory_source === "local_user_reported" ? "entered by you on this device" : "not entered"}. {data.decision_policy.uncertainty_note}
-      </p>
-      {recommendation.warnings.map((warning) => <p key={warning}>{warning}</p>)}
+        )}
+        {evidence?.chip === "bench_boost" && (
+          <>
+            <ul>
+              {evidence.ordered_bench.map((player) => (
+                <li key={player.element}>
+                  {player.player}: {num(player.points, 1)} pts
+                </li>
+              ))}
+            </ul>
+            <p>
+              Your bench is expected to score {num(evidence.bench_total, 1)}, minus about {num(evidence.expected_autosub_points, 1)} you&apos;d get anyway from normal substitutions.
+            </p>
+          </>
+        )}
+        {evidence?.chip === "free_hit" && (
+          <p>
+            A one-week team would score about {num(evidence.free_hit_total, 1)} points, against {num(evidence.no_chip_total, 1)} with your best normal transfer. It swaps {evidence.changed_player_count} player{evidence.changed_player_count === 1 ? "" : "s"}.
+          </p>
+        )}
+        {evidence?.chip === "wildcard" && (
+          <p>
+            A rebuilt squad scores about {evidence.wildcard_total != null ? num(evidence.wildcard_total, 1) : "–"} points from gameweek {evidence.window_gameweeks[0]} to {evidence.window_gameweeks[evidence.window_gameweeks.length - 1]}, compared with making your usual free transfers. It changes {evidence.changed_player_count} players.
+          </p>
+        )}
+        {recommendation.candidate_gameweeks.length > 0 && (
+          <p className="note">
+            Other weeks:{" "}
+            {recommendation.candidate_gameweeks
+              .slice(0, 10)
+              .map((gw) => {
+                const value = recommendation.gains_by_week[String(gw)];
+                return `GW${gw} ${value != null ? "+" + num(value, 1) : "–"}`;
+              })
+              .join(" · ")}
+            {recommendation.candidate_gameweeks.length > 10 ? " …" : ""}
+          </p>
+        )}
+        {recommendation.warnings.map((warning) => (
+          <p key={warning} className="note note--warn">
+            {humanReason(warning)}
+          </p>
+        ))}
+      </div>
     </details>
   );
 }
@@ -444,12 +452,12 @@ export default function ChipsPage() {
           setData(res);
         } else {
           setData(null);
-          setFetchError("Unable to compute chip optimization recommendations.");
+          setFetchError("We couldn't work out a chip plan this time.");
         }
       } catch (err) {
         if (requestId !== requestIdRef.current) return;
         setData(null);
-        setFetchError((err as Error).message || "Failed to load chip advice.");
+        setFetchError((err as Error).message || "We couldn't work out a chip plan this time.");
       } finally {
         if (requestId === requestIdRef.current) setFetching(false);
       }
@@ -550,9 +558,11 @@ export default function ChipsPage() {
   if (loading || !snapshot) {
     return (
       <section className="page">
-        <div className="shell">
-          <Skeleton variant="hero" />
-          <Skeleton variant="card" count={4} />
+        <div className="skel skel-sign" />
+        <Skeleton variant="hero" />
+        <div className="skel-columns" style={{ "--cols": 2 } as React.CSSProperties}>
+          <Skeleton variant="card" count={2} />
+          <Skeleton variant="card" count={2} />
         </div>
       </section>
     );
@@ -561,12 +571,11 @@ export default function ChipsPage() {
   if (!snapshot.prediction_available) {
     return (
       <section className="page">
-        <div className="shell shell--padded">
-          <EmptyState
-            title="Predictions Unavailable"
-            message={`The Chip Advisor requires model projections to evaluate optimal play windows.${snapshot.prediction_error ? ` (${snapshot.prediction_error})` : ""} Run the prediction pipeline or click Refresh in the header.`}
-          />
-        </div>
+        <GateSign />
+        <EmptyState
+          title="Projections aren't ready yet"
+          message="The chip plan is built from this week's projections. Use Get latest data in the menu, then come back."
+        />
       </section>
     );
   }
@@ -597,213 +606,190 @@ export default function ChipsPage() {
     : undefined;
 
   return (
-    <section className="page chips-page" aria-label="Chip advisor">
-      <div className="shell">
-        <header className="section-head section-head--mt">
-          <div>
-            <span className="badge lime">Chip planning desk</span>
-            <h1 className="display-hero">Chip Advisor</h1>
-            <p>
-              {data && data.has_squad
-                ? "A squad-specific, horizon-independent chip plan through the end of the season."
-                : "Fixture signals only; build a 15-player squad in My Team for a player-based plan."}
-            </p>
-          </div>
+    <section className="page chips-page" aria-label="Chips">
+      <GateSign
+        lede={
+          data?.has_squad
+            ? `When to play each chip, worked out for your squad through to gameweek ${data.last_gw}.`
+            : undefined
+        }
+      >
+        <Segmented
+          label="Plan using"
+          value={useSquad ? "squad" : "fixtures"}
+          onChange={(value) => setUseSquad(value === "squad")}
+          options={[
+            { value: "squad", label: "My squad", disabled: squadNames.length < 15, title: squadReasonNeeded },
+            { value: "fixtures", label: "Fixtures only" },
+          ]}
+        />
+      </GateSign>
 
-          <div className="section-head-actions">
-            <div className="chip-mode-toggle" role="group" aria-label="Evaluation mode">
-              <button
-                type="button"
-                className={`btn sm${useSquad ? " active" : ""}`}
-                onClick={() => setUseSquad(true)}
-                disabled={squadNames.length < 15}
-                title={squadReasonNeeded ?? "Evaluate with your active 15-player squad"}
-              >
-                My squad
-              </button>
-              <button
-                type="button"
-                className={`btn sm${!useSquad ? " active" : ""}`}
-                onClick={() => setUseSquad(false)}
-                title="League-wide fixture signals only, no squad required"
-              >
-                Fixtures only
-              </button>
-            </div>
-          </div>
-        </header>
-
-        {useSquad && squadReasonNeeded && (
-          <div className="chip-squad-notice">
-            <span className="chip-squad-notice-icon" aria-hidden="true">i</span>
-            <span>
-              {squadReasonNeeded}. Using league-wide fixture signals.
-              Head to <strong>My Team</strong> to complete your squad for a squad-specific plan.
-            </span>
-          </div>
-        )}
-
-        {fetching && <Loading label="Calculating the chip plan…" />}
-
-        {fetchError && (
-          <div className="chip-error">
-            <span>{fetchError}</span>
-            <button
-              type="button"
-              className="btn sm"
-              onClick={() => void loadChips(useSquad ? squadElements : [])}
-            >
-              Retry
-            </button>
-          </div>
-        )}
-
-        {data && (
-          <p className="chip-data-bar" role="status">
-            <b>GW{data.first_gw}–{data.last_gw}</b>
-            <span>{data.has_squad ? "Player projections" : "Fixture signal only"}</span>
-            <span>Generated {formatGeneratedAt(data.projection_generated_at)}</span>
-            <small>{data.projection_note} Use Refresh in the header to reload predictions.</small>
+      {useSquad && squadReasonNeeded && (
+        <div className="callout">
+          <span className="callout-mark"><Icon name="alert" size={16} /></span>
+          <p>
+            You have {squadNames.length} of 15 players, so this is based on fixtures alone. Finish your squad on My team for a plan built around your players.
           </p>
-        )}
-
-        <section className={`chip-next-decision${heroRec ? ` status-${heroRec.status}` : ""}`} aria-live="polite">
-          <div className="chip-next-decision-copy">
-            <span className="kicker">This week&apos;s chip decision</span>
-            <h2>
-              {playNow
-                ? `Play ${CHIP_LABELS[playNow.chip]}`
-                : bestPlanned
-                  ? `No chip this week: best plan uses ${CHIP_LABELS[bestPlanned.chip]} in GW${bestPlanned.gw}`
-                  : data
-                    ? "No chip stands out this week"
-                    : "No chip data yet"}
-            </h2>
-            <p>
-              {heroRec?.reasons[0] ?? (data
-                ? (data.inventory_source === "unknown"
-                  ? "Open Manage my chips and mark which chips you still have; suggestions stay provisional until then."
-                  : "Build a complete squad in My Team to calculate a decision.")
-                : "Build a complete squad in My Team to calculate a decision.")}
-            </p>
-            {data && (
-              <small className="chip-decision-context">
-                {data.has_squad ? "Player projections" : "Fixture signal"} · {data.inventory_source === "local_user_reported" ? "chips entered by you" : "chips not entered"}
-              </small>
-            )}
-            {heroRec?.close_call && <small className="chip-close-call-badge">Close call vs the alternative week</small>}
-            {heroRec?.warnings.map((warning) => <small key={warning}>{warning}</small>)}
-            {heroRec && data && <WhyThisChoice recommendation={heroRec} data={data} />}
-          </div>
-          {heroRec && (
-            <div className={`chip-decision-score status-${heroRec.status}`}>
-              <ChipIcon id={heroRec.chip} size="large" />
-              <strong>{heroRec.gw ? `GW${heroRec.gw}` : STATUS_LABELS[heroRec.status]}</strong>
-              <span>{STATUS_LABELS[heroRec.status]}</span>
-              {heroRec.gain != null && <small>+<CountUp value={heroRec.gain} decimals={1} /> extra points vs your best normal week</small>}
-            </div>
-          )}
-        </section>
-
-        {data && (data.rows?.length ?? 0) > 0 && (
-          <ChipPlanTimeline rows={data.rows} chipPlan={data.chip_plan} currentGameweek={data.current_gameweek} />
-        )}
-
-        <div className="chip-advisor-grid stagger">
-          {orderedRecommendations.filter((rec) => rec.chip !== heroRec?.chip).map((rec, index) => {
-            const nowGain = data ? rec.gains_by_week[String(data.current_gameweek)] ?? null : null;
-            // The full picture lives in the gain heatmap below; this strip is
-            // a quick glance, so it shows a handful of upcoming weeks rather
-            // than every eligible week to GW38 -- cramming 20-30 bars into a
-            // card-width chart made every label overlap into an unreadable mess.
-            const barWeeks = data?.has_squad ? pickBarWeeks(rec.candidate_gameweeks, data.current_gameweek, rec.gw) : [];
-            const barItems = barWeeks.map((gw) => ({
-              key: String(gw),
-              label: `GW${gw}`,
-              value: rec.gains_by_week[String(gw)] ?? null,
-              state: (gw === data?.current_gameweek ? "now" : gw === rec.gw ? "best" : "default") as "now" | "best" | "default",
-            }));
-            return (
-              <article key={rec.chip} className={`chip-advisor-card lift status-${rec.status}`} style={{ "--i": index } as React.CSSProperties}>
-                <div className="chip-advisor-header">
-                  <div className="chip-advisor-name">
-                    <ChipIcon id={rec.chip} />
-                    {CHIP_LABELS[rec.chip]}
-                  </div>
-                  <span className={`chip-conf status-${rec.status}`}>
-                    {STATUS_LABELS[rec.status]}
-                    {rec.close_call && " · Close call"}
-                  </span>
-                </div>
-                <div>
-                  <div className={`chip-advisor-target${rec.status === "hold" ? " hold" : ""}`}>
-                    {rec.gw ? `GW${rec.gw}` : STATUS_LABELS[rec.status]}
-                  </div>
-                  {rec.gain != null && (
-                    <p className="chip-advisor-sub">
-                      Now {nowGain != null ? num(nowGain, 1) : "—"} vs best +<CountUp value={rec.gain} decimals={1} />
-                    </p>
-                  )}
-                </div>
-                {barItems.length > 0 && <BarStrip items={barItems} height={36} />}
-                <p className="chip-advisor-desc">{rec.reasons[0]}</p>
-                {rec.use_or_lose && <p className="chip-advisor-note">Few eligible weeks remain this half: use it or lose it.</p>}
-                <WhyThisChoice recommendation={rec} data={data!} />
-                <div className="chip-advisor-footer">{CHIP_DESCRIPTIONS[rec.chip]}</div>
-              </article>
-            );
-          })}
         </div>
+      )}
 
-        <details className="chip-manage">
-          <summary>Manage my chips <small>{inventory ? "entered on this device" : "not entered"}</small></summary>
-        <section className={`chip-inventory inventory-${inventory ? "synced" : "not-synced"}`} aria-label="Chip inventory">
-          <div>
-            <span className="kicker">Entered by you · not linked to FPL</span>
-            <h2>{inventory ? "Chips you entered on this device" : "Chip history not entered"}</h2>
-            <p>
-              {inventory
-                ? "Mark a chip used as you play it. An unused first-half chip is shown Expired automatically once GW19 passes -- no private FPL account data is connected, and this device is the only place this is saved."
-                : "Suggestions stay provisional until you mark the two half-season sets. Nothing here is verified against your FPL account."}
-            </p>
-          </div>
-          <span className={`chip-inventory-state state-${inventory ? "synced" : "not-synced"}`}>
-            {inventory ? "Entered" : "Not entered"}
-          </span>
-          <button
-            type="button"
-            className="btn secondary sm"
-            onClick={() => {
-              setInventory(inventory ? null : blankInventory());
-              setInventorySource(inventory ? null : "local_user_reported");
-            }}
-          >
-            {inventory ? "Clear my chip entries" : "Mark chips available"}
+      {fetchError && (
+        <div className="callout callout--alert" role="alert">
+          <span className="callout-mark"><Icon name="alert" size={16} /></span>
+          <p>{fetchError}</p>
+          <button type="button" className="btn btn--sm" onClick={() => void loadChips(useSquad ? squadElements : [])}>
+            Try again
           </button>
-          {managerEntryId != null && (
-            <div className="chip-sync-status">
-              {syncState === "loading" && <small>Syncing from FPL…</small>}
-              {syncState === "idle" && inventorySource === "fpl_sync" && (
-                <small>Synced from FPL{syncedGameweek != null ? ` · GW${syncedGameweek}` : ""}</small>
+        </div>
+      )}
+
+      {fetching && !data ? (
+        <VerdictPlate tone="night" busy title="Working out your chip plan…" body="Checking every week left in the season. This can take a few seconds." label="This week's chip" />
+      ) : (
+        <VerdictPlate
+          tone={playNow ? "spotlight" : "night"}
+          busy={fetching}
+          label="This week's chip"
+          title={
+            playNow
+              ? <>Play {CHIP_LABELS[playNow.chip]} this week.</>
+              : bestPlanned
+                ? <>No chip this week.</>
+                : data
+                  ? <>No chip stands out yet.</>
+                  : <>Chip plan on its way.</>
+          }
+          body={
+            playNow
+              ? humanReason(playNow.reasons[0])
+              : bestPlanned
+                ? `Save them. Your best plan uses ${CHIP_LABELS[bestPlanned.chip]} in gameweek ${bestPlanned.gw}. ${humanReason(bestPlanned.reasons[0])}`
+                : data?.inventory_source === "unknown"
+                  ? "Tell us which chips you've still got (Your chips, below) and the plan sharpens up."
+                  : "Finish your squad on My team to get a plan."
+          }
+          facts={
+            heroRec && (
+              <>
+                <span className="plate-chip">
+                  <ChipIcon id={heroRec.chip} size="large" />
+                </span>
+                <PlateFact label="Best week">{heroRec.gw ? `GW${heroRec.gw}` : STATUS_LABELS[heroRec.status]}</PlateFact>
+                {heroRec.gain != null && <PlateFact label="Extra points">+{num(heroRec.gain, 1)}</PlateFact>}
+                {heroRec.close_call && <PlateFact label="Heads up">Close call</PlateFact>}
+              </>
+            )
+          }
+          actions={heroRec && <WhyThisChoice recommendation={heroRec} />}
+        />
+      )}
+
+      {data && (data.rows?.length ?? 0) > 0 && (
+        <section className="section" aria-label="Season plan">
+          <div className="section-title">
+            <div>
+              <h2>The plan, week by week</h2>
+              <p>Where each chip lands between now and the end of the season. Chips reset after gameweek 19.</p>
+            </div>
+          </div>
+          <ChipPlanTimeline rows={data.rows} chipPlan={data.chip_plan} currentGameweek={data.current_gameweek} />
+        </section>
+      )}
+
+      {orderedRecommendations.length > 0 && (
+        <section className="section" aria-label="Each chip">
+          <div className="section-title">
+            <div>
+              <h2>Each chip</h2>
+              <p>
+                {data?.inventory_source === "local_user_reported" || inventorySource === "fpl_sync"
+                  ? "Based on the chips you still have."
+                  : "Assuming you still have every chip. Tell us which you've used in Your chips, below."}
+              </p>
+            </div>
+          </div>
+          <div className="chip-grid stagger">
+            {orderedRecommendations.map((rec, index) => {
+              const barWeeks = data?.has_squad ? pickBarWeeks(rec.candidate_gameweeks, data.current_gameweek, rec.gw) : [];
+              const barItems = barWeeks.map((gw) => ({
+                key: String(gw),
+                label: `GW${gw}`,
+                value: rec.gains_by_week[String(gw)] ?? null,
+                state: (gw === data?.current_gameweek ? "now" : gw === rec.gw ? "best" : "default") as "now" | "best" | "default",
+              }));
+              return (
+                <article key={rec.chip} className={`panel chip-card status-${rec.status}`} style={{ "--i": index } as React.CSSProperties}>
+                  <div className="chip-card-head">
+                    <ChipIcon id={rec.chip} />
+                    <div>
+                      <h3>{CHIP_LABELS[rec.chip]}</h3>
+                      <p>{CHIP_DESCRIPTIONS[rec.chip]}</p>
+                    </div>
+                  </div>
+                  <div className="chip-card-call">
+                    <span className={`badge chip-status chip-status--${rec.status}`}>{STATUS_LABELS[rec.status]}</span>
+                    <b>{rec.gw ? `Gameweek ${rec.gw}` : "No week yet"}</b>
+                    {rec.gain != null && <span className="chip-gain">+{num(rec.gain, 1)} pts</span>}
+                  </div>
+                  {barItems.length > 0 && <BarStrip items={barItems} height={40} />}
+                  <p className="chip-card-reason">{humanReason(rec.reasons[0])}</p>
+                  {rec.use_or_lose && <p className="note note--warn">Only a few weeks left to use this one before it expires.</p>}
+                  <WhyThisChoice recommendation={rec} />
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      <details className="disclosure chip-manage" open={!inventory}>
+        <summary>
+          Your chips
+          <small>{inventorySource === "fpl_sync" ? "Synced from FPL" : inventory ? "Entered by you" : "Not entered yet"}</small>
+          <Icon name="chevron-down" size={18} />
+        </summary>
+        <div className="disclosure-body">
+          <div className="chip-manage-top">
+            <p className="note">
+              {inventory
+                ? "Tap a chip to mark it used. Unused first-half chips expire after gameweek 19 on their own."
+                : "Mark which chips you still have so the plan only suggests ones you can play."}
+            </p>
+            <div className="chip-manage-actions">
+              {managerEntryId != null && (
+                <button
+                  type="button"
+                  className="btn btn--line btn--sm"
+                  disabled={syncState === "loading"}
+                  onClick={() => {
+                    setInventorySource(null);
+                    syncedEntryRef.current = null;
+                    void syncFromFpl(managerEntryId);
+                  }}
+                >
+                  <Icon name="refresh" size={16} /> {syncState === "loading" ? "Syncing…" : "Sync from FPL"}
+                </button>
               )}
-              {syncState === "error" && <small>Could not sync from FPL; showing entries from this device.</small>}
               <button
                 type="button"
-                className="btn ghost sm"
+                className={inventory ? "btn btn--ghost btn--sm" : "btn btn--sm"}
                 onClick={() => {
-                  setInventorySource(null);
-                  syncedEntryRef.current = null;
-                  void syncFromFpl(managerEntryId);
+                  setInventory(inventory ? null : blankInventory());
+                  setInventorySource(inventory ? null : "local_user_reported");
                 }}
               >
-                Re-sync from FPL
+                {inventory ? "Clear my chips" : "I have all my chips"}
               </button>
             </div>
-          )}
-          <label className="chip-free-transfers-input" htmlFor="chip-free-transfers">
-            <span className="kicker">Free transfers</span>
+          </div>
+          {syncState === "error" && <p className="status-line is-error">Couldn&apos;t reach FPL, so these are the chips saved on this device.</p>}
+          {inventorySource === "fpl_sync" && syncedGameweek != null && <p className="note">Synced from FPL in gameweek {syncedGameweek}.</p>}
+          <label className="field chip-ft" htmlFor="chip-free-transfers">
+            <span>Free transfers you have{storedSquad?.freeTransfersSource === "fpl_sync" ? " (from FPL)" : ""}</span>
             <input
               id="chip-free-transfers"
+              className="input input--sm"
               type="number"
               min={0}
               max={5}
@@ -816,25 +802,24 @@ export default function ChipsPage() {
                 }
               }}
             />
-            {storedSquad?.freeTransfersSource === "fpl_sync" && <small>Synced from FPL</small>}
           </label>
           {inventory && (
-            <div className="chip-inventory-grid">
+            <div className="chip-sets">
               {(["first_half", "second_half"] as const).map((half) => (
-                <div className="chip-inventory-set" key={half}>
-                  <span className="kicker">{half === "first_half" ? "Set 1 · through GW19" : "Set 2 · GW20 onward"}</span>
-                  <div className="chip-inventory-items">
+                <div className="chip-set" key={half}>
+                  <h3>{half === "first_half" ? "First half, to gameweek 19" : "Second half, from gameweek 20"}</h3>
+                  <div className="chip-set-items">
                     {CHIP_IDS.map((chip) => {
                       const effective = effectiveChipState(inventory[half][chip], half, snapshot.gameweek ?? null);
                       const expired = effective === "expired";
                       return (
                         <button
                           type="button"
-                          className={`chip-inventory-item state-${effective}`}
+                          className={`chip-token state-${effective}`}
                           key={`${half}-${chip}`}
                           onClick={() => updateChipState(half, chip)}
                           disabled={expired}
-                          aria-label={`${CHIP_LABELS[chip]} ${half} status: ${inventoryStatusLabel(effective)}.${expired ? "" : " Change status."}`}
+                          aria-label={`${CHIP_LABELS[chip]}, ${half === "first_half" ? "first" : "second"} half: ${inventoryStatusLabel(effective)}.${expired ? "" : " Tap to change."}`}
                         >
                           <ChipIcon id={chip} />
                           <span>{CHIP_LABELS[chip]}</span>
@@ -844,10 +829,11 @@ export default function ChipsPage() {
                     })}
                   </div>
                   {half === "first_half" && inventory.first_half.free_hit === "used" && (
-                    <label className="chip-inventory-gw-input" htmlFor="chip-free-hit-gw">
-                      <span className="kicker">Free Hit played in GW</span>
+                    <label className="field chip-ft" htmlFor="chip-free-hit-gw">
+                      <span>Gameweek you played Free Hit</span>
                       <input
                         id="chip-free-hit-gw"
+                        className="input input--sm"
                         type="number"
                         min={2}
                         max={19}
@@ -874,128 +860,83 @@ export default function ChipsPage() {
               onRemove={removePlannedChip}
             />
           )}
-        </section>
+        </div>
+      </details>
 
-        </details>
-
-        {data && (
-          <ChipOpportunityMatrix
-            recommendations={data.recommendations}
-            chipPlan={data.chip_plan}
-            currentGameweek={data.current_gameweek}
-            hasSquad={data.has_squad}
-          />
-        )}
-
-        <div className="chip-heatmap-section">
-          <div className="sub-head">
-            <h3>Fixture context</h3>
-            <span className="rule" />
-            <small>
-              GW{data?.first_gw ?? snapshot.gameweek}–GW{data?.last_gw ?? 38}
-            </small>
+      {data && data.has_squad && (
+        <details className="disclosure">
+          <summary>
+            Every chip, every week
+            <small>Extra points each chip would add, week by week</small>
+            <Icon name="chevron-down" size={18} />
+          </summary>
+          <div className="disclosure-body">
+            <ChipOpportunityMatrix
+              recommendations={data.recommendations}
+              chipPlan={data.chip_plan}
+              currentGameweek={data.current_gameweek}
+              hasSquad={data.has_squad}
+            />
           </div>
+        </details>
+      )}
 
-          <div className="chip-heatmap-scroll">
-            <table className="chip-advisor-heatmap">
+      {data && (
+        <details className="disclosure">
+          <summary>
+            Doubles, blanks and difficulty
+            <small>The fixture picture behind the plan</small>
+            <Icon name="chevron-down" size={18} />
+          </summary>
+          <div className="disclosure-body table-wrap">
+            <table className="table chip-weeks">
               <thead>
                 <tr>
-                  <th className="col-gw">GW</th>
-                  <th>Fixtures</th>
-                  {data?.has_squad && <th>Squad Active</th>}
-                  <th>DGW Teams</th>
-                  <th>Blank Teams</th>
-                  <th>Avg FDR</th>
-                  <th>Signal</th>
-                  <th>Projection</th>
+                  <th>Week</th>
+                  <th className="num">Games</th>
+                  {data.has_squad && <th className="num">Your players playing</th>}
+                  <th className="num">Clubs playing twice</th>
+                  <th className="num">Clubs without a game</th>
+                  <th>Average difficulty</th>
+                  <th>What stands out</th>
                 </tr>
               </thead>
               <tbody>
-                {data?.rows.map((row: ChipRow) => {
+                {data.rows.map((row: ChipRow) => {
                   const isDgw = row.dgw_teams > 0;
                   const isBgw = row.blank_teams > 0;
-                  const avgFdr = row.avg_fdr;
-                  const hasSquad = data.has_squad;
-
-                  let signal = "Standard run";
-                  let signalClass = "trend flat";
-                  if (isDgw) {
-                    signal = `Double GW (${row.dgw_teams} teams)`;
-                    signalClass = "trend up";
-                  } else if (isBgw) {
-                    signal = `Blank GW (${row.blank_teams} teams)`;
-                    signalClass = "trend down";
-                  } else if (avgFdr <= 2.8) {
-                    signal = "Favourable Matchups";
-                    signalClass = "trend up";
-                  } else if (avgFdr >= 3.4) {
-                    signal = "High Difficulty";
-                    signalClass = "trend flat";
-                  }
-
+                  const signal = isDgw
+                    ? "Double gameweek"
+                    : isBgw
+                      ? "Blank gameweek"
+                      : row.avg_fdr <= 2.8
+                        ? "Easier week"
+                        : row.avg_fdr >= 3.4
+                          ? "Harder week"
+                          : "";
                   return (
-                    <tr
-                      key={row.gw}
-                      className={isDgw ? "is-dgw" : isBgw ? "is-bgw" : undefined}
-                    >
-                      <td className="chip-row-gw">
-                        GW{row.gw}
-                      </td>
-                      <td>
-                        {row.matches} matches
-                      </td>
-                      {hasSquad && (
-                        <td>
-                          <span className={(row.squad_blanks ?? 0) > 0 ? "chip-squad-active is-blank" : "chip-squad-active"}>
-                            {row.squad_playing ?? 15}/15
-                          </span>
-                          {(row.squad_blanks ?? 0) > 0 && (
-                            <small className="chip-squad-blank">
-                              ({row.squad_blanks} blank)
-                            </small>
-                          )}
+                    <tr key={row.gw} className={isDgw ? "is-dgw" : isBgw ? "is-bgw" : undefined}>
+                      <td><b>GW{row.gw}</b></td>
+                      <td className="num">{row.matches}</td>
+                      {data.has_squad && (
+                        <td className="num">
+                          {row.squad_playing ?? 15} of 15
                         </td>
                       )}
-                      <td className={row.dgw_teams > 0 ? "chip-count chip-count--dgw" : "chip-count"}>
-                        {row.dgw_teams > 0 ? `+${row.dgw_teams}` : "0"}
-                      </td>
-                      <td className={row.blank_teams > 0 ? "chip-count chip-count--blank" : "chip-count"}>
-                        {row.blank_teams > 0 ? row.blank_teams : "0"}
-                      </td>
+                      <td className="num">{row.dgw_teams || "–"}</td>
+                      <td className="num">{row.blank_teams || "–"}</td>
                       <td>
-                        <div className="chip-fdr-readout">
-                          <span
-                            className={`fdr`}
-                            data-fdr={Math.round(avgFdr)}
-                          />
-                          <span className="chip-fdr-value">
-                            {num(avgFdr, 1)}
-                          </span>
-                        </div>
+                        <span className={`fdr fdr--${Math.min(5, Math.max(1, Math.round(row.avg_fdr)))}`}>{num(row.avg_fdr, 1)}</span>
                       </td>
-                      <td>
-                        <span className={signalClass}>
-                          {signal}
-                        </span>
-                      </td>
-                      <td>{PROJECTION_STATE_LABELS[row.projection_state] ?? row.projection_state}</td>
+                      <td>{signal && <span className={`badge ${isDgw ? "badge--go" : isBgw ? "badge--alert" : ""}`}>{signal}</span>}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
-        </div>
-
-        {data && (
-          <details className="chip-method">
-            <summary>Projection and decision policy</summary>
-            <p>Source: {data.projection_source}. Coverage: {data.projection_gameweeks.length ? data.projection_gameweeks.map((gw) => "GW" + gw).join(", ") : "none"}. Evaluated: {data.evaluated_horizon} of {data.requested_horizon} requested weeks. Data quality: {data.data_quality}. Method: {data.methodology_version}.</p>
-            <p>Generated: {data.projection_generated_at ?? "timestamp unavailable"}. {data.decision_policy.basis}. {data.decision_policy.uncertainty_note}</p>
-            {data.coverage_warning && <p>{data.coverage_warning}</p>}
-          </details>
-        )}
-      </div>
+        </details>
+      )}
     </section>
   );
 }

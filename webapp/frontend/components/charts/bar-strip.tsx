@@ -9,9 +9,9 @@ export interface BarStripItem {
 
 function barColor(item: BarStripItem): string {
   if (item.value != null && item.value < 0) return "var(--pink)";
-  if (item.state === "now") return "var(--lime)";
-  if (item.state === "best") return "var(--white)";
-  return "rgba(255,255,255,.28)";
+  if (item.state === "now") return "var(--green)";
+  if (item.state === "best") return "var(--pl-purple)";
+  return "var(--purple-300)";
 }
 
 // Past this many bars, a persistent label under every column overlaps its
@@ -23,7 +23,7 @@ export function BarStrip({ items, height = 44 }: { readonly items: BarStripItem[
   const values = items.map((item) => item.value).filter((value): value is number => value != null);
   const maxAbs = Math.max(...values.map((value) => Math.abs(value)), 1);
   const hasNegative = values.some((value) => value < 0);
-  const zeroY = hasNegative ? height / 2 : height;
+  const zeroY = hasNegative ? height / 2 : 0;
   const barMax = hasNegative ? height / 2 : height;
   const barWidth = `calc((100% - ${(items.length - 1) * 2}px) / ${items.length})`;
   const showLabels = items.length <= MAX_LABELLED_ITEMS;

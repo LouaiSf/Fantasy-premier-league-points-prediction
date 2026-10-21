@@ -2,154 +2,221 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useApp } from "@/components/providers/app-provider";
 import { DeadlineClock } from "./deadline-clock";
+import { Icon } from "@/components/icons";
 import { refreshDataAndPredictions } from "@/lib/api";
+import { GATES, gateFor } from "@/lib/gates";
+import { isFlagged } from "@/lib/why";
 
-const TABS = [
-  { href: "/team", label: "My Team" },
-  { href: "/transfers", label: "Transfer Studio" },
-  { href: "/comparison", label: "Comparison" },
-  { href: "/captain", label: "Captain & Form" },
-  { href: "/watchlist", label: "Watchlist" },
-  { href: "/chips", label: "Chip Advisor" },
-  { href: "/fixtures", label: "Fixture Matrix" },
-  { href: "/news", label: "News Wire" },
-] as const;
+// Phone gate bar: the four gates used closest to a deadline, then a sheet
+// with the rest. Eight tabs in a scroller hid the fourth one off-screen.
+const PHONE_GATES = ["/team", "/transfers", "/captain", "/chips"];
 
-export function MainNav() {
-  const pathname = usePathname();
-  const { snapshot, reload, toast, squadPlayers } = useApp();
+function BrandMark() {
+  return (
+    <span className="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 40 40" width="40" height="40">
+        <rect width="40" height="40" fill="var(--green)" />
+        <path d="M9 10h14v5H15v4h7v5h-7v7H9z" fill="var(--pl-purple)" />
+        <path d="M25 13l7 7-7 7" fill="none" stroke="var(--pl-purple)" strokeWidth="4" strokeLinecap="square" />
+      </svg>
+    </span>
+  );
+}
+
+function useAlertCount() {
+  const { squadPlayers } = useApp();
+  return squadPlayers.length === 15 ? squadPlayers.filter(isFlagged).length : 0;
+}
+
+function RefreshButton({ compact }: { readonly compact?: boolean }) {
+  const { reload, toast } = useApp();
   const [refreshing, setRefreshing] = React.useState(false);
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-  const tabsRef = React.useRef<HTMLDivElement>(null);
-  const inkRef = React.useRef<HTMLSpanElement>(null);
-
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      toast(await refreshDataAndPredictions() || "Season data refreshed!");
+      toast((await refreshDataAndPredictions()) || "Latest prices, news and projections are in.");
       reload();
     } catch (err) {
-      toast(`Refresh failed: ${(err as Error).message}`);
+      toast(`Couldn't refresh: ${(err as Error).message}`);
     } finally {
       setRefreshing(false);
     }
   };
-  // Only alerts about the active 15. With no complete squad there is nothing
-  // to attribute an alert to, so no badge is shown.
-  const squadAlertCount = squadPlayers.length === 15
-    ? squadPlayers.filter(
-      (player) =>
-        Boolean(player.news) ||
-        player.status !== "a" ||
-        (player.chance_of_playing_next_round ?? 100) < 100,
-    ).length
-    : 0;
+  return (
+    <button
+      type="button"
+      className={`rail-refresh${refreshing ? " is-busy" : ""}`}
+      onClick={handleRefresh}
+      disabled={refreshing}
+      title="Pull the latest prices and news, then update the projections. Takes a few minutes."
+    >
+      <Icon name="refresh" size={16} />
+      {!compact && <span>{refreshing ? "Updating…" : "Get latest data"}</span>}
+      {compact && <span className="sr-only">Get latest data</span>}
+    </button>
+  );
+}
 
-  const positionInk = React.useCallback(() => {
-    const container = tabsRef.current;
-    const ink = inkRef.current;
-    if (!container || !ink) return;
-    const active = container.querySelector<HTMLElement>('[aria-selected="true"]');
-    if (!active) return;
-    ink.style.width = `${active.offsetWidth}px`;
-    ink.style.left = `${active.offsetLeft}px`;
-  }, []);
+export function MainNav() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const alerts = useAlertCount();
+  const [moreOpen, setMoreOpen] = React.useState(false);
+  const listRef = React.useRef<HTMLOListElement>(null);
+  const plateRef = React.useRef<HTMLSpanElement>(null);
+  const active = gateFor(pathname);
 
-  const centerActiveTab = React.useCallback(() => {
-    const scroller = scrollRef.current;
-    const active = tabsRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
-    if (!scroller || !active || scroller.scrollWidth <= scroller.clientWidth) return;
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    scroller.scrollTo({
-      left: active.offsetLeft - (scroller.clientWidth - active.offsetWidth) / 2,
-      behavior: reducedMotion ? "auto" : "smooth",
-    });
+  // The white active-gate plate travels between gates instead of jumping.
+  const placePlate = React.useCallback(() => {
+    const list = listRef.current;
+    const plate = plateRef.current;
+    if (!list || !plate) return;
+    const current = list.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!current) {
+      plate.style.opacity = "0";
+      return;
+    }
+    plate.style.opacity = "1";
+    plate.style.transform = `translateY(${current.offsetTop}px)`;
+    plate.style.height = `${current.offsetHeight}px`;
   }, []);
 
   React.useLayoutEffect(() => {
-    positionInk();
-    const frame = requestAnimationFrame(() => {
-      positionInk();
-      centerActiveTab();
-      inkRef.current?.classList.add("is-ready");
-      requestAnimationFrame(() => {
-        positionInk();
-        centerActiveTab();
-      });
-    });
+    placePlate();
+    const frame = requestAnimationFrame(() => plateRef.current?.classList.add("is-ready"));
     return () => cancelAnimationFrame(frame);
-  }, [centerActiveTab, positionInk, pathname]);
+  }, [pathname, placePlate]);
 
   React.useEffect(() => {
-    const container = tabsRef.current;
-    if (!container || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => {
-      positionInk();
-      centerActiveTab();
-    });
-    observer.observe(container);
-    container.querySelectorAll("a").forEach((tab) => observer.observe(tab));
-    return () => observer.disconnect();
-  }, [centerActiveTab, positionInk]);
+    window.addEventListener("resize", placePlate);
+    return () => window.removeEventListener("resize", placePlate);
+  }, [placePlate]);
+
+  React.useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      const gate = GATES.find((item) => String(item.n) === event.key);
+      if (gate) {
+        event.preventDefault();
+        router.push(gate.href);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [router]);
+
+  const alertBadge = (href: string) =>
+    href === "/news" && alerts > 0 ? (
+      <span className="gate-alert" title={`${alerts} of your 15 have an availability flag`}>
+        <span aria-hidden="true">{alerts}</span>
+        <span className="sr-only">{alerts} squad alerts</span>
+      </span>
+    ) : null;
 
   return (
-    <header className="main-nav">
-      <div className="shell main-nav-row">
-        <Link className="brand" href="/team" aria-label="FPL Assistant home">
-          <span className="brand-mark" aria-hidden="true">FPL</span>
-          <span className="brand-copy">
-            FPL Assistant
-            <small>Prediction desk</small>
+    <>
+      <aside className="rail" aria-label="Main">
+        <Link className="brand" href="/team" aria-label="FPL Assistant, my team">
+          <BrandMark />
+          <span className="brand-name">
+            FPL<br />Assistant
           </span>
         </Link>
-        <div className="nav-scroll" ref={scrollRef}>
-          <nav className="nav-tabs" role="tablist" aria-label="FPL Assistant sections" ref={tabsRef}>
-            {TABS.map((tab) => {
-              const active = pathname === tab.href;
+        <nav className="gates" aria-label="Sections">
+          <span className="gate-plate" ref={plateRef} aria-hidden="true" />
+          <ol ref={listRef}>
+            {GATES.map((gate) => {
+              const current = active?.href === gate.href;
               return (
-                <Link
-                  key={tab.href}
-                  href={tab.href}
-                  role="tab"
-                  aria-selected={active}
-                  className="nav-tab"
-                >
-                  {tab.label}
-                  {tab.href === "/news" && squadAlertCount > 0 && (
-                    <span
-                      className="tab-count"
-                      title={`${squadAlertCount} of your 15 players ${squadAlertCount === 1 ? "has" : "have"} an availability alert`}
-                    >
-                      <span aria-hidden="true">{squadAlertCount}</span>
-                      <span className="sr-only">{squadAlertCount} squad alerts</span>
-                    </span>
-                  )}
-                </Link>
+                <li key={gate.href}>
+                  <Link
+                    href={gate.href}
+                    className="gate"
+                    aria-current={current ? "page" : undefined}
+                    aria-keyshortcuts={String(gate.n)}
+                  >
+                    <span className="gate-num" aria-hidden="true">{gate.n}</span>
+                    <span className="gate-label">{gate.label}</span>
+                    {alertBadge(gate.href)}
+                    <Icon className="gate-arrow" name="arrow-right" size={18} />
+                  </Link>
+                </li>
               );
             })}
-            <span className="nav-ink" ref={inkRef} aria-hidden="true" />
-          </nav>
-        </div>
-        <div className="nav-actions">
-          <button
-            type="button"
-            className="btn ghost sm"
-            onClick={handleRefresh}
-            disabled={refreshing}
-            title="Fetch the latest season data and regenerate predictions (takes a few minutes)"
-            aria-label="Refresh season data"
-          >
-            <span className={`refresh-icon${refreshing ? " is-spinning" : ""}`} aria-hidden="true">
-              ↻
-            </span>
-            <span className="refresh-label">{refreshing ? "Updating…" : "Refresh"}</span>
-          </button>
+          </ol>
+        </nav>
+        <div className="rail-foot">
           <DeadlineClock />
+          <RefreshButton />
+          <p className="rail-hint">Press 1–8 to jump between sections</p>
         </div>
+      </aside>
+
+      <header className="topbar">
+        <Link className="brand" href="/team" aria-label="FPL Assistant, my team">
+          <BrandMark />
+          <span className="brand-name">FPL Assistant</span>
+        </Link>
+        <DeadlineClock variant="compact" />
+        <RefreshButton compact />
+      </header>
+
+      <nav className="gatebar" aria-label="Sections">
+        {GATES.filter((gate) => PHONE_GATES.includes(gate.href)).map((gate) => (
+          <Link
+            key={gate.href}
+            href={gate.href}
+            className="gatebar-item"
+            aria-current={active?.href === gate.href ? "page" : undefined}
+            onClick={() => setMoreOpen(false)}
+          >
+            <span className="gate-num" aria-hidden="true">{gate.n}</span>
+            <span>{gate.label}</span>
+          </Link>
+        ))}
+        <button
+          type="button"
+          className="gatebar-item"
+          aria-expanded={moreOpen}
+          aria-controls="more-gates"
+          aria-current={active && !PHONE_GATES.includes(active.href) ? "page" : undefined}
+          onClick={() => setMoreOpen((open) => !open)}
+        >
+          <span className="gate-num" aria-hidden="true">
+            <Icon name={moreOpen ? "close" : "more"} size={18} />
+          </span>
+          <span>{active && !PHONE_GATES.includes(active.href) ? active.label : "More"}</span>
+          {alerts > 0 && <span className="gate-alert gate-alert--dot" aria-hidden="true" />}
+        </button>
+      </nav>
+      <div id="more-gates" className={`more-sheet${moreOpen ? " is-open" : ""}`} hidden={!moreOpen}>
+        <div className="more-scrim" onClick={() => setMoreOpen(false)} aria-hidden="true" />
+        <ul>
+          {GATES.filter((gate) => !PHONE_GATES.includes(gate.href)).map((gate) => (
+            <li key={gate.href}>
+              <Link
+                href={gate.href}
+                className="gate"
+                aria-current={active?.href === gate.href ? "page" : undefined}
+                onClick={() => setMoreOpen(false)}
+              >
+                <span className="gate-num" aria-hidden="true">{gate.n}</span>
+                <span className="gate-label">
+                  {gate.label}
+                  <small>{gate.lede}</small>
+                </span>
+                {alertBadge(gate.href)}
+              </Link>
+            </li>
+          ))}
+        </ul>
       </div>
-    </header>
+    </>
   );
 }

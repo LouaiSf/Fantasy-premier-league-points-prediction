@@ -41,34 +41,33 @@ export function ManagerLineupPreview({
     <section className="manager-preview" aria-label="Public manager lineup preview">
       <div className="manager-preview-head">
         <div>
-          <span className="eyebrow muted">Public lineup · GW{lineup.lineup_gameweek}</span>
           <h2>{lineup.manager.team_name || "Unnamed team"}</h2>
-          <p>{lineup.manager.manager_name || "Unnamed manager"} · Entry {lineup.manager.entry_id}</p>
+          <p>{lineup.manager.manager_name || "Unnamed manager"} · their gameweek {lineup.lineup_gameweek} lineup</p>
         </div>
-        <button className="btn ghost sm" type="button" onClick={onClose}>Close preview</button>
+        <button className="btn btn--ghost btn--sm" type="button" onClick={onClose}>Not this one</button>
       </div>
       <div className="manager-preview-stats">
-        <span><b>Overall rank</b>{lineup.overall_rank ?? "--"}</span>
+        <span><b>Overall rank</b>{lineup.overall_rank != null ? lineup.overall_rank.toLocaleString() : "–"}</span>
         <span><b>Total points</b>{lineup.total_points ?? "--"}</span>
         <span><b>Bank</b>{lineup.bank == null ? "--" : money(lineup.bank)}</span>
         <span><b>Active chip</b>{lineup.active_chip ?? "None"}</span>
       </div>
       <div className="manager-preview-columns">
         <div>
-          <span className="kicker">Starting XI</span>
+          <h3>Starting XI</h3>
           <ol className="manager-pick-list">
             {xi.map((pick) => (
               <li key={pick.element}>
                 <span>{pick.position}</span>
                 <strong>{playerLabel(byElement.get(pick.element))}</strong>
-                {pick.is_captain && <em>Captain</em>}
-                {pick.is_vice_captain && <em>Vice</em>}
+                {pick.is_captain && <span className="armband">C</span>}
+                {pick.is_vice_captain && <span className="armband armband--vice">V</span>}
               </li>
             ))}
           </ol>
         </div>
         <div>
-          <span className="kicker">Bench order</span>
+          <h3>Bench</h3>
           <ol className="manager-pick-list manager-pick-list--bench">
             {bench.map((pick) => (
               <li key={pick.element}>
@@ -85,11 +84,11 @@ export function ManagerLineupPreview({
         </p>
         {unresolved && (
           <p className="manager-preview-warning" role="alert">
-            {lineup.missing_elements.length} player{lineup.missing_elements.length === 1 ? "" : "s"} are missing from this season&apos;s local snapshot: {lineup.missing_elements.join(", ")}.
+            {lineup.missing_elements.length === 1 ? "One of their players isn’t" : `${lineup.missing_elements.length} of their players aren’t`} in our player list yet, so this team can&apos;t come in until the next data update.
           </p>
         )}
-        <button className="btn" type="button" onClick={onImport} disabled={unresolved || ordered.length !== 15 || importing}>
-          {importing ? "Saving team…" : "Set as my team"}
+        <button className="btn btn--go" type="button" onClick={onImport} disabled={unresolved || ordered.length !== 15 || importing}>
+          {importing ? "Bringing it in…" : "This is my team"}
         </button>
       </div>
     </section>

@@ -3,8 +3,9 @@
 import * as React from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { useApp } from "@/components/providers/app-provider";
-import { PlayerPhoto } from "@/components/player-photo";
-import { money, num } from "@/lib/format";
+import { Face, Pos, Proj } from "@/components/signage";
+import { Icon } from "@/components/icons";
+import { money } from "@/lib/format";
 import { checkAffordability, fromTenths } from "@/lib/finance";
 import { validateSquad } from "@/lib/squad";
 import type { PlayerRecord } from "@/lib/types";
@@ -72,23 +73,25 @@ export function SquadEditor() {
   function save() {
     setSquadElements([...selected]);
     setOpen(false);
-    toast("Squad saved on this device.");
+    toast("Squad saved.");
   }
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={handleOpenChange}>
-      <DialogPrimitive.Trigger className="btn secondary">Edit squad</DialogPrimitive.Trigger>
+      <DialogPrimitive.Trigger className="btn">Edit squad</DialogPrimitive.Trigger>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Backdrop className="scrim is-open squad-scrim" />
+        <DialogPrimitive.Backdrop className="scrim" />
         <DialogPrimitive.Popup
           className="picker picker-dialog"
           aria-label="Squad editor"
         >
           <div className="picker-head">
-            <h3>Choose 15 players</h3>
-            <label className="search">
+            <h3>Pick your 15</h3>
+            <label className="searchbox">
               <span className="sr-only">Search players</span>
+              <Icon name="search" size={18} />
               <input
+                className="input"
                 type="search"
                 placeholder="Search players or clubs"
                 autoComplete="off"
@@ -96,7 +99,7 @@ export function SquadEditor() {
                 onChange={(event) => setQuery(event.target.value)}
               />
             </label>
-            <DialogPrimitive.Close className="btn sm secondary">Close</DialogPrimitive.Close>
+            <DialogPrimitive.Close className="btn btn--ghost btn--sm" aria-label="Close"><Icon name="close" size={18} /></DialogPrimitive.Close>
           </div>
           <div className="teamsheet">
             {POSITIONS.map((position) => {
@@ -106,11 +109,10 @@ export function SquadEditor() {
               return (
                 <div key={position}>
                   <div className="ts-head">
-                    <span className="mark">{position}</span>
+                    <Pos pos={position} />
                     <b>
-                      {position} · {have}/{NEEDED[position]}
+                      {have} of {NEEDED[position]}
                     </b>
-                    <span className="rule" />
                   </div>
                   <div className="ts-rows">
                     {rows.map((player) => {
@@ -123,23 +125,15 @@ export function SquadEditor() {
                           data-player-id={player.element}
                           onClick={() => toggle(player)}
                         >
-                          {isChosen && <span className="ts-seat">Selected</span>}
-                          <span className="shot">
-                            <PlayerPhoto
-                              src={player.photo ?? undefined}
-                              alt={player.name}
-                              name={player.name}
-                              variant="avatar"
-                              loading="lazy"
-                            />
-                          </span>
+                          {isChosen && <span className="ts-seat"><Icon name="check" size={14} /><span className="sr-only">Selected</span></span>}
+                          <Face player={player} size="sm" />
                           <span className="ts-name">
                             <b>{player.web_name || player.name}</b>
                             <span>{player.team_short}</span>
                           </span>
                           <span className="ts-num">
                             <span className="price">{money(player.value_m)}</span>
-                            <span className="proj">{num(player.predicted_points ?? player.form)}</span>
+                            <Proj value={player.predicted_points ?? player.form} />
                           </span>
                         </button>
                       );
@@ -151,10 +145,10 @@ export function SquadEditor() {
             {!filtered.length && <p className="picker-empty">No players match that search.</p>}
           </div>
           <div className="dialog-actions">
-            <span style={{ fontSize: 12, color: problem ? "var(--pink)" : "var(--lime)" }}>
-              {problem || "Legal 15-player squad ready to save."}
+            <span className={problem ? "status-line is-error" : "status-line"}>
+              {problem || "That's a legal 15. Ready to save."}
             </span>
-            <button className="btn" type="button" disabled={Boolean(problem)} onClick={save}>
+            <button className="btn btn--go" type="button" disabled={Boolean(problem)} onClick={save}>
               Save squad
             </button>
           </div>

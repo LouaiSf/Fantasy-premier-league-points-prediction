@@ -80,6 +80,39 @@ screenshots at 1440 and 375.
 - `e41b686f` -- chips: squad-specific, horizon-independent chip plan (contract v4, A2-A6)
 - `28762d82` -- ui: fix chip advisor bar strips showing every gameweek to GW38
 
+## UI overhaul: Stadium Wayfinding (2026-10-21)
+
+Owner asked for a drastic, award-level redesign that stays Premier League (PL colours, a
+Premier-Sans-like face) and reads as human: no model scores, R², model names, element IDs or
+methodology text on the surface. Direction chosen through the impeccable direction round and
+recorded in `.impeccable/surfaces/`; the system is documented in `DESIGN.md` v2.0.
+
+### Implemented
+- New shell: purple gate rail with numbered gates 1-8 (also keyboard shortcuts), travelling active
+  plate, live deadline sign and refresh at its foot; phone top bar + bottom gate bar + More sheet.
+- Every page rebuilt on the new system: gate sign, one verdict plate with the player cutout, and
+  shared signage atoms (position blocks, projection ramp, FDR blocks, limit tracks, faces).
+- My team leads with the call (hold / bring in X for Y, captain), purple pitch, bench strip,
+  deadline checklist, limits, flagged players, the full plan, and the FPL import panel on demand.
+- Player dossier drawer rebuilt; Compare, Captain, Chips, Fixtures, Watchlist, News, Transfers
+  reworked (move channel above the sell/buy desks; no empty middle column).
+- Removed: `broadcast.css`, `ModelInfo` (R² line), the crest ticker, eyebrow labels, `#id`
+  suffixes, chip methodology/source strings. Chip API reasons are rephrased on the page.
+- Fonts reduced to Archivo Variable; Inter, Newsreader and Barlow imports dropped.
+- Dev overlays (react-scan, react-grab) now load only with `NEXT_PUBLIC_DEV_OVERLAYS=1`.
+
+### Verification
+- `tsc --noEmit` clean; `npm run build` passes (all 10 routes); impeccable detector: 0 findings.
+- Real screenshots at 1440 and 390 of every page, plus drawer, squad editor, phone More sheet;
+  keyboard gates verified (3 -> Captain, 8 -> News, ignored while typing).
+- `eslint`: the files this change wrote are clean; 13 pre-existing react-hooks findings remain in
+  untouched logic (chips, transfer studio effects, deadline board, manager search, use-count-up).
+
+### Not done
+- `@fontsource-variable/inter`, `newsreader` and `@fontsource/barlow-semi-condensed` are still
+  in package.json (no longer imported).
+- No independent finish review was run on the redesign yet.
+
 ### Exact next action
 
 Slice B — Effective ownership (EO) and rank exposure. See `PLATFORM_V3_PLAN.md` for the full spec.

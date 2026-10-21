@@ -33,8 +33,8 @@ export function Sparkline({
       role="img"
       aria-label={`Trend over ${values.length} points: ${values.join(", ")}`}
     >
-      <polyline points={path} fill="none" stroke="var(--lime)" strokeWidth={1.5} />
-      {highlightLast && last && <circle cx={last.x} cy={last.y} r={2.5} fill="var(--lime)" />}
+      <polyline points={path} fill="none" stroke="var(--green-ink)" strokeWidth={1.5} />
+      {highlightLast && last && <circle cx={last.x} cy={last.y} r={2.5} fill="var(--green-ink)" />}
     </svg>
   );
 }

@@ -41,11 +41,8 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       return (
         <section className="page page--centered">
           <div className="error-card">
-            <p className="eyebrow alert">
-              Runtime Notice
-            </p>
             <h2>
-              Something went wrong
+              Something went wrong on this page
             </h2>
             <p>
               {this.state.error?.message || "An unexpected error occurred while rendering this surface."}
@@ -55,7 +52,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
               className="btn"
               onClick={this.handleReload}
             >
-              Reload Surface
+              Reload the page
             </button>
           </div>
         </section>
