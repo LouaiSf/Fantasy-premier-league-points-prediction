@@ -3,56 +3,15 @@
 import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
 import { PlayerPhoto } from "@/components/player-photo";
+import { ClubCrest } from "@/components/club-crest";
 import { money, num } from "@/lib/format";
 import { api } from "@/lib/api";
-import { clubStyle } from "@/lib/club-colors";
+import { Loading } from "@/components/loading";
 import { Skeleton } from "@/components/skeleton";
 import { EmptyState } from "@/components/empty-state";
-import { Face, GateSign, PlateFact, Pos, Proj, Segmented, VerdictPlate } from "@/components/signage";
-import { Icon } from "@/components/icons";
-import type { PlayerRecord, WatchlistPlayer, WatchlistResult } from "@/lib/types";
+import type { WatchlistPlayer, WatchlistResult } from "@/lib/types";
 
-type SectionKey = "value" | "differentials" | "overpriced" | "no_history";
-type SectionTab = "all" | SectionKey;
-
-interface SectionDef {
-  readonly key: SectionKey;
-  readonly title: string;
-  readonly blurb: (maxOwnership: number) => string;
-  readonly stat: (player: WatchlistPlayer) => string;
-  readonly empty: string;
-}
-
-const SECTIONS: readonly SectionDef[] = [
-  {
-    key: "value",
-    title: "Good value",
-    blurb: () => "The most expected points for every million you spend.",
-    stat: (player) => `${num(player.points_per_million, 2)} pts per £m`,
-    empty: "No value picks match that search.",
-  },
-  {
-    key: "differentials",
-    title: "Under the radar",
-    blurb: (max) => `Owned by ${max}% of managers or fewer. A good week from one of these gains you ground on almost everyone.`,
-    stat: (player) => `${num(player.selected_by, 1)}% own him`,
-    empty: "No low-owned picks match that search.",
-  },
-  {
-    key: "overpriced",
-    title: "Not pulling their weight",
-    blurb: () => "Players at £8m or more whose expected points don't justify the price right now.",
-    stat: (player) => `${num(player.points_per_million, 2)} pts per £m`,
-    empty: "No expensive underperformers match that search.",
-  },
-  {
-    key: "no_history",
-    title: "New to the league",
-    blurb: () => "No Premier League record to go on yet, so their numbers are a rough guide.",
-    stat: () => "Rough guide",
-    empty: "No newcomers match that search.",
-  },
-];
+type SectionTab = "all" | "value" | "differentials" | "overpriced" | "no_history";
 
 export default function WatchlistPage() {
   const { snapshot, loading, openProfile } = useApp();
@@ -72,10 +31,10 @@ export default function WatchlistPage() {
       if (res && res.ok) {
         setData(res);
       } else {
-        setFetchError("We couldn't build the watchlist this time.");
+        setFetchError("Could not retrieve watchlist from the optimization engine.");
       }
     } catch (err) {
-      setFetchError((err as Error).message || "We couldn't build the watchlist this time.");
+      setFetchError((err as Error).message || "Failed to load watchlist data.");
     } finally {
       setFetching(false);
     }
@@ -92,11 +51,12 @@ export default function WatchlistPage() {
   if (loading || !snapshot) {
     return (
       <section className="page">
-        <div className="skel skel-sign" />
-        <Skeleton variant="hero" />
-        <div className="skel-columns" style={{ "--cols": 2 } as React.CSSProperties}>
-          <Skeleton variant="row" count={6} />
-          <Skeleton variant="row" count={6} />
+        <div className="shell">
+          <div className="skel-columns" style={{ "--cols": 3 } as React.CSSProperties}>
+            <Skeleton variant="row" count={8} />
+            <Skeleton variant="row" count={8} />
+            <Skeleton variant="row" count={8} />
+          </div>
         </div>
       </section>
     );
@@ -105,160 +65,280 @@ export default function WatchlistPage() {
   if (!snapshot.prediction_available) {
     return (
       <section className="page">
-        <GateSign />
-        <EmptyState
-          title="Projections aren't ready yet"
-          message="The watchlist is built from this week's projections. Use Get latest data in the menu, then come back."
-        />
+        <div className="shell shell--padded">
+          <EmptyState
+            title="Predictions Unavailable"
+            message={`The Watchlist requires model projections to calculate value ratios, differentials, and overpriced assets.${snapshot.prediction_error ? ` (${snapshot.prediction_error})` : ""} Run the prediction pipeline or click Refresh.`}
+          />
+        </div>
       </section>
     );
   }
 
+  const teamsByName = new Map(snapshot.teams.map((t) => [t.name, t]));
   const playersByElement = new Map(snapshot.players.map((p) => [p.element, p]));
-  const fullPlayer = (player: WatchlistPlayer): PlayerRecord | undefined =>
-    (player.element ? playersByElement.get(player.element) : undefined) ?? snapshot.players.find((p) => p.name === player.name);
 
-  const query = search.trim().toLowerCase();
-  const listFor = (key: SectionKey) =>
-    (data?.[key] ?? []).filter(
-      (p) => !query || p.name.toLowerCase().includes(query) || p.team.toLowerCase().includes(query) || p.position.toLowerCase() === query,
+  const filterList = (list: WatchlistPlayer[] = []) => {
+    if (!search.trim()) return list;
+    const q = search.trim().toLowerCase();
+    return list.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.team.toLowerCase().includes(q) ||
+        p.position.toLowerCase().includes(q),
     );
+  };
 
-  const bestValue = data?.value?.[0] ?? null;
-  const bestValueFull = bestValue ? fullPlayer(bestValue) : undefined;
-  const shown = activeSection === "all" ? SECTIONS : SECTIONS.filter((section) => section.key === activeSection);
+  const renderPlayerCard = (
+    player: WatchlistPlayer,
+    index: number,
+    tagClass: "value" | "diff" | "trap" | "new",
+    tagLabel: string,
+  ) => {
+    const fullPlayer =
+      (player.element ? playersByElement.get(player.element) : undefined) ??
+      snapshot.players.find((p) => p.name === player.name);
+    const team = teamsByName.get(player.team);
+    const photo = fullPlayer?.photo;
+
+    return (
+      <button
+        key={`${player.element ?? player.name}-${tagLabel}`}
+        type="button"
+        className="watch-card lift"
+        style={{ "--i": index } as React.CSSProperties}
+        onClick={() => fullPlayer && openProfile(fullPlayer)}
+      >
+        <div className="watch-photo-wrap">
+          <PlayerPhoto
+            src={photo ?? undefined}
+            name={player.name}
+            alt={player.name}
+            width={48}
+            height={48}
+          />
+          {team && (
+            <div className="watch-crest-badge">
+              <ClubCrest code={team.code} team={team.name} shortName={team.short_name} />
+            </div>
+          )}
+        </div>
+
+        <div className="watch-info">
+          <div className="watch-name-row">
+            <span className="watch-name">{player.name}</span>
+            <span className="watch-pos-badge">{player.position}</span>
+            <span className={`watch-tag ${tagClass}`}>{tagLabel}</span>
+          </div>
+          <div className="watch-meta">
+            <span className="watch-club">{player.team}</span>
+            {player.opponent_team && (
+              <span className="watch-fixture">· {player.opponent_team} ({player.was_home ? "Home" : "Away"})</span>
+            )}
+            {player.selected_by != null && (
+              <span className="watch-ownership">
+                {num(player.selected_by, 1)}% owned
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="watch-pts-wrap">
+          <div className="watch-pts-row">
+            <span className="watch-pts">{num(player.predicted_points, 1)}</span>
+            <span className="watch-pts-unit">pts</span>
+          </div>
+          <div className="watch-price-row">
+            <span className="watch-price">{money(player.value_m)}</span>
+          </div>
+        </div>
+      </button>
+    );
+  };
+
+  const valList = filterList(data?.value);
+  const diffList = filterList(data?.differentials);
+  const overList = filterList(data?.overpriced);
+  const noHistList = filterList(data?.no_history);
+
+  const tabs: { key: SectionTab; label: string; count: number }[] = [
+    { key: "all", label: "All Insights", count: (valList?.length ?? 0) + (diffList?.length ?? 0) + (overList?.length ?? 0) + (noHistList?.length ?? 0) },
+    { key: "value", label: "Top Value", count: valList?.length ?? 0 },
+    { key: "differentials", label: `Differentials (≤${maxOwnership}%)`, count: diffList?.length ?? 0 },
+    { key: "overpriced", label: "Price Traps", count: overList?.length ?? 0 },
+    { key: "no_history", label: "Limited model history", count: noHistList?.length ?? 0 },
+  ];
 
   return (
-    <section className="page watch-page" aria-label="Watchlist">
-      <GateSign lede={`Players worth a look for gameweek ${snapshot.gameweek ?? ""}: bargains, hidden gems, and big names to think twice about.`} />
+    <section className="page watchlist-page" aria-label="Watchlist">
+      <div className="shell">
+        <header className="section-head section-head--mt">
+          <div>
+            <span className="badge cyan">
+              Tactical Market Wire
+            </span>
+            <h1 className="display-hero">Watchlist &amp; Differentials</h1>
+            <p>
+              Automated high-value targets, mini-league differentials, price traps, and newly promoted talent for GW{snapshot.gameweek}.
+            </p>
+          </div>
 
-      {bestValue && bestValueFull && (
-        <VerdictPlate
-          tone="stats"
-          label="Best value this week"
-          player={bestValueFull}
-          title={<>Best bang for your buck: {bestValueFull.web_name}.</>}
-          body={`${num(bestValue.predicted_points)} expected points for ${money(bestValue.value_m)}${
-            bestValue.selected_by != null ? `, and only ${num(bestValue.selected_by, 1)}% of managers have him` : ""
-          }.`}
-          facts={
-            <>
-              <PlateFact label="This week">{num(bestValue.predicted_points)} pts</PlateFact>
-              <PlateFact label="Price">{money(bestValue.value_m)}</PlateFact>
-              <PlateFact label="Per £1m">{num(bestValue.points_per_million, 2)} pts</PlateFact>
-            </>
-          }
-          actions={
-            <button className="btn btn--go" type="button" onClick={() => openProfile(bestValueFull)}>
-              See his profile <Icon name="arrow-right" size={18} />
+          <div className="section-head-actions">
+            <label
+              htmlFor="diff-threshold"
+              className="kicker kicker-row"
+            >
+              Diff Max:
+              <select
+                id="diff-threshold"
+                value={maxOwnership}
+                onChange={(e) => setMaxOwnership(Number(e.target.value))}
+                className="ctrl-select"
+              >
+                <option value={5}>≤ 5% owned</option>
+                <option value={10}>≤ 10% owned</option>
+                <option value={15}>≤ 15% owned</option>
+              </select>
+            </label>
+
+            <label
+              htmlFor="top-count"
+              className="kicker kicker-row"
+            >
+              Count:
+              <select
+                id="top-count"
+                value={topCount}
+                onChange={(e) => setTopCount(Number(e.target.value))}
+                className="ctrl-select"
+              >
+                <option value={8}>8 per list</option>
+                <option value={12}>12 per list</option>
+                <option value={16}>16 per list</option>
+              </select>
+            </label>
+
+            <div className="search">
+              <input
+                type="search"
+                placeholder="Search player, club, position…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+          </div>
+        </header>
+
+        {/* Tab switcher */}
+        <div className="filter-row">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              className={`btn sm ${activeSection === tab.key ? "" : "ghost"}`}
+              onClick={() => setActiveSection(tab.key)}
+            >
+              {tab.label}
+              <span className="tab-count">{tab.count}</span>
             </button>
-          }
-        />
-      )}
-
-      <div className="toolbar">
-        <Segmented
-          label="Show"
-          value={activeSection}
-          onChange={setActiveSection}
-          options={[{ value: "all" as SectionTab, label: "Everything" }, ...SECTIONS.map((section) => ({ value: section.key as SectionTab, label: section.title }))]}
-        />
-        <span className="toolbar-spacer" />
-        <label className="searchbox">
-          <span className="sr-only">Search</span>
-          <Icon name="search" size={18} />
-          <input className="input input--sm" type="search" placeholder="Player, club or position" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </label>
-        <label className="toolbar-field">
-          <span>Under the radar means</span>
-          <select className="select select--sm" value={maxOwnership} onChange={(e) => setMaxOwnership(Number(e.target.value))}>
-            <option value={5}>5% owned or less</option>
-            <option value={10}>10% owned or less</option>
-            <option value={15}>15% owned or less</option>
-          </select>
-        </label>
-        <label className="toolbar-field">
-          <span>Show</span>
-          <select className="select select--sm" value={topCount} onChange={(e) => setTopCount(Number(e.target.value))}>
-            <option value={8}>8 each</option>
-            <option value={12}>12 each</option>
-            <option value={16}>16 each</option>
-          </select>
-        </label>
-      </div>
-
-      {fetching && <p className="loading-state"><span className="loading-spinner" />Updating the lists…</p>}
-      {fetchError && (
-        <div className="callout callout--alert" role="alert">
-          <span className="callout-mark"><Icon name="alert" size={16} /></span>
-          <p>{fetchError}</p>
-          <button className="btn btn--sm" type="button" onClick={() => void loadWatchlist(maxOwnership, topCount)}>Try again</button>
+          ))}
         </div>
-      )}
 
-      <div className={`watch-grid${activeSection === "all" ? "" : " is-single"}`}>
-        {shown.map((section) => {
-          const list = listFor(section.key);
-          return (
-            <section key={section.key} className={`panel watch-list watch-list--${section.key}`} aria-label={section.title}>
-              <div className="panel-head">
-                <div>
-                  <h2>{section.title}</h2>
-                  <p>{section.blurb(maxOwnership)}</p>
-                </div>
+        {fetching && <Loading label="Updating market metrics…" />}
+
+        {fetchError && (
+          <div className="watch-error">{fetchError}</div>
+        )}
+
+        <div className={`watch-sections${activeSection === "all" ? "" : " is-single"}`}>
+          {/* 1. Best Value */}
+          {(activeSection === "all" || activeSection === "value") && (
+            <div className="watch-section" data-section="value">
+              <div className="sub-head">
+                <h3>Best Value (Pts / £m)</h3>
+                <span className="rule" />
+                <small>Top PPM Efficiency</small>
               </div>
-              {list.length === 0 ? (
-                <p className="panel-body note">{section.empty}</p>
-              ) : activeSection === "all" ? (
-                <ol className="stagger">
-                  {list.map((player, index) => {
-                    const full = fullPlayer(player);
-                    return (
-                      <li key={`${player.element ?? player.name}`} style={{ "--i": index } as React.CSSProperties}>
-                        <button type="button" className="prow watch-row" onClick={() => full && openProfile(full)} disabled={!full}>
-                          {full ? <Face player={full} /> : <span className="face face--md" />}
-                          <span className="prow-name">
-                            <b>{full?.web_name || player.name}</b>
-                            <span>
-                              {player.team} · {money(player.value_m)}
-                              {player.opponent_team ? ` · ${player.was_home ? "home to" : "away at"} ${player.opponent_team}` : ""}
-                            </span>
-                          </span>
-                          <span className="watch-stat">{section.stat(player)}</span>
-                          <Proj value={player.predicted_points} />
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ol>
-              ) : (
-                <ol className="watch-cards stagger">
-                  {list.map((player, index) => {
-                    const full = fullPlayer(player);
-                    return (
-                      <li key={`${player.element ?? player.name}`} style={{ "--i": index } as React.CSSProperties}>
-                        <button type="button" className="watch-card" onClick={() => full && openProfile(full)} disabled={!full}>
-                          <span className="watch-card-art" style={clubStyle(player.team)}>
-                            <PlayerPhoto src={full?.photo ?? undefined} alt="" name={player.name} variant="card" loading="lazy" />
-                            <Pos pos={player.position} />
-                          </span>
-                          <span className="watch-card-copy">
-                            <b>{full?.web_name || player.name}</b>
-                            <span className="note">{player.team} · {money(player.value_m)}</span>
-                            <span className="watch-card-foot">
-                              <span className="watch-stat">{section.stat(player)}</span>
-                              <Proj value={player.predicted_points} suffix="pts" />
-                            </span>
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ol>
-              )}
-            </section>
-          );
-        })}
+              <p className="watch-section-desc">
+                Budget stretchers who yield the highest projected output per million spent.
+              </p>
+              <div className="watch-grid stagger">
+                {valList.map((player, index) =>
+                  renderPlayerCard(player, index, "value", `${num(player.points_per_million, 2)} PPM`),
+                )}
+                {valList.length === 0 && (
+                  <p className="empty-copy">No matching players found.</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 2. Differentials */}
+          {(activeSection === "all" || activeSection === "differentials") && (
+            <div className="watch-section" data-section="differentials">
+              <div className="sub-head">
+                <h3>Differentials (≤{maxOwnership}%)</h3>
+                <span className="rule" />
+                <small>Mini-League Edge</small>
+              </div>
+              <p className="watch-section-desc">
+                Low-ownership assets capable of propelling your rank without templates.
+              </p>
+              <div className="watch-grid stagger">
+                {diffList.map((player, index) =>
+                  renderPlayerCard(player, index, "diff", `${num(player.selected_by, 1)}% own`),
+                )}
+                {diffList.length === 0 && (
+                  <p className="empty-copy">No matching differentials found.</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 3. Overpriced / Traps */}
+          {(activeSection === "all" || activeSection === "overpriced") && (
+            <div className="watch-section" data-section="overpriced">
+              <div className="sub-head">
+                <h3>Overpriced Traps (≥£8.0m)</h3>
+                <span className="rule" />
+                <small>Lowest PPM Premium</small>
+              </div>
+              <p className="watch-section-desc">
+                Expensive assets whose current fixture/projection profile does not justify premium allocation.
+              </p>
+              <div className="watch-grid stagger">
+                {overList.map((player, index) =>
+                  renderPlayerCard(player, index, "trap", `${num(player.points_per_million, 2)} PPM`),
+                )}
+                {overList.length === 0 && (
+                  <p className="empty-copy">No overpriced players found.</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 4. No History */}
+          {(activeSection === "all" || activeSection === "no_history") && (
+            <div className="watch-section" data-section="new">
+              <div className="sub-head">
+                <h3>Limited model history</h3>
+                <span className="rule" />
+                <small>Baseline Projection</small>
+              </div>
+              <p className="watch-section-desc">
+                Players with no prior model history. Their projections lean on position baselines, so treat them as less reliable.
+              </p>
+              <div className="watch-grid stagger">
+                {noHistList.map((player, index) =>
+                  renderPlayerCard(player, index, "new", "No model history"),
+                )}
+                {noHistList.length === 0 && (
+                  <p className="empty-copy">No players with limited model history have predictions.</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </section>
   );

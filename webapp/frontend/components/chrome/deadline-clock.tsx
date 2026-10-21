@@ -19,72 +19,77 @@ function earliestKickoff(snapshot: ReturnType<typeof useApp>["snapshot"]): Date 
   return earliest === null ? null : new Date(earliest);
 }
 
-interface Part {
-  readonly value: number;
-  readonly unit: string;
-}
-
-function countdownParts(ms: number): Part[] {
+function formatCountdown(ms: number, gw: number | null): string {
+  if (ms <= 0) return `GW${gw ?? ""} in progress`;
   const totalMinutes = Math.floor(ms / 60000);
   const days = Math.floor(totalMinutes / (60 * 24));
   const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
   const minutes = totalMinutes % 60;
-  return days > 0
-    ? [{ value: days, unit: "d" }, { value: hours, unit: "h" }, { value: minutes, unit: "m" }]
-    : [{ value: hours, unit: "h" }, { value: minutes, unit: "m" }];
+  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+  return `${hours}h ${minutes}m`;
 }
 
-export function useDeadline() {
+interface CountdownTick {
+  readonly value: number;
+  readonly text: string;
+}
+
+function countdownTicks(ms: number): CountdownTick[] {
+  if (ms <= 0) return [];
+  const totalMinutes = Math.floor(ms / 60000);
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+  const ticks: CountdownTick[] = [];
+  if (days > 0) ticks.push({ value: days, text: `${days}d` });
+  ticks.push({ value: hours, text: `${hours}h` });
+  ticks.push({ value: minutes, text: `${minutes}m` });
+  return ticks;
+}
+
+export function DeadlineClock() {
   const { snapshot } = useApp();
   const [now, setNow] = React.useState(() => Date.now());
+
   React.useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 30_000);
+    const id = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(id);
   }, []);
+
   const deadline = earliestKickoff(snapshot);
-  const remaining = deadline ? deadline.getTime() - now : null;
-  return { snapshot, deadline, remaining };
-}
-
-// The deadline as a stadium departure sign: the gameweek, the time left in
-// big figures, and a track that fills as the lock gets closer.
-export function DeadlineClock({ variant = "rail" }: { readonly variant?: "rail" | "compact" }) {
-  const { snapshot, deadline, remaining } = useDeadline();
-  if (!snapshot) return null;
-
-  if (!deadline || remaining == null) {
-    return (
-      <div className={`deadline deadline--${variant}`}>
-        <span className="deadline-label">Season {snapshot.season}</span>
-        <span className="deadline-time">Fixtures to come</span>
-      </div>
-    );
+  if (!deadline) {
+    if (snapshot?.season) {
+      return (
+        <div className="deadline" aria-live="polite">
+          <strong className="deadline-context">Season {snapshot.season}</strong>
+          <span>Fixtures pending</span>
+        </div>
+      );
+    }
+    return null;
   }
 
+  const remaining = deadline.getTime() - now;
   const inProgress = remaining <= 0;
   const urgent = remaining > 0 && remaining < 24 * 60 * 60 * 1000;
-  const tension = inProgress ? 1 : Math.min(1, Math.max(0, 1 - remaining / WEEK_MS));
-  const kickoff = deadline.toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" });
+  const tension = inProgress ? 100 : Math.min(100, Math.max(0, 100 - (remaining / WEEK_MS) * 100));
 
   return (
-    <div className={`deadline deadline--${variant}${urgent ? " is-urgent" : ""}`} aria-live="polite">
-      <span className="deadline-label">
-        {inProgress ? `Gameweek ${snapshot.gameweek} is live` : `Gameweek ${snapshot.gameweek} deadline`}
-      </span>
-      <span className="deadline-time">
+    <div className={`deadline${urgent ? " urgent" : ""}`} aria-live="polite">
+      <strong className="deadline-context">GW{snapshot?.gameweek} {inProgress ? "matchday" : "deadline"}</strong>
+      <span>
         {inProgress
-          ? "Matches under way"
-          : countdownParts(remaining).map((part) => (
-              <span className="deadline-part" key={part.unit}>
-                <b key={part.value}>{part.value}</b>
-                {part.unit}
-              </span>
-            ))}
+          ? formatCountdown(remaining, snapshot?.gameweek ?? null)
+          : countdownTicks(remaining).flatMap((tick, index) => [
+              index > 0 ? <React.Fragment key={`sep${index}`}> </React.Fragment> : null,
+              <span key={`${index}-${tick.value}`} className="tick">
+                {tick.text}
+              </span>,
+            ])}
       </span>
-      {variant === "rail" && !inProgress && <span className="deadline-when">First kick-off {kickoff}</span>}
-      <span className="deadline-track" aria-hidden="true">
-        <i style={{ transform: `scaleX(${tension})` }} />
-      </span>
+      <div className="deadline-tension" aria-hidden="true">
+        <i style={{ transform: `scaleX(${tension / 100})` }} />
+      </div>
     </div>
   );
 }

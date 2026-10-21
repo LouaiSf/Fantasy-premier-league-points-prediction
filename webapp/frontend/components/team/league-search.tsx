@@ -196,34 +196,31 @@ export function LeagueSearchPanel({
   return (
     <div className="league-search">
       <form className="manager-search-form" onSubmit={submitSearch}>
-        <label className="field-label" htmlFor="league-id-input">League ID (it&apos;s in the league&apos;s address on the FPL site)</label>
+        <label htmlFor="league-id-input">Mini-league ID</label>
         <div className="manager-search-input-row">
           <input
             id="league-id-input"
-            className="input"
             value={leagueIdInput}
             onChange={(event) => updateLeagueId(event.target.value)}
             placeholder="e.g. 314"
             inputMode="numeric"
             autoComplete="off"
           />
-          <button className="btn btn--go" type="submit" disabled={loading}>
+          <button className="btn sm" type="submit" disabled={loading}>
             {loading ? "Searching…" : "Search league"}
           </button>
         </div>
-        <label className="field-label" htmlFor="league-name-input">Manager or team name</label>
+        <label htmlFor="league-name-input">Manager or team name</label>
         <input
           id="league-name-input"
-          className="input"
           value={query}
           onChange={(event) => updateQuery(event.target.value)}
           placeholder="Search within a known league"
           autoComplete="off"
         />
-        <label className="field-label" htmlFor="league-rank-input">Roughly where they rank (optional)</label>
+        <label htmlFor="league-rank-input">Approximate rank (optional)</label>
         <input
           id="league-rank-input"
-          className="input"
           value={rankInput}
           onChange={(event) => {
             setRankInput(event.target.value);
@@ -241,7 +238,7 @@ export function LeagueSearchPanel({
         </p>
       )}
       {loading && (
-        <p className="loading-state" aria-live="polite">
+        <p className="manager-search-loading" aria-live="polite">
           Scanning standings from page {nextCursor ?? (checkedPages.at(-1) ?? 0) + 1}, up to five pages…
         </p>
       )}
@@ -259,7 +256,7 @@ export function LeagueSearchPanel({
                 onClick={() => onSelect(candidateFromEntry(entry))}
               >
                 <span><strong>{entry.manager_name || "Unnamed manager"}</strong><small>{entry.team_name || "Unnamed team"}</small></span>
-                <span><b>{entry.total_points ?? "–"} pts</b><small>{entry.rank != null ? `Rank ${entry.rank.toLocaleString()}` : ""}</small></span>
+                <span><b>Entry {entry.entry_id}</b><small>Rank {entry.rank ?? "--"} · {entry.total_points ?? "--"} pts</small></span>
               </button>
             </li>
           ))}
@@ -272,7 +269,7 @@ export function LeagueSearchPanel({
       )}
       {nextCursor !== null && (
         <button
-          className="btn btn--line btn--sm"
+          className="btn secondary sm"
           type="button"
           disabled={loading}
           onClick={() => void search(nextCursor)}
@@ -286,14 +283,13 @@ export function LeagueSearchPanel({
           <label htmlFor="league-page-jump">Page</label>
           <input
             id="league-page-jump"
-            className="input input--sm"
             value={pageJumpInput}
             onChange={(event) => setPageJumpInput(event.target.value)}
             placeholder="e.g. 25"
             inputMode="numeric"
             autoComplete="off"
           />
-          <button className="btn btn--line btn--sm" type="submit" disabled={loading}>Start here</button>
+          <button className="btn secondary sm" type="submit" disabled={loading}>Start here</button>
         </form>
       </details>
       {leagueId === null && query.trim().length < 2 && (

@@ -8,14 +8,12 @@ import { clubStyle } from "@/lib/club-colors";
 import { num } from "@/lib/format";
 import type { PlayerRecord } from "@/lib/types";
 import { Skeleton } from "@/components/skeleton";
-import { Face, GateSign, PlateFact, Segmented, VerdictPlate } from "@/components/signage";
-import { Icon } from "@/components/icons";
 
 type Filter = "all" | "squad" | "injury" | "suspension" | "doubt";
 type View = "desk" | "cards";
 
 const FILTERS: { key: Filter; label: string }[] = [
-  { key: "all", label: "All" },
+  { key: "all", label: "All notes" },
   { key: "squad", label: "My squad" },
   { key: "injury", label: "Injuries" },
   { key: "suspension", label: "Suspensions" },
@@ -49,9 +47,9 @@ function noteFor(player: PlayerRecord): string {
   if (player.news) return player.news;
   const chance = chanceFor(player);
   if (chance != null && chance < 100) {
-    return `${chance}% chance of playing this week.`;
+    return `FPL lists a ${chance}% chance of playing this round.`;
   }
-  return "Availability unclear.";
+  return `Current availability status: ${player.status}.`;
 }
 
 // What a note is worth reading first is not how low the chance is. A player
@@ -83,7 +81,7 @@ function byUrgency(a: PlayerRecord, b: PlayerRecord): number {
 function noteAge(player: PlayerRecord, newest: number | null): string | null {
   if (player.news_since_gw == null) return null;
   if (newest != null && player.news_since_gw >= newest) return "New this week";
-  return `Since gameweek ${player.news_since_gw}`;
+  return `Since GW${player.news_since_gw}`;
 }
 
 function statusLabel(player: PlayerRecord): string {
@@ -92,7 +90,25 @@ function statusLabel(player: PlayerRecord): string {
   if (player.status === "u") return "Unavailable";
   if (player.status === "n") return "Not in squad";
   if (player.status === "d" || (chanceFor(player) ?? 100) < 100) return "Doubtful";
-  return "Update";
+  return "Availability note";
+}
+
+// FPL publishes a chance of playing as 25, 50 or 75. Red through orange to
+// yellow, so the badge reads as a risk level at a glance rather than as a
+// number the reader has to interpret.
+function chanceTone(chance: number): "bad" | "mid" | "ok" {
+  if (chance <= 25) return "bad";
+  if (chance <= 50) return "mid";
+  return "ok";
+}
+
+function ChanceBadge({ player }: { player: PlayerRecord }) {
+  const chance = chanceFor(player);
+  // Only the partial cases. 100 is not news, and 0 already reads as Injured or
+  // Unavailable beside it -- a "0% fit" badge on a player who has left the club
+  // is noise, not a risk level.
+  if (chance == null || chance <= 0 || chance >= 100) return null;
+  return <span className={`chance-badge is-${chanceTone(chance)}`}>{chance}% fit</span>;
 }
 
 export default function NewsPage() {
@@ -119,7 +135,7 @@ export default function NewsPage() {
   const squadIdSet = new Set(squadElements);
   const teamCodeByName = new Map(snapshot.teams.map((team) => [team.name, team.code]));
   const clubOptions = snapshot.teams.map((team) => team.name);
-  const freshness = snapshot.gameweek ? `Gameweek ${snapshot.gameweek}` : "This season";
+  const freshness = snapshot.gameweek ? `Local snapshot · GW${snapshot.gameweek}` : "Local snapshot";
   const allNotes = snapshot.players.filter(hasNote).sort(byUrgency);
   const newestNoteGw = allNotes.reduce<number | null>(
     (seen, player) => (player.news_since_gw != null && (seen == null || player.news_since_gw > seen)
@@ -154,145 +170,263 @@ export default function NewsPage() {
   const allRest = filtered.slice(1);
   const rest = showAll ? allRest : allRest.slice(0, 24);
 
-  const squadNotes = allNotes.filter((player) => squadIdSet.has(player.element)).length;
-  const lede = squadElements.length
-    ? squadNotes
-      ? `${squadNotes} of your players ${squadNotes === 1 ? "has" : "have"} a note this week. The ones that could still play come first.`
-      : "None of your players has a note this week. Here's the rest of the league, the ones that could still play first."
-    : undefined;
-
   return (
-    <section className="page news-page" aria-label="News">
-      <GateSign lede={lede} />
-
-      {lead ? (
-        <VerdictPlate
-          tone={tier(lead) === 0 ? "spotlight" : "matchday"}
-          label="Top story"
-          player={lead}
-          title={
-            <>
-              {lead.web_name}: {statusLabel(lead).toLowerCase()}.
-            </>
-          }
-          body={noteFor(lead)}
-          facts={
-            <>
-              <PlateFact label="Club">{lead.team_short}</PlateFact>
-              <PlateFact label="Owned by">{num(lead.selected_by)}%</PlateFact>
-              <PlateFact label="Your squad">{squadIdSet.has(lead.element) ? "He's in it" : "Not in it"}</PlateFact>
-            </>
-          }
-          actions={
-            <button className="btn btn--go" type="button" onClick={() => openProfile(lead)}>
-              See his profile <Icon name="arrow-right" size={18} />
-            </button>
-          }
-        />
-      ) : (
-        <div className="empty-state">
-          <h2 className="empty-title">Nothing matches</h2>
-          <p className="empty-message">No notes fit these filters. Try All, or clear the search.</p>
+    <section className="page news-page paper-scope" aria-label="Team news">
+      <div className="shell">
+        <div className="section-head on-paper">
+          <div>
+            <p className="eyebrow alert">
+              Team news // local desk
+            </p>
+            <h1 className="display-hero">Matchday wire</h1>
+          </div>
+          <p>
+            Every availability note in the local FPL snapshot, ordered by what changes your
+            team first: players still selectable but in doubt, then those ruled out, then
+            those who have left the league.
+          </p>
         </div>
-      )}
 
-      <div className="toolbar">
-        <Segmented label="Show" value={filter} onChange={setFilter} options={FILTERS.map((item) => ({ value: item.key, label: item.label }))} />
-        <label className="searchbox">
-          <span className="sr-only">Search player or club</span>
-          <Icon name="search" size={18} />
-          <input className="input input--sm" type="search" placeholder="Player or club" value={query} onChange={(event) => setQuery(event.target.value)} />
-        </label>
-        <label>
-          <span className="sr-only">Club</span>
-          <select className="select select--sm" value={club} onChange={(event) => setClub(event.target.value)}>
-            <option value="ALL">All clubs</option>
-            {clubOptions.map((team) => (
-              <option key={team} value={team}>
-                {team}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="sr-only">Position</span>
-          <select className="select select--sm" value={position} onChange={(event) => setPosition(event.target.value)}>
-            <option value="ALL">All positions</option>
-            {(["GK", "DEF", "MID", "FWD"] as const).map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span className="toolbar-spacer" />
-        <Segmented
-          label="Layout"
-          value={view}
-          onChange={setView}
-          options={[
-            { value: "desk", label: "List" },
-            { value: "cards", label: "Cards" },
-          ]}
-        />
-      </div>
+        {filtered.length > 0 && (
+          <div className="ticker-strip" aria-label="Availability headlines">
+            <span className="tag">Notes</span>
+            <div
+              className="ticker-track"
+              aria-hidden="true"
+              style={{ "--ticker-duration": `${Math.max(60, filtered.length * 4)}s` } as React.CSSProperties}
+            >
+              {[...filtered, ...filtered].map((player, index) => (
+                <span key={`${player.element}-${index}`}>
+                  <b>{player.web_name}</b> — {noteFor(player)}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
-      {rest.length > 0 && view === "desk" && (
-        <ul className="panel wire stagger">
-          {rest.map((player, idx) => (
-            <li key={player.element} style={{ "--i": idx } as React.CSSProperties}>
-              <button type="button" className="prow wire-row" onClick={() => openProfile(player)}>
-                <Face player={player} />
-                <span className="prow-name">
-                  <b>
-                    {player.web_name}
-                    {squadIdSet.has(player.element) && <span className="badge badge--dark">Yours</span>}
-                  </b>
-                  <span className="why">{noteFor(player)}</span>
-                </span>
-                <span className="wire-tags">
-                  <span className={`badge ${tier(player) === 0 ? "badge--warn" : "badge--alert"}`}>{statusLabel(player)}</span>
-                </span>
-                <span className="wire-meta">
-                  <span>{player.team_short} · {player.position}</span>
-                  <small>{noteAge(player, newestNoteGw) ?? freshness}</small>
-                </span>
+        <div className="news-toolbar">
+          <div className="news-control-stack">
+            <div className="filter-row" role="group" aria-label="News filters">
+              {FILTERS.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={`chip on-paper${filter === item.key ? " is-active" : ""}`}
+                  onClick={() => setFilter(item.key)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <div className="news-filter-tools">
+              <label className="search">
+                <span className="sr-only">Search player or club</span>
+                <input
+                  type="search"
+                  placeholder="Search player or club"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </label>
+              <label className="news-select-wrap">
+                <span className="sr-only">Filter by club</span>
+                <select className="news-select" value={club} onChange={(event) => setClub(event.target.value)}>
+                  <option value="ALL">All clubs</option>
+                  {clubOptions.map((team) => (
+                    <option key={team} value={team}>{team}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="news-select-wrap">
+                <span className="sr-only">Filter by position</span>
+                <select className="news-select" value={position} onChange={(event) => setPosition(event.target.value)}>
+                  <option value="ALL">All positions</option>
+                  {(["GK", "DEF", "MID", "FWD"] as const).map((item) => (
+                    <option key={item} value={item}>{item}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="news-view-switch" role="tablist" aria-label="News reading mode">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "desk"}
+                className="news-view-tab"
+                onClick={() => setView("desk")}
+              >
+                Desk
               </button>
-            </li>
-          ))}
-        </ul>
-      )}
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "cards"}
+                className="news-view-tab"
+                onClick={() => setView("cards")}
+              >
+                Cards
+              </button>
+            </div>
+          </div>
+          <p className="kicker muted">
+            {filtered.length} note{filtered.length === 1 ? "" : "s"} in this filter
+          </p>
+        </div>
 
-      {rest.length > 0 && view === "cards" && (
-        <ul className="news-cards stagger">
-          {rest.map((player, index) => (
-            <li key={player.element} style={{ "--i": index } as React.CSSProperties}>
-              <button type="button" className="news-card" onClick={() => openProfile(player)}>
-                <span className="news-card-art" style={clubStyle(player.team)}>
-                  <ClubCrest className="news-card-crest" code={teamCodeByName.get(player.team)} team={player.team} aria-hidden="true" />
-                  <PlayerPhoto src={player.photo ?? undefined} alt="" name={player.name} variant="card" loading="lazy" />
-                  <span className={`badge ${tier(player) === 0 ? "badge--warn" : "badge--alert"} news-card-status`}>{statusLabel(player)}</span>
-                </span>
-                <span className="news-card-copy">
-                  <b>{player.web_name}</b>
-                  <span className="note">
-                    {player.team} · {player.position}
-                    {squadIdSet.has(player.element) ? " · yours" : ""}
+        {!lead && <p className="wire-empty">No notes match this filter in the local snapshot.</p>}
+
+        {lead && (
+          <article className="lead-story" style={clubStyle(lead.team)}>
+            <span className="lead-hazard" aria-hidden="true" />
+            <div className="lead-mane" aria-hidden="true" />
+            <ClubCrest
+              className="lead-crest"
+              code={teamCodeByName.get(lead.team)}
+              team={lead.team}
+              aria-hidden="true"
+            />
+            <div className="lead-copy">
+              <div className="lead-badges">
+                <span className="sev" data-status={lead.status}>{statusLabel(lead)}</span>
+                <ChanceBadge player={lead} />
+                <span className="club">{lead.team}</span>
+              </div>
+              <h2>{lead.web_name}</h2>
+              <p className="lead-note">{noteFor(lead)}</p>
+              <p className="wire-fresh">
+                {noteAge(lead, newestNoteGw) ?? freshness} · Official FPL player status,
+                not third-party reporting
+              </p>
+              <div className="lead-actions">
+                <button className="btn sm secondary" type="button" onClick={() => openProfile(lead)}>
+                  View player
+                </button>
+              </div>
+            </div>
+            <div className="lead-shot">
+              <PlayerPhoto src={lead.photo ?? undefined} alt={lead.name} name={lead.name} variant="hero" />
+            </div>
+            <div className="lead-panel">
+              <h3>Squad relevance</h3>
+              <ul className="lead-impact">
+                <li>
+                  <i>{num(lead.selected_by)}%</i>
+                  <span>Owned by managers in the local snapshot</span>
+                </li>
+                <li>
+                  <i className={squadIdSet.has(lead.element) ? "" : "neg"}>
+                    {squadIdSet.has(lead.element) ? "In squad" : "Not owned"}
+                  </i>
+                  <span>Relevance to your current squad</span>
+                </li>
+                <li>
+                  <i>{lead.position}</i>
+                  <span>{lead.team}</span>
+                </li>
+              </ul>
+            </div>
+          </article>
+        )}
+
+        {view === "desk" && rest.length > 0 && (
+          <div className="wire-layout wire-layout--single">
+            <div className="wire-col stagger">
+              <h3 className="col-title">
+                League wire<small>
+                  {rest.length} of {allRest.length} stories
+                </small>
+              </h3>
+              {rest.map((player, idx) => (
+                <button
+                  key={player.element}
+                  type="button"
+                  className="wire-item lift"
+                  data-pri={player.status !== "a" ? "high" : "med"}
+                  onClick={() => openProfile(player)}
+                  style={{ "--i": idx } as React.CSSProperties}
+                >
+                  <span className="wire-shot" style={clubStyle(player.team)}>
+                    <PlayerPhoto src={player.photo ?? undefined} alt={player.name} name={player.name} variant="avatar" loading="lazy" />
+                    <ClubCrest
+                      className="wire-badge"
+                      code={teamCodeByName.get(player.team)}
+                      team={player.team}
+                      aria-hidden="true"
+                    />
                   </span>
-                  <span className="news-card-note">{noteFor(player)}</span>
-                  <small className="note">{noteAge(player, newestNoteGw) ?? freshness}</small>
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+                  <span>
+                    <h4>{player.web_name}</h4>
+                    <p>{noteFor(player)}</p>
+                    <div className="tagline">
+                      <span className="tagline-status" data-status={player.status}>{statusLabel(player)}</span>
+                      <ChanceBadge player={player} />
+                      <span>{player.team}</span>
+                      <span>{player.position}</span>
+                      {squadIdSet.has(player.element) && <span className="owned">Owned</span>}
+                    </div>
+                  </span>
+                  <time>{noteAge(player, newestNoteGw) ?? freshness}</time>
+                </button>
+              ))}
+              {allRest.length > rest.length && (
+                <button
+                  type="button"
+                  className="btn sm secondary wire-more"
+                  onClick={() => setShowAll(true)}
+                >
+                  Show all {allRest.length} stories
+                </button>
+              )}
+              {showAll && allRest.length > 24 && (
+                <button
+                  type="button"
+                  className="btn sm secondary wire-more"
+                  onClick={() => setShowAll(false)}
+                >
+                  Show fewer
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
-      {allRest.length > 24 && (
-        <button type="button" className="btn btn--line wire-more" onClick={() => setShowAll((value) => !value)}>
-          {showAll ? "Show fewer" : `Show all ${allRest.length + 1} notes`}
-        </button>
-      )}
+        {view === "cards" && rest.length > 0 && (
+          <div className="news-cards stagger">
+            {rest.map((player, index) => (
+              <button
+                key={player.element}
+                type="button"
+                className="news-card"
+                style={{ "--i": index } as React.CSSProperties}
+                onClick={() => openProfile(player)}
+              >
+                <div className="news-card-art" style={clubStyle(player.team)}>
+                  <ClubCrest
+                    className="crest"
+                    code={teamCodeByName.get(player.team)}
+                    team={player.team}
+                    aria-hidden="true"
+                  />
+                  <div className="shot">
+                    <PlayerPhoto src={player.photo ?? undefined} alt={player.name} name={player.name} variant="card" loading="lazy" />
+                  </div>
+                </div>
+                <div className="news-card-copy">
+                  <div className="news-card-meta">
+                    <span className="news-status" data-status={player.status}>{statusLabel(player)}</span>
+                    <span>{player.team}</span>
+                    <span>{player.position}</span>
+                  </div>
+                  <h3>{player.web_name}</h3>
+                  <p>{noteFor(player)}</p>
+                  <span className="wire-fresh">{noteAge(player, newestNoteGw) ?? freshness}</span>
+                  {squadIdSet.has(player.element) && <span className="news-card-tag owned">Owned</span>}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 }

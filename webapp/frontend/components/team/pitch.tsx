@@ -43,8 +43,9 @@ export function Pitch({ result: resultProp, compact }: PitchProps = {}) {
         </div>
         <div className="formation formation--empty">
           <div className="pitch-empty">
-            <h2>No team yet</h2>
-            <p>Bring in your FPL team or pick 15 players, and your lineup appears here.</p>
+            <span className="eyebrow">Squad required</span>
+            <h2>Build your 15</h2>
+            <p>Use the squad editor, or restore the local prediction export to run the optimiser.</p>
           </div>
         </div>
       </div>

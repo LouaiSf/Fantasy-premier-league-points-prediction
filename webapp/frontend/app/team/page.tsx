@@ -3,20 +3,20 @@
 import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
 import { api, refreshDataAndPredictions } from "@/lib/api";
-import { money } from "@/lib/format";
+import { money, num } from "@/lib/format";
 import { fromTenths, sellingPricesTenthsForSquad } from "@/lib/finance";
 import { previewSquad } from "@/lib/squad";
-import { isFlagged, nextFixtureFor, whyLine } from "@/lib/why";
 import { Pitch } from "@/components/team/pitch";
 import { SquadEditor } from "@/components/team/squad-editor";
+import { PlayerPhoto } from "@/components/player-photo";
 import { Skeleton } from "@/components/skeleton";
+import { ModelInfo } from "@/components/model-info";
 import { ManagerSearch } from "@/components/team/manager-search";
-import { TeamPlan, planMoves, playerName, recommendationOf } from "@/components/team/team-plan";
+import { TeamPlan } from "@/components/team/team-plan";
 import { DeadlineBoard } from "@/components/team/deadline-board";
 import { DataPortability } from "@/components/team/data-portability";
-import { Face, GateSign, PlateFact, Pos, Proj, Track, VerdictPlate } from "@/components/signage";
-import { Icon } from "@/components/icons";
-import type { PlayerRecord, TransferResult, TransferRow } from "@/lib/types";
+import { CountUp } from "@/components/motion/count-up";
+import type { TransferResult, TransferRow } from "@/lib/types";
 
 // The FPL budget every manager starts a season with.
 const BUDGET = 100.0;
@@ -45,7 +45,6 @@ export default function TeamPage() {
   const [transferPlan, setTransferPlan] = React.useState<TransferResult | null>(null);
   const [transferPlanError, setTransferPlanError] = React.useState<string | null>(null);
   const [transferPlanLoading, setTransferPlanLoading] = React.useState(false);
-  const [importOpen, setImportOpen] = React.useState(false);
   // Date.now() is impure, so it's captured once via a lazy initializer
   // (matching DeadlineClock) rather than called directly in render.
   const [now] = React.useState(() => Date.now());
@@ -85,19 +84,12 @@ export default function TeamPage() {
     };
   }, [snapshot, squadElements, squadPlayers, storedSquad, freeTransfers, plannerBankValue]);
 
-  const byElement = React.useMemo(
-    () => new Map((snapshot?.players ?? []).map((player) => [player.element, player])),
-    [snapshot],
-  );
-
   if (loading) {
     return (
       <section className="page">
-        <div className="skel skel-sign" />
-        <Skeleton variant="hero" />
-        <div className="cols">
+        <div className="shell">
+          <Skeleton variant="hero" />
           <Skeleton variant="pitch" />
-          <Skeleton variant="row" count={6} />
         </div>
       </section>
     );
@@ -106,22 +98,29 @@ export default function TeamPage() {
   if (error || !snapshot) {
     return (
       <section className="page">
-        <div className="empty-state">
-          <h2 className="empty-title">We couldn&apos;t load the season</h2>
-          <p className="empty-message">The data service didn&apos;t answer. Check it&apos;s running, then try again.</p>
-          {error && <p className="note">{error}</p>}
-          <button className="btn" type="button" onClick={reload}>Try again</button>
+        <div className="shell shell--lg">
+          <div className="pitch-empty">
+            <h2>Platform data unavailable</h2>
+            <p>{error}</p>
+          </div>
         </div>
       </section>
     );
   }
 
-  const hasSquad = squadPlayers.length === 15;
   const preview = teamResult ?? previewSquad(squadPlayers);
+  const xiPoints = preview
+    ? "xi_points" in preview
+      ? preview.xi_points
+      : preview.xiPoints
+    : null;
   const predictionAvailable = snapshot.prediction_available;
-  // A squad's current market value and its selling value diverge as soon as
-  // any player's price moves -- an appreciated squad is not over budget.
+  // A squad's current market value (what buying it today would cost) and its
+  // selling value (what it actually returns if sold, after the half-rise
+  // rule) diverge as soon as any player's price moves -- neither one is
+  // "£100.0m minus something," and an appreciated squad is not over budget.
   const bank = fromTenths(financeSummary.bankTenths);
+  const marketValue = fromTenths(financeSummary.marketValueTenths);
   const sellingValue = fromTenths(financeSummary.sellingValueTenths);
   const marketPricesUpdatedAt = snapshot.market_prices_updated_at
     ? new Date(snapshot.market_prices_updated_at)
@@ -129,23 +128,20 @@ export default function TeamPage() {
   const marketStale = Boolean(
     marketPricesUpdatedAt && now - marketPricesUpdatedAt.getTime() > 24 * 60 * 60 * 1000,
   );
-  const flagged = squadPlayers.filter(isFlagged);
-  const clubCounts = new Map<string, number>();
-  for (const player of squadPlayers) clubCounts.set(player.team, (clubCounts.get(player.team) ?? 0) + 1);
-  const [busiestClub, busiestCount] = [...clubCounts.entries()].sort((a, b) => b[1] - a[1])[0] ?? ["", 0];
-
-  const recommendation = recommendationOf(transferPlan);
-  const moves = recommendation && hasSquad ? planMoves(recommendation, squadPlayers, byElement) : null;
-  const holding = !recommendation || recommendation.transfers === 0 || !moves || (!moves.outPlayers.length && !moves.inPlayers.length);
-  const captain = moves?.captain ?? preview?.captain ?? null;
+  const marketPricesUpdatedLabel = marketPricesUpdatedAt
+    ? marketPricesUpdatedAt.toLocaleString()
+    : "unknown";
+  const flagged = squadPlayers.filter(
+    (player) => player.status !== "a" || (player.chance_of_playing_next_round ?? 100) < 100,
+  );
 
   async function refreshPrices() {
     setRefreshingPrices(true);
     try {
-      toast((await refreshDataAndPredictions()) || "Latest prices, news and projections are in.");
+      toast(await refreshDataAndPredictions() || "Season data refreshed.");
       reload();
     } catch (err) {
-      toast(`Couldn't refresh: ${(err as Error).message}`);
+      toast(`Refresh failed: ${(err as Error).message}`);
     } finally {
       setRefreshingPrices(false);
     }
@@ -156,7 +152,7 @@ export default function TeamPage() {
     try {
       const result = await api.squad({ budget: BUDGET, lock: [], ban: [] });
       setTeamResult(result, "reset");
-      toast("Here's the best £100m squad for this gameweek.");
+      toast("Optimal squad loaded from the prediction pipeline.");
     } catch (err) {
       toast((err as Error).message);
     } finally {
@@ -165,15 +161,15 @@ export default function TeamPage() {
   }
 
   async function optimiseLineup() {
-    if (!hasSquad) {
-      toast("Add all 15 players first.");
+    if (squadPlayers.length !== 15) {
+      toast("Save a legal 15-player squad first.");
       return;
     }
     setLiningUp(true);
     try {
       const result = await api.lineup({ elements: squadElements });
       setTeamResult(result, "lineup");
-      toast("Lineup, bench order and armbands updated.");
+      toast("Starting XI, bench order and armband picks updated.");
     } catch (err) {
       toast((err as Error).message);
     } finally {
@@ -184,253 +180,283 @@ export default function TeamPage() {
   function applyTransferPlan(row: TransferRow) {
     setTeamResult(row, row.transfers === 0 ? "lineup" : "transfer");
     setPlannerBank(row.bank_after);
-    toast(row.transfers === 0 ? "Lineup applied." : "Plan applied to My team.");
+    toast(row.transfers === 0 ? "Lineup recommendation applied." : "Transfer plan applied to My Team.");
   }
 
-  const planUnavailable = !snapshot.prediction_available || !hasSquad;
+  const planUnavailable = Boolean(snapshot) && (
+    !snapshot?.prediction_available || squadElements.length !== 15
+  );
   const planError = planUnavailable
-    ? !snapshot.prediction_available
-      ? snapshot.prediction_error ?? "Projections aren't available right now."
-      : "Add all 15 players to get a plan."
+    ? !snapshot?.prediction_available
+      ? snapshot?.prediction_error ?? "Predictions are unavailable for this snapshot."
+      : "Save a legal 15-player squad to build a transfer plan."
     : transferPlanError;
 
-  const importedName = storedSquad?.source === "manager" ? storedSquad.sourceTeamName || "Your FPL team" : null;
-  const lede = importedName
-    ? <>{importedName}, brought in from FPL. Everything here is worked out for this fifteen.</>
-    : undefined;
-
-  const showImport = importOpen || !hasSquad;
-
   return (
-    <section className="page team-page" aria-label="My team">
-      <GateSign lede={lede}>
-        <button
-          className="btn btn--line"
-          type="button"
-          aria-expanded={showImport}
-          aria-controls="fpl-import"
-          onClick={() => setImportOpen((open) => !open)}
-          disabled={!hasSquad}
-        >
-          {importedName ? "Switch team" : "Bring in my FPL team"}
-        </button>
-        <SquadEditor />
-      </GateSign>
-
-      {showImport && (
-        <div id="fpl-import" className="panel import-panel">
+    <section className="page" aria-label="My team">
+      <div className="manager-search-zone manager-search-zone--top">
+        <div className="shell">
           <ManagerSearch
             snapshot={snapshot}
             onImport={(lineup) => {
               if (!setImportedTeam(lineup)) return false;
               setPlannerBank(lineup.bank ?? 0);
-              setImportOpen(false);
-              toast(`${lineup.manager.team_name || "Your team"} is now your team here.`);
+              toast("Imported " + (lineup.manager.team_name || "public team") + " as My Team.");
               return true;
             }}
           />
         </div>
-      )}
-
-      {!hasSquad ? (
-        <VerdictPlate
-          tone="night"
-          title="Let's get your team in."
-          body="Paste your FPL team link or entry ID above, or let us pick the best £100m squad for this gameweek to start from."
-          actions={
-            <button className="btn btn--go" type="button" disabled={!predictionAvailable || picking} onClick={autoPick}>
-              {picking ? "Picking…" : "Pick a squad for me"} <Icon name="arrow-right" size={18} />
-            </button>
-          }
-          label="Getting started"
-        />
-      ) : !predictionAvailable ? (
-        <VerdictPlate
-          tone="night"
-          title="Projections are on their way."
-          body={`${snapshot.prediction_error ?? "This week's projections aren't ready yet."} Your squad, prices and news still work.`}
-          label="This week's call"
-        />
-      ) : transferPlanLoading && !recommendation ? (
-        <VerdictPlate tone="matchday" busy title="Working out your best move…" body="Checking every legal transfer against your fifteen." label="This week's call" />
-      ) : recommendation && moves ? (
-        <VerdictPlate
-          tone={holding ? "matchday" : "spotlight"}
-          label="This week's call"
-          player={holding ? captain : moves.inPlayers[0] ?? captain}
-          title={
-            holding ? (
-              <>Hold your transfer. Captain {playerName(captain)}.</>
-            ) : moves.inPlayers.length === 1 ? (
-              <>Bring in {playerName(moves.inPlayers[0])} for {playerName(moves.outPlayers[0])}.</>
-            ) : (
-              <>Make {moves.inPlayers.length} transfers this week.</>
-            )
-          }
-          body={
-            holding
-              ? "Nothing on the market beats your squad by enough to be worth a transfer. Keep the free one for next week."
-              : `It's worth about ${Math.max(0, recommendation.gain).toFixed(1)} more points this week, after any hit. Then give ${playerName(captain)} the armband.`
-          }
-          facts={
-            <>
-              <PlateFact label="Your XI this week">{recommendation.xi_points.toFixed(1)} pts</PlateFact>
-              <PlateFact label="In the bank after">{money(recommendation.bank_after)}</PlateFact>
-              {holding && <PlateFact label="Free transfers next week">{Math.min(5, freeTransfers + 1)}</PlateFact>}
-            </>
-          }
-          actions={
-            <>
-              <button className="btn btn--go" type="button" onClick={() => applyTransferPlan(recommendation)} disabled={recommendation.squad.length !== 15}>
-                {holding ? "Use this lineup" : "Apply this plan"} <Icon name="arrow-right" size={18} />
-              </button>
-              <a className="btn btn--line" href="#plan">See the full plan</a>
-            </>
-          }
-        />
-      ) : (
-        <VerdictPlate
-          tone="night"
-          title="Your team is in."
-          body={planError ?? "We couldn't build a plan this time. Your lineup below still works."}
-          label="This week's call"
-        />
-      )}
-
-      <div className="cols team-cols">
-        <section className="panel pitch-panel" aria-label="Starting eleven">
-          <div className="panel-head">
-            <div>
-              <h2>Starting XI</h2>
-              <p>{preview ? `${preview.formation} · tap a player for their profile` : "Add 15 players to see your lineup"}</p>
-            </div>
-            <button
-              className="btn btn--sm"
-              type="button"
-              disabled={!predictionAvailable || !hasSquad || liningUp}
-              onClick={optimiseLineup}
-            >
-              {liningUp ? "Picking…" : "Pick my best XI"}
-            </button>
+      </div>
+      <div className="hero-team">
+        <div className="hero-glow" aria-hidden="true" />
+        <div className="hero-rays" aria-hidden="true" />
+        <div className="hero-blade" aria-hidden="true" />
+        <div className="shell hero-grid">
+          <div className="hero-copy">
+            <p className="eyebrow">Match centre</p>
+            <h1 className="hero-title display-hero">
+              My<em>Team</em>
+            </h1>
+            <div className="hero-rule" aria-hidden="true" />
+            <p className="hero-lede">
+              Set a legal squad, inspect availability, and put the model&apos;s best eleven on the
+              turf.
+            </p>
           </div>
-          <Pitch />
-          {preview && "bench" in preview && preview.bench.length > 0 && (
-            <div className="bench-strip" aria-label="Bench, in order">
-              <span className="bench-strip-label">Bench</span>
-              {preview.bench.map((player, index) => (
-                <button key={player.element} type="button" className="bench-chip" onClick={() => openProfile(player)}>
-                  <span className="bench-order">{index + 1}</span>
-                  <Face player={player} size="sm" />
-                  <span className="prow-name">
-                    <b>{player.web_name || player.name}</b>
-                    <span>{player.position}</span>
-                  </span>
-                  <Proj value={predictionAvailable ? player.predicted_points : player.form} />
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <div className="side-stack">
-          <DeadlineBoard />
-
-          {hasSquad && (
-            <section className="panel" aria-label="Squad limits">
-              <div className="panel-head">
-                <h2>Limits</h2>
-              </div>
-              <div className="panel-body">
-                <Track label="Free transfers" value={freeTransfers} max={5} display={`${freeTransfers} of 5`} />
-                <Track
-                  label={`Most from one club (${busiestClub})`}
-                  value={busiestCount}
-                  max={3}
-                  display={`${busiestCount} of 3`}
-                />
-                <Track
-                  label="Fit to play"
-                  value={squadPlayers.length - flagged.length}
-                  max={15}
-                  display={`${squadPlayers.length - flagged.length} of 15`}
-                  warnAt={Infinity}
-                />
-                <p className="note">
-                  <b className="money-line">{money(bank)} in the bank</b> · squad sells for {money(sellingValue)}
-                  {financeSummary.priceBasis === "estimated" ? " (estimated: we don't have every purchase price)" : ""}.
-                </p>
-                {marketStale && (
-                  <p className="note note--warn">
-                    Prices are more than a day old.{" "}
-                    <button type="button" className="text-link" onClick={() => void refreshPrices()} disabled={refreshingPrices}>
-                      {refreshingPrices ? "Refreshing…" : "Get the latest"}
-                    </button>
-                  </p>
-                )}
-                {snapshot.predictions_older_than_market && (
-                  <p className="note">Projections were made before the last price change, so they may lag a little.</p>
-                )}
-              </div>
-            </section>
-          )}
-
-          {flagged.length > 0 && (
-            <section className="panel" aria-label="Flagged players">
-              <div className="panel-head">
-                <h2>Flagged</h2>
-                <span className="badge badge--alert">{flagged.length}</span>
-              </div>
-              <div>
-                {flagged.map((player: PlayerRecord) => (
-                  <button key={player.element} type="button" className="prow" onClick={() => openProfile(player)}>
-                    <Face player={player} />
-                    <span className="prow-name">
-                      <b>{player.web_name || player.name}</b>
-                      <span className="why is-flag">{whyLine(player, nextFixtureFor(snapshot, player))}</span>
-                    </span>
-                    <Pos pos={player.position} />
-                    <Icon name="chevron-right" size={18} />
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
+          <div className="hero-numwrap" aria-hidden="true">
+            <span className="hero-gw">{snapshot.gameweek ?? "--"}</span>
+            <span className="hero-gw-ghost">{snapshot.gameweek ?? "--"}</span>
+            <span className="hero-gw-tag">Gameweek</span>
+          </div>
         </div>
+        <div className="shell hero-strip" aria-label="Squad summary">
+          <div className="cell">
+            <span>Season</span>
+            <strong>{snapshot.season}</strong>
+          </div>
+          <div className="cell">
+            <span>Local players</span>
+            <strong>{snapshot.players.length}</strong>
+          </div>
+          <div className="cell">
+            <span>Market value</span>
+            <strong>{preview ? <CountUp value={marketValue} decimals={1} prefix="£" suffix="m" /> : "--"}</strong>
+          </div>
+          <div className="cell">
+            <span>XI projection</span>
+            <strong>{preview && predictionAvailable && xiPoints != null ? <CountUp value={xiPoints} decimals={1} /> : "N/A"}</strong>
+          </div>
+          <div className="cell">
+            <span>Predictions</span>
+            <strong>{predictionAvailable ? "Ready" : "Unavailable"}</strong>
+          </div>
+        </div>
+        {predictionAvailable && (
+          <div className="shell">
+            <ModelInfo model={snapshot.model} timestamp={snapshot.prediction_timestamp} />
+          </div>
+        )}
       </div>
 
-      {hasSquad && (
-        <TeamPlan
-          analysis={transferPlan}
-          freeTransfers={freeTransfers}
-          onFreeTransfersChange={setFreeTransfers}
-          bank={plannerBankValue}
-          onBankChange={(value) => setPlannerBank(Math.max(0, Math.min(100, Math.round(value * 10) / 10)))}
-          loading={transferPlanLoading}
-          error={planError}
-          onApply={applyTransferPlan}
-        />
-      )}
+      <DeadlineBoard />
 
-      <details className="disclosure">
-        <summary>
-          More tools
-          <small>Start from scratch, or move your data to another device</small>
-          <Icon name="chevron-down" size={18} />
-        </summary>
-        <div className="disclosure-body tools-grid">
+      <div className="pitch-zone">
+        <div className="shell pitch-layout">
           <div>
-            <h3>Start from the best squad</h3>
-            <p className="note">Replace your fifteen with the highest-projected £100m squad for this gameweek.</p>
-            <button className="btn btn--line btn--sm" type="button" disabled={!predictionAvailable || picking} onClick={autoPick}>
-              {picking ? "Picking…" : "Pick a fresh squad"}
-            </button>
+            <div className="pitch-head">
+              <h2>Starting XI</h2>
+              <span className="kicker">{preview ? `Formation ${preview.formation}` : "No squad selected"}</span>
+              <SquadEditor />
+            </div>
+            <Pitch />
+            {flagged.length > 0 && (
+              <div className="pitch-alert">
+                <b>Squad alert</b>
+                <span>
+                  {flagged.length} player{flagged.length === 1 ? "" : "s"} flagged: {" "}
+                  {flagged.map((player) => player.web_name || player.name).join(", ")}
+                </span>
+                <button className="btn sm secondary" type="button" onClick={() => openProfile(flagged[0])}>
+                  Open {flagged[0].web_name}
+                </button>
+              </div>
+            )}
           </div>
-          <div>
-            <h3>Your data</h3>
-            <DataPortability />
-          </div>
+
+          <aside className="rail" aria-label="Matchday controls">
+            <section className="rail-block">
+              <p className="eyebrow muted">
+                Predicted output
+              </p>
+              <h2>Matchday read</h2>
+              <div className="rail-stat">
+                <span>Starting XI projection</span>
+                <strong>{preview && predictionAvailable && xiPoints != null ? <CountUp value={xiPoints} decimals={1} /> : "N/A"}</strong>
+              </div>
+              <div className="rail-stat">
+                <span>Formation</span>
+                <strong>{preview?.formation ?? "--"}</strong>
+              </div>
+              <div className="rail-stat">
+                <span>Captain</span>
+                <strong>{preview?.captain?.web_name || preview?.captain?.name || "--"}</strong>
+              </div>
+              <div className="rail-stat">
+                <span>Vice-captain</span>
+                <strong>{preview?.vice_captain?.web_name || preview?.vice_captain?.name || "--"}</strong>
+              </div>
+              <div className="rail-stat">
+                <span>Squad availability</span>
+                <strong>
+                  {squadPlayers.length - flagged.length}/{squadPlayers.length || 15}
+                </strong>
+              </div>
+              <div className="rail-stat">
+                <span>Selling value</span>
+                <strong>{preview ? money(sellingValue) : "--"}</strong>
+              </div>
+              <div className="rail-stat">
+                <span>In the bank</span>
+                <strong className={bank < 0 ? "is-over" : undefined}>
+                  {preview ? money(bank) : "--"}
+                </strong>
+              </div>
+              {preview && financeSummary.priceBasis === "estimated" && (
+                <p className="finance-basis-note">
+                  Purchase prices are estimated from a squad saved before price tracking; selling
+                  value may not match your real FPL account.
+                </p>
+              )}
+              {marketStale && (
+                <p className="finance-basis-note">
+                  Local market prices are more than 24 hours old (as of {marketPricesUpdatedLabel}).{" "}
+                  <button
+                    type="button"
+                    className="finance-basis-refresh"
+                    onClick={() => void refreshPrices()}
+                    disabled={refreshingPrices}
+                  >
+                    {refreshingPrices ? "Refreshing…" : "Refresh now"}
+                  </button>
+                </p>
+              )}
+              {snapshot.predictions_older_than_market && (
+                <p className="finance-basis-note">
+                  Point projections were generated before the last market price update; prices shown
+                  are current, projections may not reflect the latest price moves.
+                </p>
+              )}
+              {storedSquad?.source === "manager" && (
+                <div className="team-source-note">
+                  <span className="kicker">Imported source</span>
+                  <strong>{storedSquad.sourceTeamName || "Public team"}</strong>
+                  <small>GW{storedSquad.sourceGameweek ?? snapshot.gameweek ?? "--"} · Entry {storedSquad.sourceEntryId ?? "--"}</small>
+                </div>
+              )}
+              <button
+                className="btn w-full"
+                type="button"
+                style={{ marginTop: 14 }}
+                disabled={!predictionAvailable || squadPlayers.length !== 15 || liningUp}
+                onClick={optimiseLineup}
+              >
+                {liningUp ? "Optimising lineup…" : "Optimise saved lineup"}
+              </button>
+              <button
+                className="btn secondary w-full"
+                type="button"
+                style={{ marginTop: 8 }}
+                disabled={!predictionAvailable || picking}
+                onClick={autoPick}
+              >
+                {picking ? "Optimising…" : "Run auto-pick"}
+              </button>
+              {!predictionAvailable && (
+                <p style={{ fontSize: 11, color: "var(--muted-mid)", marginTop: 8 }}>
+                  {snapshot.prediction_error ?? "A matching prediction export is required."}
+                </p>
+              )}
+            </section>
+
+            <section className="rail-block">
+              <p className="eyebrow muted">
+                Dugout dock
+              </p>
+              <h2>Bench order</h2>
+              <div className="bench">
+                {preview && "bench" in preview
+                  ? preview.bench.map((player) => (
+                      <button
+                        key={player.element}
+                        type="button"
+                        className="bench-player"
+                        onClick={() => openProfile(player)}
+                      >
+                        <span>{player.position}</span>
+                        <strong>{player.web_name || player.name}</strong>
+                        <em>{num(player.predicted_points ?? player.form)}</em>
+                        <div className="shot">
+                          <PlayerPhoto
+                            src={player.photo ?? undefined}
+                            alt={player.name}
+                            name={player.name}
+                            variant="pitch"
+                            loading="lazy"
+                          />
+                        </div>
+                      </button>
+                    ))
+                  : <p className="empty-copy">No bench until a squad is saved.</p>}
+              </div>
+            </section>
+
+            <section className="rail-block">
+              <p className="eyebrow muted">
+                Availability desk
+              </p>
+              <h2>Squad alerts</h2>
+              {flagged.length ? (
+                <div className="squad-alerts-list">
+                  {flagged.map((player) => (
+                    <p key={player.element} className="squad-alerts-row">
+                      <strong>{player.web_name}</strong>
+                      <br />
+                      {player.news || `${player.chance_of_playing_next_round ?? 0}% chance of playing`}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className="empty-copy">
+                  {squadPlayers.length
+                    ? "All selected players are currently marked available."
+                    : "No squad loaded."}
+                </p>
+              )}
+            </section>
+
+            <section className="rail-block">
+              <p className="eyebrow muted">
+                Device data
+              </p>
+              <h2>Export &amp; import</h2>
+              <DataPortability />
+            </section>
+          </aside>
         </div>
-      </details>
+
+        <div className="shell team-plan-shell">
+          <TeamPlan
+            analysis={transferPlan}
+            freeTransfers={freeTransfers}
+            onFreeTransfersChange={setFreeTransfers}
+            bank={plannerBankValue}
+            onBankChange={(value) => setPlannerBank(Math.max(0, Math.min(100, Math.round(value * 10) / 10)))}
+            loading={transferPlanLoading}
+            error={planError}
+            onApply={applyTransferPlan}
+          />
+        </div>
+      </div>
     </section>
   );
 }

@@ -1,107 +1,262 @@
-# FPL Assistant — Stadium Wayfinding
+# FPL Assistant Broadcast Design System
 
-Version 2.0. Replaces the 1.x "Broadcast" system. Applies to every screen in `webapp/frontend`.
-Stylesheets: `app/styles/system.css` (tokens, shell, primitives), `team.css` (gate 1), `screens.css`
-(gates 2–8), `drawer.css` (overlays), imported from `app/layout.tsx` after Tailwind so they win.
-Shared signage components live in `components/signage.tsx`; icons in `components/icons.tsx`.
+Version 1.4 — the definitive design vision for the 2026/27 match centre.
+Scope: `fpl-assistant-prototype.html`, plus the production Next.js components listed in
+§5 "Production components" (`webapp/frontend/`), which consume the same tokens from
+`webapp/frontend/app/broadcast.css`. The rest of the production Flask interface is untouched
+until a component is added to that list.
 
-## 1. Idea
+## 1. Atmosphere & Identity
 
-The app is signed like a Premier League stadium concourse: you always know which gate you are at,
-what the call is, and where to go next. Premier League colours and a Premier-Sans-like face are a
-brand commitment (see PRODUCT.md). Copy is human: no model scores, R², model names, IDs or
-methodology strings anywhere on the surface.
+FPL Assistant feels like a live Premier League broadcast control room crossed with a sharp Sunday-paper
+football supplement: fast, graphic, confident, legible under pressure.
 
-Three moves carry the world:
+The signature is the **Radiant Mane** — cropped jagged arcs that move between cyan/lime analysis,
+magenta/aubergine matchday drama and orange/yellow editorial spotlight — while player cutouts and giant
+outlined numerals break their frames.
 
-1. **Numbered gates.** Eight destinations, numbered 1–8 in the rail, on each page's gate sign and in
-   the phone gate bar. The number is also the keyboard shortcut (1–8 outside text fields).
-2. **One verdict plate per screen.** The decision in plain words, on a PL gradient, with the player it
-   is about as a real cutout breaking the plate's top edge.
-3. **Signage atoms.** Position blocks, a projection ramp, FDR blocks and limit tracks read the same
-   on every screen.
+Two rules separate this from a themed dashboard:
+
+1. **Information is carried by composition, not by chrome.** Hierarchy comes from scale, flat colour
+   fields, crests, photography and typography — not from borders, shadows and rounded cards.
+2. **Colour is rationed.** See §2. A screen that needs five accents to be understood has failed.
 
 ## 2. Colour
 
-| Token | Value | Job |
+### Palette
+
+| Role | Token | Value | Usage |
+|---|---|---:|---|
+| PL canvas | `--pl-purple` | `#37003C` | Persistent navigation and identity |
+| Stadium void | `--night-900` | `#1A0022` | Deepest page background |
+| Stadium layer | `--night-850` / `--night-800` | `#1F0027` / `#25002C` | Elevated dark regions |
+| Stadium mid | `--night-700` | `#430048` | Dividers and secondary purple |
+| Pitch white | `--white` | `#FFFFFF` | Primary text and white broadcast panels |
+| Paper | `--paper` | `#F5F2F3` | Editorial data fields |
+| Ink | `--ink` | `#210025` | Text on luminous/white surfaces |
+| Muted light / mid / ink | `--muted-light` / `--muted-mid` / `--muted-ink` | `#CBBCCF` / `#9D88A3` / `#6C5B6D` | Supporting text |
+| Electric cyan | `--cyan` | `#04F5FF` | Focus ring and stats-mode identity |
+| Volt lime | `--lime` | `#00FF87` | Primary action, positive value, selected state |
+| Neon pink | `--pink` | `#E90052` | Alert, negative value, outgoing transfer |
+| Sunset orange | `--orange` | `#FF5E00` | Captain spotlight gradient only |
+| Hot yellow | `--yellow` | `#EBFF00` | Spotlight contrast and hazard blade |
+| Captain gold | `--gold` | `#FFD45A` | Armband badge |
+| FDR 1–5 | `--fdr-1` … `--fdr-5` | `#257D5A` `#00CC6A` `#B0B0B0` `#E90052` `#7B0033` | Fixture difficulty field |
+
+Club identity is a two-stop pair per club (`--c1`, `--c2`) set inline from `CLUBS`, never a neutral grey.
+
+### Gradient recipes
+
+- `--gradient-stats`: cyan → lime. Stats Centre / My Team hero.
+- `--gradient-matchday`: pink → PL purple. Transfer impact.
+- `--gradient-spotlight`: orange → pink → purple. Captain lead recommendation.
+- Club panels always use the relevant two-stop club pair.
+
+### Colour discipline (the rule that keeps it off-template)
+
+- **Purple and white are the system. One accent carries a context, and the context header carries it** —
+  as a *flat block of colour*, not as a thin neon rail on every panel. The Transfer Studio proves the
+  rule: a solid pink `PLAYER OUT` band, a solid lime `PLAYER IN` band, and nothing else competing.
+- **Lime means state, never data.** Primary action, selected row, positive delta. A projection column
+  rendered lime on all 36 rows is decoration, and was removed.
+- **Pink means alert or negative.** Nothing else.
+- **Selected filters and tabs are a white block with ink text**, not a coloured one. Quiet, and closer to
+  the real Premier League UI than a lime chip.
+- Cyan is reserved for the focus ring and the Stats Centre gradient. It is not a UI accent.
+- FDR is the one place a full-chroma field is correct — it is the data.
+- FDR, injury state, captaincy and comparison leadership always carry a text or numeric cue as well as
+  colour.
+
+## 3. Typography
+
+Four roles, and they must stay distinguishable. The licensed faces are not redistributable, so each has a
+metric-sympathetic open fallback.
+
+| Role | Stack | Carries |
 |---|---|---|
-| `--pl-purple` | `#37003C` | Rail, gate signs, primary buttons, ink on luminous fields |
-| `--ground` | `#F4F1F6` | Page (light concourse) |
-| `--surface` / `--surface-2` | `#FFFFFF` / `#FAF8FB` | Panels, rows |
-| `--ink` / `--ink-2` / `--muted` | `#1E0021` / `#4A3A4E` / `#6F5F72` | Text |
-| `--line` / `--line-strong` | `#E7E1EA` / `#D3C9D7` | Dividers, input borders |
-| `--green` | `#00FF87` | The way forward: go buttons, the active gate edge, strong projections |
-| `--pink` | `#E90052` | Out, alerts, sell desk |
-| `--cyan` | `#04F5FF` | Focus ring on purple, DEF block |
-| `--yellow` | `#EBFF00` | Doubt, GK block |
-| `--green-ink` / `--pink-ink` | `#007A3D` / `#C70046` | Positive/negative text on light grounds |
-| `--on-purple` / `-2` / `-3` | `#FFF` / `#E6D6E9` / `#BFA4C5` | Text on purple, tinted from the hue |
+| Display | `"Premier Sans", "Archivo Black", Arial Black` | Enormous headlines, gameweek numerals, squad numbers |
+| Product UI | `"Radikal", "Inter", Helvetica Neue` | Navigation, controls, player names, body |
+| Editorial | `"Toshi", "Newsreader", Georgia` serif | Analyst reads, quotes, verdicts, tactical insight |
+| Data | `"Johnston100", "Barlow Semi Condensed", Archivo` | Prices, clocks, stats, FDR, all tabular values |
 
-Gradients (verdict plates only): `--grad-matchday` pink→purple, `--grad-spotlight`
-orange→pink→purple (a strong call), `--grad-stats` cyan→green (value/verdict, purple ink),
-`--grad-night` (neutral/empty states).
+**The data face is not a monospace, and this is deliberate.** Johnston100 is a humanist sans with tabular
+figures. Substituting a typewriter mono (Roboto Mono, Consolas) reads as a terminal, not a stadium, and
+was the single biggest type error in v0.5. A condensed grotesque gives the scoreboard/score-bug feel the
+product wants and buys horizontal density in the fixture matrix and stat tables.
 
-Position blocks: GK yellow, DEF cyan, MID green, FWD pink (white text). FDR uses the official FPL
-scale: 1 `#375523`, 2 `#01FC7A`, 3 `#E7E7E7`, 4 `#FF1751`, 5 `#80072D`, each with its own ink and
-always with opponent and venue text. Club colours (`lib/club-colors.ts`) only ever back player
-cutouts and run cards.
+Tabular figures are enforced with `font-feature-settings: "tnum" 1, "lnum" 1` on `:root` rather than
+`font-variant-numeric`, because the `font:` shorthand used throughout the stylesheet silently resets
+`font-variant-numeric` and would leave figures proportional.
 
-Light ground was chosen from the use scene: dense tables read under any light, and purple plates
-carry the identity.
+The Display, Product UI and Editorial faces are self-hosted via Fontsource (`@fontsource-variable/archivo`,
+`@fontsource-variable/inter`, `@fontsource-variable/newsreader`, `@fontsource/barlow-semi-condensed`),
+imported directly in `app/layout.tsx` rather than loaded from Google Fonts at runtime. Archivo Variable's
+width axis powers `.display-hero` (`"wdth" 112`, weight 900) on every page's `<h1>` and `.sub-head h3`
+(`"wdth" 100`, weight 800), so headlines keep the Archivo Black look while gaining real variable weights.
 
-## 3. Type
+**11px type floor.** `--type-micro` (`0.6875rem` / 11px) is the smallest text permitted anywhere in
+`broadcast.css`; the `.ghost-num` decorative numerals are the sole exception. Rules at the floor also cap
+`letter-spacing` at `.1em` so the larger glyphs still fit their original boxes.
 
-One family, Archivo Variable (self-hosted via `@fontsource-variable/archivo/wdth.css`), as the open
-stand-in for Premier Sans.
+### Scale
 
-| Role | Setting |
-|---|---|
-| Gate sign title | 900, `font-stretch: 118%`, `--t-sign` clamp(1.9rem → 3rem), -0.02em |
-| Verdict plate | 900, 112%, `--t-plate` clamp(2rem → 4.25rem), line-height .95 |
-| Section / panel heads | 900, 108–112%, 1.0625–1.375rem |
-| Figures | 800–900, `font-stretch: 75–85%`, tabular (`tnum` set on `html`) |
-| UI / body | 450–800, 100%, 15px body, 13px small, 12px floor |
+| Level | Token | Size | Weight | Usage |
+|---|---|---:|---|---|
+| Stadium display | `--type-display-xl` | `clamp(3.5rem, 11vw, 10rem)` | 900 | Giant GW and silhouette numerals |
+| Display | `--type-display` | `clamp(2.5rem, 5.8vw, 6rem)` | 900 | Page hero titles |
+| H1 | `--type-h1` | `clamp(2rem, 4vw, 4.25rem)` | 900 | Major screen heading |
+| H2 | `--type-h2` | `clamp(1.4rem, 2.4vw, 2.4rem)` | 800 | Section heading |
+| H3 | `--type-h3` | `1.125rem` | 700 | Card/player title |
+| Body | `--type-body` | `0.9375rem` | 450 | Product copy |
+| Small | `--type-small` | `0.8125rem` | 550 | Supporting copy |
+| Caption | `--type-caption` | `0.6875rem` | 700 uppercase | Broadcast labels |
+| Mini | `--type-mini` | `0.75rem` | — | Secondary metadata, just above the floor |
+| Micro (floor) | `--type-micro` | `0.6875rem` (11px) | — | Smallest permitted text anywhere except `.ghost-num` |
 
-No eyebrow or kicker labels above headings, no all-caps label rows, no serif.
+## 4. Spacing & Layout
 
-## 4. Layout
+Base unit 4px; `--space-1` … `--space-20` (4 → 80px).
 
-- Shell: `.app` grid of the 248px purple rail and the stage (content max 1360px, gutter
-  clamp(16px, 2.6vw, 40px)). Below 1024px the rail becomes a sticky top bar (brand, compact
-  deadline, refresh) and a fixed bottom gate bar (gates 1–4 plus a More sheet for 5–8).
-- Page rhythm: `.page` is a 32px-gap grid: gate sign, verdict plate, then work sections.
-- `.cols` 1.55fr / 1fr for work + side stack; stacks at 1100px.
-- Corners are square. Depth is a light shadow on panels only (`--shadow-1/2`); plates have none.
+- Content maximum `1440px` (`.shell`), `1720px` for the three-column Transfer Studio (`.shell-wide`).
+- Crest ticker and main navigation are sticky; the document owns vertical scrolling.
+- Screens are document sections toggled by the tablist. The active tab indicator (`.nav-ink`) travels.
+- **Named scroll regions** are permitted where the surface is a working list rather than a reading
+  surface: the fixture matrix reel (horizontal), the two Transfer Studio desk lists, and the comparison
+  team sheet. Each is keyboard reachable and labelled. Everything else scrolls with the document.
+- Asymmetric 7/5 and 8/4 compositions are preferred over uniform mosaics.
+- Border radii are intentionally mixed and mostly absent: compact controls 4px, broadcast panels 12px,
+  hero arenas 20px. Endless 16px rounded rectangles are prohibited.
 
 ## 5. Components
 
-- **GateSign** — number tile (purple, green numeral), title, one-sentence lede, actions right.
-- **VerdictPlate** — props `tone`, `title`, `body`, `player`, `facts` (`PlateFact`), `actions`,
-  `busy`. The cutout uses the player's 500×500 transparent PL photo on a club-colour wedge, clipped
-  at the plate's sides and free to break the top edge. On phones the cutout becomes a 150×190 corner
-  piece beside the title.
-- **Pos**, **Proj** (≥6 solid green, ≥4 green tint, else plain), **Fdr**, **Track** (fills to an end
-  stop, turns pink when full), **Face** (cutout on a club-colour square), **Segmented**.
-- **Panels/rows**: `.panel`, `.panel-head`, `.prow` (face, name + one human "why" line from
-  `lib/why.ts`, position, projection), `.table`, `.callout`, `.disclosure`.
-- **Buttons**: `.btn` purple, `.btn--go` green with a moving arrow, `.btn--line`, `.btn--ghost`,
-  `.btn--sm`.
-- **Pitch**: purple turf with chalk lines; markers are a club tile + white name plate with the
-  projection; armbands and availability flags sit on the tile corners.
-- **Dossier drawer**: club-colour header with crest watermark and big cutout, status strip, four
-  figures, then This week / Next games / Recent points / Season / Transfers sections.
+### Chrome
+- **CrestTicker** — 20 club crests, hover/focus highlights every element of that club across the screen.
+- **BroadcastNav** — tablist with a travelling lime blade, unread count on News Wire.
+- **DeadlineClock** — live countdown plus a deadline tension bar that fills as the lock approaches.
+
+### Primitives
+- **ScoreBug** (`.bug`) — label/value pair, neutral white rail. Not colour-coded per instance.
+- **Meter**, **Dial** — `--d` is unitless and multiplied to px inside the component, so every call site
+  passes a number.
+- **FdrCell / FixChip / FixtureRibbon** — difficulty 1–5 plus blank and double, always with opponent,
+  venue and the numeric value.
+- **PointsSequence / FormLadder** — the ladder adds the opponent, venue and a dotted season-average line;
+  a bar chart alone is not a form graphic.
+- **PhotoFallback** — a failed portrait becomes a club-gradient roundel of initials at small sizes and a
+  ghosted outline mark inside large cutout slots, sized in JS from the container. The layout never
+  collapses because a CDN image 404s.
+
+### Screen components
+- **PlayerMarker** — cutout, club ring, projected-points bug, availability flag, armband, fixture tag.
+- **PlayerDossier** (drawer) — club-spined, six numbered slates: the read (editorial), matchday, form
+  ladder, fixture ribbon, output table with positional percentile ranks, market. One action bar. Drawer
+  actions are an isolated event boundary: close completes before Compare or Transfer changes screen, so
+  an action can never bubble back into the player-open trigger.
+- **TransferDesk / TransferChannel** — the outgoing and incoming desks are deliberately quiet: a single
+  price line and one projected-points read per row. The desk is capped to the relevant shortlist until
+  a search or filter asks for more. The full move is staged in one wide horizontal channel above them;
+  its compact decision read appears only when a move exists, while the deeper impact breakdown remains
+  a progressive disclosure below. Scout reasoning appears only on the selected incoming player.
+- **TeamSheet** — the comparison picker: a printed squad list grouped by position with sticky position
+  slates. Explicitly *not* a grid of identical tiles.
+- **CandidateRunway** — ranked captaincy board; the lead candidate becomes a club-gradient row.
+- **LeadStory** — the News Wire interruption: hazard blade, oversized crop breaking the frame, severity
+  badges, serif quote, squad-impact panel, source reliability dial.
+- **NewsViewSwitch** — one filtered wire can be read three ways without creating parallel data: **Desk**
+  is the full editorial control room; **Cards** is the calm scan-friendly briefing grid; **Reel** is a
+  horizontal, image-led picture line. It is a native tablist: the active view is announced, inactive
+  panels are hidden, and the same filters drive every view. The Reel is deliberately user-driven
+  (scroll snap plus previous/next controls), never an auto-moving carousel.
+- **Disclosure** — single-open accordion, ten comparison categories.
+- **VerdictStamp** — rotated circular stamp closing the comparison.
+
+### Production components
+Live in `webapp/frontend/`, styled from the same `--pl-purple`/`--pink`/`--lime`/`--cyan` tokens and
+`PlayerPhoto` fallback as the prototype — no parallel accent palette.
+- **ChipsPage** (`app/chips/page.tsx`) — chip planning desk: inventory tracker, next-decision banner,
+  per-chip advisor cards, fixture heatmap. `.chip-error` is a solid `--pink`-bordered inline banner with
+  a Retry action; it must never be replaced by a silent empty state or an uncaught crash.
+- **My Team** (`app/team/page.tsx`, `components/team/squad-editor.tsx`,
+  `components/team/manager-lineup-preview.tsx`, `components/team/team-plan.tsx`, `components/team/pitch.tsx`)
+  — owned-squad finance and lineup editor. Distinguishes current market value from selling value; never
+  uses `is-over`/red budget styling for a legally appreciated squad.
+- **TeamPlan** (`components/team/team-plan.tsx`) — the combined transfer-and-lineup recommendation. Lives
+  in its own `.team-plan-shell` section in normal document flow after the pitch/rail grid, not inside it,
+  so the sticky rail can never paint over it. A result strip (transfer count left, net gain and bank
+  after right) is followed by either one `HOLD` statement or a two-column OUT/IN lane — solid `--pink`
+  "Out" / `--lime` "In" label bars over stacked portrait rows, each a 56×56 photo, name, `POS · CLUB`, and
+  a `Sell`/`Buy` price line using the same selling-price basis as the finance summary, never raw market
+  value for an outgoing player. `outPlayers`/`inPlayers` are derived by element-set difference against
+  the owned 15, never by pairing the API's `out`/`in` name arrays, which are not in matching order for a
+  multi-player move. Below that, `Pitch` takes an optional presentational `result` prop and a `compact`
+  (`.pitch--plan`) class to show the suggested XI without ever touching the user's saved team, alongside a
+  bench strip (40×40 photos) and a captain/vice summary. Transfer-row players carry sparse
+  `squad_records` (no photo or `web_name`), so every row is joined back to `snapshot.players` by
+  `element` before rendering.
+  Sizing tokens (`--plan-lane-photo:56px`, `--plan-bench-photo:40px`, `--plan-row-min-h:48px`,
+  `--plan-pitch-min-h:640px`, `--plan-pitch-min-h-mobile:560px`) are declared in §1's `:root` block.
+  Responsive: the OUT/IN lane is two columns from full width down through 561px, stacking only at
+  ≤560px; the pitch-vs-bench/armband evidence panel stacks a breakpoint earlier, at ≤1080px, since the
+  pitch needs the width the lane doesn't.
 
 ## 6. Motion
 
-Ease `cubic-bezier(.16,1,.3,1)`; 140 / 240 / 520ms. One authored moment per gate change: the gate
-number wipes in, the verdict plate wipes in from the left and the cutout rises, and the rail's white
-active plate travels between gates. Pitch lines rise in order; deadline figures flip when they change.
-`prefers-reduced-motion` collapses all of it while keeping every state.
+| Token | Value | Use |
+|---|---|---|
+| `--motion-fast` | `140ms` | Press, icon, colour feedback |
+| `--motion-ui` | `220ms` | Tabs, hover lift, filters |
+| `--motion-panel` | `420ms` | Screen/accordion reveal |
+| `--motion-stage` | `560ms` | Drawer and staged reveals |
+| `--ease-out` | `cubic-bezier(.22,1,.36,1)` | Entrances |
+| `--ease-snap` | `cubic-bezier(.34,1.56,.64,1)` | Short directional swap |
 
-## 7. Accessibility
+Motion serves state: the drawer enters like a broadcast panel, the horizontal transfer lane animates only
+when both ends are filled, the comparison arena reveals on the second selection, and the news-view tab
+indicator moves between reading modes. The Reel itself never auto-advances. The nav blade travels between
+destinations. `prefers-reduced-motion: reduce` removes transforms, the ticker crawl, the lane flow and
+reveal staggering while preserving every state change.
 
-AA contrast throughout (secondary text on purple is tinted, never grey). Every control is native.
-Focus ring: purple on light, cyan on purple. Meaning never rides on colour alone: FDR carries the
-opponent and number, positions carry their letters, doubts carry text. The phone More sheet,
-drawer and dialogs are keyboard reachable; the 1–8 shortcuts are ignored while typing or when a
-dialog is open.
+## 7. Depth & Surfaces
+
+Layered broadcast planes, not a card grid. Purple shell depth is a three-layer recipe: tonal shift, a 1px
+low-alpha white rim, and a directional ambient glow. Blur is used only on the drawer scrim, the sticky
+nav and the lead-story panel. White editorial regions use crisp dividers and no floating shadow. Club
+panels use hard gradient light and clipped graphic shapes rather than grey elevation.
+
+## 8. Accessibility & Accepted Debt
+
+- WCAG 2.2 AA contrast for functional text; luminous lime/yellow surfaces always take dark ink.
+- Every control is a native button, switch, select or input, and is keyboard reachable.
+- The player drawer is a labelled `role="dialog"`, traps Tab, closes on Escape, and returns focus to the
+  marker that opened it.
+- At 560px and below, the Captain Spotlight score bugs become a 2 × 2 broadcast grid and section
+  annotations wrap; decorative player crops may bleed inside their clipped hero but never widen the page.
+- At the same narrow breakpoint, five-player formation lines use compact 60px markers with zero explicit
+  gap so every profile target remains fully inside the turf. Squad alerts recompose into a label/action
+  rail above a full-width message instead of squeezing all three into one row.
+- The mobile navigation scrolls the active destination into view, the fifth My Team summary stat spans
+  the full row, and the Transfer Channel becomes a vertical out → in sequence so labels never clip.
+- Fixture-run summaries resolve deliberately as four columns on desktop, a complete 2 × 2 field on
+  tablet, and one continuous briefing rail on phone; an orphaned fourth card is never allowed to create
+  false empty-panel space. Its overflow fade and scroll cue appear only when later gameweeks are actually
+  off-screen; the sticky club column narrows on phone to keep two fixtures visible at once.
+- Visible `:focus-visible` ring — cyan on dark, purple on paper.
+- Meaning is never colour-only: FDR carries its number, leadership carries a screen-reader "leads",
+  availability carries text.
+- Images have fixed dimensions and a graceful non-breaking fallback; decorative mane and numeral layers
+  are `aria-hidden`.
+
+### Personas
+- **Deadline sprinter** — 90 seconds before lock; must reach squad warnings and the armband without
+  precision tapping.
+- **Data comparer** — keyboard-heavy; must fill two seats, open categories and reach the verdict in
+  logical order.
+- **Low-vision strategist** — 200% zoom; must read status and FDR without relying on hue.
+
+### Accepted debt
+- Proprietary Premier League faces are referenced but not redistributed; open fallbacks are self-hosted
+  via Fontsource. Owner action: drop licensed WOFF2 files into `webapp/static/fonts/` and the named
+  families take over.
+- Crest and player photography come from the Premier League CDN for prototype purposes. Production
+  publication requires the owner to confirm rights and host local optimised derivatives.
+- The prototype HTML uses seeded data. The production app reads live data: model projections and market prices from the Flask snapshot, public manager and league data from the FPL API, and the manager's squad, chip inventory, drafts and holds from this device's local storage. Fixture-signal figures are estimates, not results; nothing is synced with an FPL account.

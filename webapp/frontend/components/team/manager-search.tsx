@@ -259,17 +259,30 @@ export function ManagerSearch({ snapshot, onImport }: ManagerSearchProps) {
     <section className="manager-search" aria-label="Find your FPL team">
       <div className="manager-search-head">
         <div>
-          <h2>Bring in your FPL team</h2>
-          <p>Paste your team&apos;s link from the FPL site, or its entry ID. Only know the name? Search a mini-league you&apos;re in.</p>
+          <span className="eyebrow muted">Team lookup</span>
+          <h2>Find your FPL team</h2>
+          <p>Paste the link to your FPL team, or enter its entry ID. For a name, search a mini-league.</p>
         </div>
-        <div className="seg" role="group" aria-label="How to find your team">
-          <button type="button" aria-pressed={mode === "entry"} onClick={() => changeMode("entry")}>
-            Link or ID
-          </button>
-          <button type="button" aria-pressed={mode === "league"} onClick={() => changeMode("league")}>
-            Search a league
-          </button>
-        </div>
+        <span className="manager-search-source">FPL public API</span>
+      </div>
+
+      <div className="manager-search-mode" aria-label="Team search mode">
+        <button
+          className={"mini-chip" + (mode === "entry" ? " is-active" : "")}
+          type="button"
+          aria-pressed={mode === "entry"}
+          onClick={() => changeMode("entry")}
+        >
+          Entry ID or link
+        </button>
+        <button
+          className={"mini-chip" + (mode === "league" ? " is-active" : "")}
+          type="button"
+          aria-pressed={mode === "league"}
+          onClick={() => changeMode("league")}
+        >
+          Search a mini-league
+        </button>
       </div>
 
       {mode === "entry" ? (
@@ -280,28 +293,27 @@ export function ManagerSearch({ snapshot, onImport }: ManagerSearchProps) {
             void runEntrySearch(entryQuery);
           }}
         >
-          <label className="field-label" htmlFor="manager-search-input">Team link or entry ID</label>
+          <label htmlFor="manager-search-input">FPL entry ID or team link</label>
           <div className="manager-search-input-row">
             <input
               id="manager-search-input"
-              className="input"
               value={entryQuery}
               onChange={(event) => handleEntryInput(event.target.value)}
               placeholder="Entry ID or https://fantasy.premierleague.com/entry/…"
               autoComplete="off"
             />
             <button
-              className="btn btn--go"
+              className="btn sm"
               type="submit"
               disabled={status === "searching" || status === "loading"}
             >
-              {status === "searching" ? "Looking…" : "Find my team"}
+              {status === "searching" ? "Searching…" : "Find team"}
             </button>
           </div>
           <p className="manager-search-help">
-            On the FPL site, open your Points page and copy the address.{" "}
+            Open your team on the official FPL site and copy its URL.{" "}
             <a href="https://fantasy.premierleague.com/" target="_blank" rel="noreferrer">
-              Open FPL in a new tab
+              Open FPL
             </a>
           </p>
         </form>
@@ -318,9 +330,10 @@ export function ManagerSearch({ snapshot, onImport }: ManagerSearchProps) {
         <section className="recent-manager-list" aria-label="Recent teams">
           <div className="recent-manager-head">
             <div>
-              <h3>Recent teams</h3>
+              <span className="kicker">Recent teams</span>
+              <p>Saved on this device · {snapshot.season}</p>
             </div>
-            <button className="btn btn--ghost btn--sm" type="button" onClick={clearRecent}>
+            <button className="btn secondary sm" type="button" onClick={clearRecent}>
               Clear
             </button>
           </div>
@@ -333,7 +346,7 @@ export function ManagerSearch({ snapshot, onImport }: ManagerSearchProps) {
                   onClick={() => void openRecentTeam(manager)}
                 >
                   <strong>{manager.team_name || manager.manager_name || "Public FPL team"}</strong>
-                  <span>{manager.manager_name}</span>
+                  <span>{manager.manager_name} · Entry {manager.entry_id}</span>
                 </button>
               </li>
             ))}
@@ -360,8 +373,8 @@ export function ManagerSearch({ snapshot, onImport }: ManagerSearchProps) {
                   <small>{candidate.team_name || "Unnamed team"}</small>
                 </span>
                 <span>
-                  <b>{candidate.total_points ?? "–"} pts</b>
-                  <small>{candidate.overall_rank != null ? `Rank ${candidate.overall_rank.toLocaleString()}` : ""}</small>
+                  <b>Entry {candidate.entry_id}</b>
+                  <small>Rank {candidate.overall_rank ?? "--"} · {candidate.total_points ?? "--"} pts</small>
                 </span>
               </button>
             </li>
@@ -369,7 +382,7 @@ export function ManagerSearch({ snapshot, onImport }: ManagerSearchProps) {
         </ul>
       )}
       {status === "loading" && (
-        <p className="loading-state" aria-live="polite"><span className="loading-spinner" />Fetching their latest lineup…</p>
+        <p className="manager-search-loading" aria-live="polite">Loading latest public lineup…</p>
       )}
       {lineup && (
         <ManagerLineupPreview
