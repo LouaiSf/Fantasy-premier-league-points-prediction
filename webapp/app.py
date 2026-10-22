@@ -59,6 +59,7 @@ from webapp.platform_data import (  # noqa: E402
     player_history,
 )
 from webapp import contracts  # noqa: E402
+from webapp import stats as stats_lab  # noqa: E402
 from webapp import observability as obs  # noqa: E402
 from webapp.contracts import API_CONTRACT_VERSION, MAX_BODY_BYTES, RequestError  # noqa: E402
 from webapp.fpl_client import FplClient  # noqa: E402
@@ -1547,6 +1548,44 @@ def api_player_history(element_id: int):
     season = s.get('season') or latest_local_season(Path(ROOT)) or '2026-27'
     history = player_history(Path(ROOT), season, element_id)
     return jsonify({'ok': True, 'history': history})
+
+
+def _stats_season() -> str:
+    s = state()
+    return s.get('season') or latest_local_season(Path(ROOT)) or '2026-27'
+
+
+@app.route('/api/stats/players')
+def api_stats_players():
+    """Stats Lab table: FPL + FotMob underlying numbers over a gameweek window."""
+    args = request.args
+    window = args.get('window', 'season')
+    if window not in stats_lab.WINDOWS:
+        raise RequestError(f"window must be one of {sorted(stats_lab.WINDOWS)}", 'invalid_field', 'window')
+    position = args.get('position') or None
+    if position not in (None, 'GK', 'DEF', 'MID', 'FWD'):
+        raise RequestError('position must be GK, DEF, MID or FWD', 'invalid_field', 'position')
+    preset = args.get('preset') or None
+    if preset is not None and preset not in stats_lab.PRESETS:
+        raise RequestError(f"unknown preset {preset!r}", 'invalid_field', 'preset')
+    season = _stats_season()
+    data = stats_lab.player_stats(
+        ROOT, season, window=window,
+        gw_from=contracts.query_number(args, 'gw_from', None, lo=1, hi=38, integer=True),
+        gw_to=contracts.query_number(args, 'gw_to', None, lo=1, hi=38, integer=True),
+        position=position,
+        min_minutes=contracts.query_number(args, 'min_minutes', 0, lo=0, hi=3420, integer=True),
+        preset=preset, sort=args.get('sort') or None,
+        limit=contracts.query_number(args, 'limit', None, lo=1, hi=1000, integer=True))
+    return jsonify({'ok': True, 'season': season,
+                    'fotmob_updated_at': fotmob_updated_at(season), **data})
+
+
+@app.route('/api/player/<int:element_id>/underlying')
+def api_player_underlying(element_id: int):
+    season = _stats_season()
+    return jsonify({'ok': True, 'season': season,
+                    **stats_lab.player_underlying(ROOT, season, element_id)})
 
 
 
