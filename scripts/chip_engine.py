@@ -402,63 +402,131 @@ def _discount(gain: float | None, week: int, current_gw: int, policy: ChipPlanPo
     return gain * (policy.future_reliability ** (week - current_gw))
 
 
-def _joint_plan(gains: dict, candidates: dict, current_gw: int, policy: ChipPlanPolicy) -> dict:
-    """The single week each unused chip should target, maximising total
-    discounted gain with no two chips sharing a gameweek. Brute force: at
-    most 4 chips, each with at most ~19 candidate weeks (plus "hold")."""
-    unused = [chip for chip in CHIP_IDS if candidates.get(chip)]
-    options_per_chip = []
-    for chip in unused:
-        weeks_with_gain = [gw for gw in candidates[chip] if gains[chip].get(gw) is not None]
-        options_per_chip.append([(chip, gw) for gw in weeks_with_gain] + [(chip, None)])
+def _plan_tokens(candidate_windows: dict) -> list[tuple[str, str, list]]:
+    """One (chip, half, eligible weeks) per chip copy still available.
 
-    best_assignment: tuple = ()
-    best_score = float('-inf')
-    for combo in itertools.product(*options_per_chip):
-        weeks_used = [gw for _, gw in combo if gw is not None]
-        if len(weeks_used) != len(set(weeks_used)):
+    2026/27 has a full chip set per half, so an unused first-half Triple
+    Captain and an unused second-half one are two separate chips to place.
+    Planning one week per chip across both halves would let the first-half
+    copy expire unplayed whenever the best week fell after GW19.
+    """
+    tokens = []
+    for chip in CHIP_IDS:
+        eligible = candidate_windows[chip][0]
+        for half in ('first_half', 'second_half'):
+            weeks = [gw for gw in eligible if _half_of(gw) == half]
+            if weeks:
+                tokens.append((chip, half, weeks))
+    return tokens
+
+
+def _gain_in_plan(chip: str, gw: int, placed: dict, gains: dict, after_wildcard: dict):
+    """(gain, Wildcard week it depends on) for chip at gw, given the plan's other chips.
+
+    Triple Captain and Bench Boost in the weeks after a planned Wildcard are
+    played with the Wildcard's squad, not today's.
+    """
+    wc_gw = placed.get('wildcard')
+    if chip in ('triple_captain', 'bench_boost') and wc_gw is not None and wc_gw < gw:
+        later = after_wildcard.get(wc_gw, {}).get(gw, {})
+        if chip in later:
+            return later[chip][0], wc_gw
+    return gains[chip].get(gw), None
+
+
+def _joint_plan(gains: dict, tokens: list, current_gw: int, policy: ChipPlanPolicy,
+                after_wildcard: dict | None = None) -> dict:
+    """Place every available chip copy, one half at a time.
+
+    Within a half: at most one chip per gameweek, every placed chip must clear
+    its MIN_GAIN (or merely be positive once the half is short of weeks --
+    an expiring chip is worth any positive week), and the placement maximises
+    total discounted gain, with TC/BB re-valued after a Wildcard. Halves are
+    independent: their weeks never overlap and each has its own chips.
+
+    Returns {(chip, half): {'gw', 'gain', 'after_wildcard', 'use_or_lose',
+    'runner_up_gw', 'runner_up_gain', 'best_unplaced'}}.
+    """
+    after_wildcard = after_wildcard or {}
+    plan = {}
+    for half in ('first_half', 'second_half'):
+        half_tokens = [t for t in tokens if t[1] == half]
+        if not half_tokens:
             continue
-        score = sum(
-            _discount(gains[chip][gw], gw, current_gw, policy)
-            for chip, gw in combo if gw is not None)
-        if score > best_score:
-            best_score = score
-            best_assignment = combo
+        half_weeks = {gw for _, _, weeks in half_tokens for gw in weeks}
+        use_or_lose = len(half_weeks) <= len(half_tokens) + policy.use_or_lose_buffer
 
-    return {chip: gw for chip, gw in best_assignment}
+        def floor(chip: str) -> float:
+            return 0.0 if use_or_lose else policy.min_gain[chip]
+
+        def best_possible(chip: str, gw: int):
+            values = [gains[chip].get(gw)]
+            if chip in ('triple_captain', 'bench_boost'):
+                values += [later[gw][chip][0] for later in after_wildcard.values()
+                           if chip in later.get(gw, {})]
+            values = [v for v in values if v is not None]
+            return max(values) if values else None
+
+        options, ranked_by_chip = [], {}
+        for chip, _half, weeks in half_tokens:
+            ranked = [(gw, best_possible(chip, gw)) for gw in weeks]
+            ranked = [(gw, g) for gw, g in ranked if g is not None and g > 0 and g >= floor(chip)]
+            ranked.sort(key=lambda t: -_discount(t[1], t[0], current_gw, policy))
+            ranked_by_chip[chip] = ranked
+            options.append([(chip, gw) for gw, _ in ranked[:policy.plan_top_weeks]] + [(chip, None)])
+
+        best_placed, best_score = {}, 0.0
+        for combo in itertools.product(*options):
+            placed = {chip: gw for chip, gw in combo if gw is not None}
+            if len(set(placed.values())) != len(placed):
+                continue
+            score = 0.0
+            for chip, gw in placed.items():
+                gain, _wc = _gain_in_plan(chip, gw, placed, gains, after_wildcard)
+                if gain is None or gain <= 0 or gain < floor(chip):
+                    break
+                score += _discount(gain, gw, current_gw, policy)
+            else:
+                if score > best_score + 1e-9:
+                    best_placed, best_score = placed, score
+
+        for chip, _half, weeks in half_tokens:
+            gw = best_placed.get(chip)
+            gain, wc_gw = (_gain_in_plan(chip, gw, best_placed, gains, after_wildcard)
+                           if gw is not None else (None, None))
+            # The runner-up week: this chip's best other week that no other
+            # placed chip occupies, valued under the same plan.
+            taken = {w for c, w in best_placed.items() if c != chip}
+            runner_up_gw, runner_up_gain = None, None
+            for other in weeks:
+                if other == gw or other in taken:
+                    continue
+                other_gain, _ = _gain_in_plan(chip, other, {**best_placed, chip: other}, gains, after_wildcard)
+                if other_gain is None or other_gain <= 0:
+                    continue
+                if runner_up_gw is None or (_discount(other_gain, other, current_gw, policy)
+                                            > _discount(runner_up_gain, runner_up_gw, current_gw, policy)):
+                    runner_up_gw, runner_up_gain = other, other_gain
+            best_unplaced = max(((w, g) for w in weeks if (g := gains[chip].get(w)) is not None),
+                                key=lambda t: t[1], default=(None, None))
+            plan[(chip, half)] = {
+                'gw': gw, 'gain': gain, 'after_wildcard': wc_gw, 'use_or_lose': use_or_lose,
+                'runner_up_gw': runner_up_gw, 'runner_up_gain': runner_up_gain,
+                'best_unplaced': best_unplaced,
+            }
+    return plan
 
 
-def _chip_status(chip: str, assigned_gw: int | None, gains: dict, candidates: list,
-                 half_unused_count: int, half_last_gw: int, current_gw: int,
-                 policy: ChipPlanPolicy) -> dict:
-    gain_now = gains.get(current_gw)
+def _token_status(entry: dict, current_gw: int, policy: ChipPlanPolicy) -> dict:
+    gw = entry['gw']
+    status = 'hold' if gw is None else ('play_now' if gw == current_gw else 'planned')
     close_call = False
-    if assigned_gw is not None:
-        future_candidates = [gw for gw in candidates if gw != current_gw]
-        best_future_gw = max(
-            future_candidates, key=lambda gw: _discount(gains.get(gw), gw, current_gw, policy),
-            default=None)
-        discounted_future = (
-            _discount(gains.get(best_future_gw), best_future_gw, current_gw, policy)
-            if best_future_gw is not None else None)
-        if discounted_future is not None and gain_now is not None:
-            close_call = abs(discounted_future - gain_now) < policy.close_call_margin
-
-    remaining_weeks = half_last_gw - current_gw + 1
-    use_or_lose = remaining_weeks <= half_unused_count
-
-    if assigned_gw == current_gw and gain_now is not None and gain_now >= policy.min_gain[chip]:
-        status = 'play_now'
-    elif assigned_gw is not None:
-        status = 'planned'
-    else:
-        status = 'hold'
-
-    return {
-        'status': status,
-        'close_call': close_call and status in {'play_now', 'planned'},
-        'use_or_lose': use_or_lose and status in {'play_now', 'planned'},
-    }
+    if gw is not None and entry['runner_up_gw'] is not None:
+        close_call = abs(_discount(entry['gain'], gw, current_gw, policy)
+                         - _discount(entry['runner_up_gain'], entry['runner_up_gw'], current_gw, policy)
+                         ) < policy.close_call_margin
+    return {'status': status, 'close_call': close_call,
+            'use_or_lose': entry['use_or_lose'] and gw is not None}
 
 
 # ---------------------------------------------------------------------------
@@ -473,6 +541,39 @@ def _fixture_signal(row: dict) -> dict:
         'free_hit': round(signal + row['blank_teams'] * 2, 2),
         'wildcard': round(signal + max(0.0, row['avg_fdr'] - 3.0), 2),
     }
+
+
+def _captain_and_bench(result: dict, p_plays: pd.DataFrame, gw: int) -> dict:
+    """Triple Captain and Bench Boost gains (and evidence) for one squad's week.
+
+    TC adds the captain's points once more; BB adds the bench, less what the
+    bench would have scored anyway through autosubs.
+    """
+    out = {}
+    captain = result.get('captain')
+    if captain is not None:
+        captain_points = float(captain['predicted_points'])
+        out['triple_captain'] = (captain_points, {
+            'chip': 'triple_captain',
+            'captain': {
+                'element': _player_key(captain), 'name': str(captain.get('name', '')),
+                'team': str(captain.get('team', '')), 'position': str(captain.get('position', '')),
+                'projected_points': round(captain_points, 2),
+            },
+        })
+    bench_total = float(result['bench']['predicted_points'].sum())
+    autosub = _expected_autosub_points(result, p_plays, gw)
+    out['bench_boost'] = (bench_total - autosub, {
+        'chip': 'bench_boost',
+        'ordered_bench': [
+            {'player': str(r.get('name', '')), 'element': _player_key(r),
+             'points': round(float(r['predicted_points']), 2)}
+            for _, r in result['bench'].iterrows()
+        ],
+        'bench_total': round(bench_total, 2),
+        'expected_autosub_points': round(autosub, 2),
+    })
+    return out
 
 
 def _evaluate_candidate_week(opt, gw: int, squad: pd.DataFrame, point_matrix: pd.DataFrame,
@@ -492,34 +593,10 @@ def _evaluate_candidate_week(opt, gw: int, squad: pd.DataFrame, point_matrix: pd
 
     current_result = _current_week_result(opt, squad, point_matrix, gw)
     if current_result is not None:
-        captain = current_result.get('captain')
-        captain_points = None if captain is None else float(captain['predicted_points'])
-
-        if gw in candidate_windows['triple_captain'][0] and captain_points is not None:
-            week_gains['triple_captain'] = captain_points
-            week_evidence['triple_captain'] = {
-                'chip': 'triple_captain',
-                'captain': {
-                    'element': _player_key(captain), 'name': str(captain.get('name', '')),
-                    'team': str(captain.get('team', '')), 'position': str(captain.get('position', '')),
-                    'projected_points': round(captain_points, 2),
-                },
-            }
-
-        if gw in candidate_windows['bench_boost'][0]:
-            bench_total = float(current_result['bench']['predicted_points'].sum())
-            autosub = _expected_autosub_points(current_result, p_plays, gw)
-            week_gains['bench_boost'] = bench_total - autosub
-            week_evidence['bench_boost'] = {
-                'chip': 'bench_boost',
-                'ordered_bench': [
-                    {'player': str(r.get('name', '')), 'element': _player_key(r),
-                    'points': round(float(r['predicted_points']), 2)}
-                    for _, r in current_result['bench'].iterrows()
-                ],
-                'bench_total': round(bench_total, 2),
-                'expected_autosub_points': round(autosub, 2),
-            }
+        for chip, (gain, chip_evidence) in _captain_and_bench(current_result, p_plays, gw).items():
+            if gw in candidate_windows[chip][0]:
+                week_gains[chip] = gain
+                week_evidence[chip] = chip_evidence
 
     if gw in candidate_windows['free_hit'][0]:
         fh_total, fh_result = _free_hit_total(opt, reduced_players, point_matrix, gw, chip_budget, cost_overrides)
@@ -562,6 +639,20 @@ def _evaluate_candidate_week(opt, gw: int, squad: pd.DataFrame, point_matrix: pd
                 'wildcard_total': round(wc_total, 2) if wc_total is not None else None,
                 'changed_player_count': changed,
             }
+            # The squad a Wildcard builds is the one Triple Captain and Bench
+            # Boost would be played with in the weeks after it, so their gains
+            # there are re-valued on it. That is what lets the planner find a
+            # Wildcard-then-Bench-Boost pairing at all.
+            after = {}
+            if wc_result is not None:
+                wc_squad = wc_result['squad']
+                for later in window_gws[1:]:
+                    if not any(later in candidate_windows[c][0] for c in ('triple_captain', 'bench_boost')):
+                        continue
+                    later_result = _current_week_result(opt, wc_squad, point_matrix, later)
+                    if later_result is not None:
+                        after[later] = _captain_and_bench(later_result, p_plays, later)
+            week_evidence['wildcard']['_after'] = after
 
     return gw, week_gains, week_evidence
 
@@ -654,16 +745,11 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
             normalized_inventory[half][chip] = value if value in {'unused', 'used', 'expired'} else 'unknown'
 
     scheduled = sorted({int(gw) for gw in (scheduled_gameweeks or [])})
-    half_last_gw = _half_last_gw(first_gw)
     candidate_windows = {
         chip: _candidate_window(first_gw, last_gw, chip, normalized_inventory, scheduled,
                                last_free_hit_gameweek)
         for chip in CHIP_IDS
     }
-    half_unused_count = sum(
-        1 for chip in CHIP_IDS
-        if normalized_inventory[_half_of(first_gw)][chip] == 'unused'
-    )
 
     for row in rows:
         row['fixture_signal'] = _fixture_signal(row)
@@ -745,15 +831,82 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
                         gains[chip][gw] = week_gains[chip]
                         evidence[chip][gw] = week_evidence[chip]
 
-        chip_plan_assignment = _joint_plan(gains, {chip: candidate_windows[chip][0] for chip in CHIP_IDS},
-                                          first_gw, policy)
+        # {wildcard gw: {later gw: {chip: (gain, evidence)}}}, kept out of the response.
+        after_wildcard = {gw: ev.pop('_after', {}) for gw, ev in evidence['wildcard'].items()}
+        tokens = _plan_tokens(candidate_windows)
+        plan = _joint_plan(gains, tokens, first_gw, policy, after_wildcard)
+        current_half = _half_of(first_gw)
+
+        def token_view(chip: str, half: str) -> dict:
+            entry = plan[(chip, half)]
+            info = _token_status(entry, first_gw, policy)
+            gw, gain, wc_gw = entry['gw'], entry['gain'], entry['after_wildcard']
+            if gw is None:
+                # Held: show the best week it was weighed against, so "hold" can be checked.
+                best_gw = entry['best_unplaced'][0]
+                chip_evidence = None if best_gw is None else evidence[chip].get(best_gw)
+            elif wc_gw is not None:
+                chip_evidence = {**after_wildcard[wc_gw][gw][chip][1], 'after_wildcard_gameweek': wc_gw}
+            else:
+                chip_evidence = evidence[chip].get(gw)
+            return {**info, 'half': half, 'gw': gw,
+                    'gain': None if gain is None else round(gain, 2),
+                    'discounted_gain': None if gain is None else round(_discount(gain, gw, first_gw, policy), 2),
+                    'after_wildcard_gameweek': wc_gw, 'evidence': chip_evidence,
+                    'best_unplaced': entry['best_unplaced']}
+
+        def reason_for(chip: str, view: dict) -> str:
+            label, margin = CHIP_LABELS[chip], policy.min_gain[chip]
+            half_end = FIRST_HALF_LAST_GW if view['half'] == 'first_half' else SECOND_HALF_LAST_GW
+            if view['gw'] is None:
+                best_gw, best_gain = view['best_unplaced']
+                if best_gw is None:
+                    return f'No eligible {label} week remains this half.'
+                return (f'No week clears the {margin:.0f}-point margin yet (best is +{best_gain:.1f} in '
+                        f'GW{best_gw}); hold it. It is planned automatically once GW{half_end} is close '
+                        'enough that it would otherwise expire.')
+            gain = view['gain']
+            after = (f" with the squad your GW{view['after_wildcard_gameweek']} Wildcard builds"
+                     if view['after_wildcard_gameweek'] is not None else '')
+            if view['status'] == 'play_now':
+                text = f'{label} is worth playing now: +{gain:.1f} points{after}'
+                text += (f', above its {margin:.0f}-point margin.' if gain >= margin else
+                         f". That is under its {margin:.0f}-point margin, but this half's chips expire "
+                         f'after GW{half_end} and no better week is left.')
+            else:
+                text = f"Planned for GW{view['gw']}: +{gain:.1f} points{after}."
+            # Say why a week with a bigger raw gain was passed over, or the
+            # card reads "now 6.8 vs best 6.6" with no explanation.
+            holders = {e['gw']: c for (c, h), e in plan.items()
+                       if h == view['half'] and c != chip and e['gw'] is not None}
+            half_gains = {w: g for w, g in gains[chip].items()
+                          if _half_of(w) == view['half'] and w != view['gw'] and g is not None}
+            planned_value = _discount(gain, view['gw'], first_gw, policy)
+            better = [w for w, g in half_gains.items()
+                      if _discount(g, w, first_gw, policy) > planned_value + 0.05]
+            if better:
+                taken_gw = max(better, key=lambda w: _discount(half_gains[w], w, first_gw, policy))
+                if taken_gw in holders:
+                    text += (f' GW{taken_gw} (+{half_gains[taken_gw]:.1f}) goes to '
+                             f'{CHIP_LABELS[holders[taken_gw]]}: one chip per week, and the plan '
+                             'scores more that way.')
+            top_gw, top_gain = view['best_unplaced']
+            if (top_gw is not None and top_gw > view['gw'] and top_gain > gain + 0.05
+                    and top_gw not in better):
+                text += f' GW{top_gw} is higher (+{top_gain:.1f}) but further out, so less certain.'
+            if view['close_call']:
+                text += ' Close call: another week is within a point of it.'
+            if view['use_or_lose'] and view['status'] != 'play_now':
+                text += f' Few weeks remain before GW{half_end}, so it is planned rather than held.'
+            return text
 
         recommendations = []
         chip_plan = []
         for chip in CHIP_IDS:
             candidates, halves = candidate_windows[chip]
-            state = halves.get(_half_of(first_gw), {}).get('state', 'unknown')
-            if not candidates and state in {'used', 'expired'}:
+            state = halves.get(current_half, {}).get('state', 'unknown')
+            chip_halves = [half for c, half, _w in tokens if c == chip]
+            if not chip_halves:
                 recommendations.append({
                     'chip': chip, 'label': CHIP_LABELS[chip], 'status': 'unavailable',
                     'gw': None, 'gain': None, 'discounted_gain': None,
@@ -761,54 +914,49 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
                     'candidate_gameweeks': [], 'gains_by_week': {}, 'evidence': None,
                     'reasons': [f'{CHIP_LABELS[chip]} is marked {state}.'], 'warnings': [],
                     'inventory_windows': [dict(window) for window in halves.values()],
+                    'half': None, 'after_wildcard_gameweek': None, 'plan_by_half': [],
                 })
                 continue
 
-            assigned_gw = chip_plan_assignment.get(chip)
-            status_info = _chip_status(
-                chip, assigned_gw, gains[chip], candidates, half_unused_count, half_last_gw,
-                first_gw, policy)
-            gain_at_assigned = gains[chip].get(assigned_gw) if assigned_gw is not None else None
-            discounted_gain = _discount(gain_at_assigned, assigned_gw, first_gw, policy) if assigned_gw else None
+            views = {half: token_view(chip, half) for half in chip_halves}
+            # The card shows the copy that matters now: this half's if it is
+            # still unused, otherwise the next half's.
+            active = views.get(current_half) or views[chip_halves[0]]
 
             warnings = []
             if not inventory_known:
                 warnings.append('Chip inventory has not been entered; confirm this chip is still available.')
             if chip in ('free_hit', 'wildcard') and finance_warning:
                 warnings.append(finance_warning)
-
-            if status_info['status'] == 'play_now':
-                reason = (f'{CHIP_LABELS[chip]} is worth playing now: +{gain_at_assigned:.1f} points, '
-                         f'above the {policy.min_gain[chip]:.1f}-point policy margin.')
-            elif status_info['status'] == 'planned':
-                reason = f'Best window GW{assigned_gw}: +{gain_at_assigned:.1f} points.'
-            elif candidates:
-                reason = f'No candidate week for {CHIP_LABELS[chip]} clears its policy margin right now.'
-            else:
-                reason = f'No eligible {CHIP_LABELS[chip]} window remains this half.'
-            if status_info['close_call']:
-                reason += ' This is a close call against playing it now instead.'
-            if status_info['use_or_lose']:
-                reason += ' Few eligible weeks remain this half relative to unused chips: use it or lose it.'
+            reasons = [reason_for(chip, active)]
+            for half, view in views.items():
+                if view is not active and view['gw'] is not None:
+                    which = 'Second' if half == 'second_half' else 'First'
+                    reasons.append(f"{which}-half {CHIP_LABELS[chip]}: GW{view['gw']} (+{view['gain']:.1f}).")
 
             recommendations.append({
-                'chip': chip, 'label': CHIP_LABELS[chip], 'status': status_info['status'],
-                'gw': assigned_gw, 'gain': None if gain_at_assigned is None else round(gain_at_assigned, 2),
-                'discounted_gain': None if discounted_gain is None else round(discounted_gain, 2),
-                'close_call': status_info['close_call'], 'use_or_lose': status_info['use_or_lose'],
+                'chip': chip, 'label': CHIP_LABELS[chip], 'status': active['status'],
+                'gw': active['gw'], 'gain': active['gain'], 'discounted_gain': active['discounted_gain'],
+                'close_call': active['close_call'], 'use_or_lose': active['use_or_lose'],
                 'candidate_gameweeks': candidates,
                 'gains_by_week': {int(gw): round(g, 2) for gw, g in gains[chip].items()},
-                'evidence': evidence[chip].get(assigned_gw) if assigned_gw is not None else None,
-                'reasons': [reason], 'warnings': warnings,
+                'evidence': active['evidence'],
+                'reasons': reasons, 'warnings': warnings,
                 'inventory_windows': [dict(window) for window in halves.values()],
+                'half': active['half'], 'after_wildcard_gameweek': active['after_wildcard_gameweek'],
+                'plan_by_half': [
+                    {'half': half, 'gw': view['gw'], 'gain': view['gain'], 'status': view['status'],
+                     'after_wildcard_gameweek': view['after_wildcard_gameweek']}
+                    for half, view in views.items()],
             })
-            if assigned_gw is not None:
-                chip_plan.append({
-                    'chip': chip, 'gw': assigned_gw,
-                    'gain': None if gain_at_assigned is None else round(gain_at_assigned, 2),
-                    'discounted_gain': None if discounted_gain is None else round(discounted_gain, 2),
-                    'status': status_info['status'],
-                })
+            for half, view in views.items():
+                if view['gw'] is not None:
+                    chip_plan.append({
+                        'chip': chip, 'gw': view['gw'], 'half': half,
+                        'gain': view['gain'], 'discounted_gain': view['discounted_gain'],
+                        'status': view['status'],
+                        'after_wildcard_gameweek': view['after_wildcard_gameweek'],
+                    })
         chip_plan.sort(key=lambda entry: entry['gw'])
 
         play_now = [rec for rec in recommendations if rec['status'] == 'play_now']

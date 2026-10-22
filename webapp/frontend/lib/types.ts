@@ -428,6 +428,10 @@ export interface ChipRecommendationBase {
   reasons: string[];
   warnings: string[];
   inventory_windows: ChipInventoryWindow[];
+  /** Which half's copy this card describes: the current half's while unused, else the next. */
+  half: ChipHalf | null;
+  after_wildcard_gameweek: number | null;
+  plan_by_half: ChipHalfPlan[];
 }
 
 export type ChipRecommendation =
@@ -442,12 +446,27 @@ export interface ChipBenchPlayer {
   points: number;
 }
 
+export type ChipHalf = "first_half" | "second_half";
+
+/** One chip copy's placement. Each half has its own chip set, so a chip can
+ * appear twice: once per half. */
 export interface ChipPlanEntry {
   chip: ChipId;
   gw: number;
+  half: ChipHalf;
   gain: number | null;
   discounted_gain: number | null;
   status: ChipStatus;
+  /** Set when the gain assumes the squad a Wildcard planned that week builds. */
+  after_wildcard_gameweek: number | null;
+}
+
+export interface ChipHalfPlan {
+  half: ChipHalf;
+  gw: number | null;
+  gain: number | null;
+  status: ChipStatus;
+  after_wildcard_gameweek: number | null;
 }
 
 export interface ChipPrimaryDecision {

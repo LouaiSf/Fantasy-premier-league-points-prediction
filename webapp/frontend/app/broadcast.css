@@ -2291,6 +2291,7 @@
 
   /* --- V0.4 SHARED SVG CHART KIT (components/charts/) --------------------- */
   .bar-strip{position:relative;display:flex;align-items:flex-end;gap:2px;width:100%}
+  .bar-strip.is-labelled{margin-bottom:18px}
   .bar-strip-zero{position:absolute;left:0;right:0;height:1px;background:rgba(255,255,255,.24)}
   .bar-strip-col{position:relative;height:100%;display:flex;align-items:flex-end;justify-content:center}
   .bar-strip-col:focus-visible{outline:0;box-shadow:var(--focus)}

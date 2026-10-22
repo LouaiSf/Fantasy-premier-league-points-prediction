@@ -26,7 +26,11 @@ interface ChipGainHeatmapProps {
 export function ChipOpportunityMatrix({ recommendations, chipPlan, currentGameweek, hasSquad }: ChipGainHeatmapProps) {
   if (!hasSquad) return null;
   const byChip = new Map(recommendations.map((rec) => [rec.chip, rec]));
-  const assigned = new Map(chipPlan.map((entry) => [entry.chip, entry.gw]));
+  // A chip can be planned once per half, so each chip maps to a set of weeks.
+  const assigned = new Map<string, Set<number>>();
+  for (const entry of chipPlan) {
+    assigned.set(entry.chip, (assigned.get(entry.chip) ?? new Set<number>()).add(entry.gw));
+  }
   const gameweeks = Array.from(
     new Set(recommendations.flatMap((rec) => rec.candidate_gameweeks)),
   ).sort((a, b) => a - b);
@@ -50,7 +54,7 @@ export function ChipOpportunityMatrix({ recommendations, chipPlan, currentGamewe
         <tbody>
           {CHIP_IDS.map((chip) => {
             const rec = byChip.get(chip);
-            const assignedGw = assigned.get(chip);
+            const assignedWeeks = assigned.get(chip);
             return (
               <tr key={chip}>
                 <th scope="row">
@@ -62,7 +66,7 @@ export function ChipOpportunityMatrix({ recommendations, chipPlan, currentGamewe
                 {gameweeks.map((gw) => {
                   const value = rec?.gains_by_week[String(gw)] ?? null;
                   const isCandidate = rec?.candidate_gameweeks.includes(gw) ?? false;
-                  const isAssigned = assignedGw === gw;
+                  const isAssigned = assignedWeeks?.has(gw) ?? false;
                   if (!isCandidate) {
                     return <td key={`${chip}-${gw}`} className="chip-score chip-score--empty">—</td>;
                   }

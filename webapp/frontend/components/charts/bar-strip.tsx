@@ -23,14 +23,16 @@ export function BarStrip({ items, height = 44 }: { readonly items: BarStripItem[
   const values = items.map((item) => item.value).filter((value): value is number => value != null);
   const maxAbs = Math.max(...values.map((value) => Math.abs(value)), 1);
   const hasNegative = values.some((value) => value < 0);
-  const zeroY = hasNegative ? height / 2 : height;
+  // Bars are placed by `bottom`, so the zero line sits 0px up from the
+  // bottom when every value is positive, and at mid-height otherwise.
+  const zeroY = hasNegative ? height / 2 : 0;
   const barMax = hasNegative ? height / 2 : height;
   const barWidth = `calc((100% - ${(items.length - 1) * 2}px) / ${items.length})`;
   const showLabels = items.length <= MAX_LABELLED_ITEMS;
 
   return (
     <div
-      className="bar-strip"
+      className={showLabels ? "bar-strip is-labelled" : "bar-strip"}
       role="img"
       aria-label={`Bar chart: ${items.map((item) => `${item.label} ${item.value ?? "no data"}`).join(", ")}`}
       style={{ height }}
@@ -50,7 +52,7 @@ export function BarStrip({ items, height = 44 }: { readonly items: BarStripItem[
                   aria-label={`${item.label}: ${item.value == null ? "no data" : item.value}`}
                 >
                   {item.value == null ? (
-                    <div className="bar-strip-bar hatch" style={{ height: 10, bottom: zeroY - 5, opacity: 0.3 }} />
+                    <div className="bar-strip-bar hatch" style={{ height: 10, bottom: Math.max(0, zeroY - 5), opacity: 0.3 }} />
                   ) : (
                     <div
                       className="bar-strip-bar"

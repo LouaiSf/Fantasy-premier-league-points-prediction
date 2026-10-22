@@ -584,9 +584,13 @@ export default function ChipsPage() {
   const playNow = data?.primary_decision
     ? recsByChip.get(data.primary_decision.chip) ?? null
     : null;
-  const bestPlanned = !playNow && data?.chip_plan.length
+  // Only this half's plan: a card describes this half's copy of its chip, so
+  // a second-half entry would put one chip's later week on another's card.
+  const currentHalf = (data?.current_gameweek ?? 1) <= 19 ? "first_half" : "second_half";
+  const halfPlan = data?.chip_plan.filter((entry) => entry.half === currentHalf) ?? [];
+  const bestPlanned = !playNow && halfPlan.length
     ? recsByChip.get(
-        [...data.chip_plan].sort(
+        [...halfPlan].sort(
           (a, b) => (b.discounted_gain ?? -Infinity) - (a.discounted_gain ?? -Infinity),
         )[0].chip,
       ) ?? null
@@ -747,7 +751,9 @@ export default function ChipsPage() {
                 </div>
                 {barItems.length > 0 && <BarStrip items={barItems} height={36} />}
                 <p className="chip-advisor-desc">{rec.reasons[0]}</p>
-                {rec.use_or_lose && <p className="chip-advisor-note">Few eligible weeks remain this half: use it or lose it.</p>}
+                {rec.reasons.slice(1).map((reason) => (
+                  <p className="chip-advisor-note" key={reason}>{reason}</p>
+                ))}
                 <WhyThisChoice recommendation={rec} data={data!} />
                 <div className="chip-advisor-footer">{CHIP_DESCRIPTIONS[rec.chip]}</div>
               </article>

@@ -7,8 +7,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from optimise import compute_chips  # noqa: E402
 from chip_engine import (  # noqa: E402
-    _candidate_window, _expected_autosub_points, _no_chip_total, _optimise,
-    build_point_matrix, ChipPlanPolicy,
+    _candidate_window, _expected_autosub_points, _gain_in_plan, _joint_plan, _no_chip_total, _optimise,
+    _plan_tokens, _token_status, build_point_matrix, ChipPlanPolicy,
 )
 
 
@@ -580,3 +580,110 @@ def test_fixture_only_mode_marks_weeks_with_no_confirmed_fixtures_unknown(monkey
 
     assert data['week_states'][13] == 'complete'
     assert data['week_states'][15] == 'unknown'
+
+
+# ---------------------------------------------------------------------------
+# The planner: one copy per chip per half, margins, Wildcard pairing
+# ---------------------------------------------------------------------------
+POLICY = ChipPlanPolicy()
+
+
+def windows(**weeks_by_chip):
+    """candidate_windows in the shape _plan_tokens reads: {chip: (weeks, halves)}."""
+    return {chip: (weeks_by_chip.get(chip, []), {}) for chip in CHIPS}
+
+
+def gains_for(**by_chip):
+    out = {chip: {} for chip in CHIPS}
+    out.update(by_chip)
+    return out
+
+
+def test_each_half_gets_its_own_copy_of_a_chip():
+    # Second-half TC is worth more, but the first-half copy expires at GW19:
+    # both must be planned, one per half.
+    tokens = _plan_tokens(windows(triple_captain=list(range(8, 39))))
+    gains = gains_for(triple_captain={**{gw: 6.0 for gw in range(8, 39)}, 9: 7.0, 30: 15.0})
+    plan = _joint_plan(gains, tokens, 8, POLICY)
+    assert plan[('triple_captain', 'first_half')]['gw'] == 9
+    assert plan[('triple_captain', 'second_half')]['gw'] == 30
+
+
+def test_a_future_week_below_the_margin_is_held_not_planned():
+    tokens = _plan_tokens(windows(wildcard=list(range(8, 20))))
+    plan = _joint_plan(gains_for(wildcard={gw: 3.0 for gw in range(8, 20)}), tokens, 8, POLICY)
+    entry = plan[('wildcard', 'first_half')]
+    assert entry['gw'] is None
+    assert _token_status(entry, 8, POLICY)['status'] == 'hold'
+
+
+def test_an_expiring_chip_is_planned_even_below_its_margin():
+    # GW18 now: two weeks left for one chip is inside the use-or-lose buffer.
+    tokens = _plan_tokens(windows(wildcard=[18, 19]))
+    plan = _joint_plan(gains_for(wildcard={18: 3.0, 19: 2.0}), tokens, 18, POLICY)
+    entry = plan[('wildcard', 'first_half')]
+    assert entry['gw'] == 18 and entry['use_or_lose'] is True
+    assert _token_status(entry, 18, POLICY)['status'] == 'play_now'
+
+
+def test_now_below_the_margin_is_never_both_assigned_and_not_played():
+    # Old engine: assigned to the current week but "planned", not "play now".
+    tokens = _plan_tokens(windows(bench_boost=list(range(8, 20))))
+    plan = _joint_plan(gains_for(bench_boost={8: 4.0, **{gw: 1.0 for gw in range(9, 20)}}), tokens, 8, POLICY)
+    assert plan[('bench_boost', 'first_half')]['gw'] is None
+
+
+def test_bench_boost_after_a_wildcard_uses_the_wildcard_squad():
+    # Today's bench is weak (BB +2 every week); the Wildcard squad's bench in
+    # GW11 is worth +12. Only the pairing makes either chip worth playing.
+    tokens = _plan_tokens(windows(wildcard=list(range(8, 20)), bench_boost=list(range(8, 20))))
+    gains = gains_for(wildcard={gw: 9.0 for gw in range(8, 20)},
+                      bench_boost={gw: 2.0 for gw in range(8, 20)})
+    after = {10: {11: {'bench_boost': (12.0, {'chip': 'bench_boost'})}}}
+    plan = _joint_plan(gains, tokens, 8, POLICY, after)
+    assert plan[('wildcard', 'first_half')]['gw'] == 10
+    bb = plan[('bench_boost', 'first_half')]
+    assert (bb['gw'], bb['gain'], bb['after_wildcard']) == (11, 12.0, 10)
+
+
+def test_only_chips_after_the_wildcard_use_its_squad():
+    gains = gains_for(bench_boost={11: 2.0, 13: 2.0})
+    after = {12: {13: {'bench_boost': (12.0, {})}}}
+    assert _gain_in_plan('bench_boost', 13, {'wildcard': 12}, gains, after) == (12.0, 12)
+    assert _gain_in_plan('bench_boost', 11, {'wildcard': 12}, gains, after) == (2.0, None)
+    assert _gain_in_plan('bench_boost', 13, {}, gains, after) == (2.0, None)
+
+
+def test_close_call_compares_the_planned_week_with_its_runner_up():
+    tokens = _plan_tokens(windows(triple_captain=list(range(8, 20))))
+    gains = gains_for(triple_captain={**{gw: 1.0 for gw in range(8, 20)}, 12: 9.0, 13: 9.2})
+    entry = _joint_plan(gains, tokens, 8, POLICY)[('triple_captain', 'first_half')]
+    assert entry['gw'] == 12 and entry['runner_up_gw'] == 13
+    assert _token_status(entry, 8, POLICY)['close_call'] is True
+
+
+def test_two_chips_never_share_a_week_within_a_half():
+    tokens = _plan_tokens(windows(triple_captain=list(range(8, 20)), bench_boost=list(range(8, 20))))
+    gains = gains_for(triple_captain={gw: (20.0 if gw == 10 else 5.0) for gw in range(8, 20)},
+                      bench_boost={gw: (20.0 if gw == 10 else 6.0) for gw in range(8, 20)})
+    plan = _joint_plan(gains, tokens, 8, POLICY)
+    weeks = [plan[(c, 'first_half')]['gw'] for c in ('triple_captain', 'bench_boost')]
+    assert 10 in weeks and len(set(weeks)) == 2
+
+
+def test_api_plan_lists_each_half_and_cards_show_the_current_half(monkeypatch, tmp_path):
+    write_season(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    players = market().reset_index(drop=True)
+    squad = players.iloc[:15].copy()
+    points = horizon_points(players, range(6, 39))
+    data = compute_chips(squad, 'test-season', 6, 8, players,
+                         inventory=synced_inventory(), future_points=points)
+    tc = next(rec for rec in data['recommendations'] if rec['chip'] == 'triple_captain')
+    assert tc['half'] == 'first_half' and tc['gw'] <= 19
+    assert {entry['half'] for entry in tc['plan_by_half']} == {'first_half', 'second_half'}
+    halves_in_plan = [(e['chip'], e['half']) for e in data['chip_plan']]
+    assert len(halves_in_plan) == len(set(halves_in_plan))
+    for half in ('first_half', 'second_half'):
+        weeks = [e['gw'] for e in data['chip_plan'] if e['half'] == half]
+        assert len(weeks) == len(set(weeks))

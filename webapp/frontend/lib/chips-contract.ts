@@ -84,6 +84,9 @@ function isValidPlanEntry(value: unknown): boolean {
     isRecord(value) &&
     typeof value.chip === "string" &&
     typeof value.gw === "number" &&
+    // The hero filters the plan to the current half, so a server that omits
+    // it would silently show no plan rather than fail.
+    (value.half === "first_half" || value.half === "second_half") &&
     isNumberOrNull(value.gain) &&
     isNumberOrNull(value.discounted_gain) &&
     typeof value.status === "string"
