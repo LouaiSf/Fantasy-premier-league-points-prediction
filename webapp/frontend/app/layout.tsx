@@ -14,6 +14,7 @@ import { MotionProvider } from "@/components/motion/motion-provider";
 import { CrestTicker } from "@/components/chrome/crest-ticker";
 import { MainNav } from "@/components/chrome/main-nav";
 import { PlayerDrawer } from "@/components/player-drawer";
+import { BottomNav } from "@/components/chrome/bottom-nav";
 import { OwnershipProvider } from "@/components/providers/ownership-provider";
 import { Toast } from "@/components/chrome/toast";
 
@@ -57,6 +58,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <main id="main" tabIndex={-1}>
                 <ErrorBoundary>{children}</ErrorBoundary>
               </main>
+              <BottomNav />
               <PlayerDrawer />
               <Toast />
             </MotionProvider>
