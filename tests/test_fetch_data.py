@@ -51,3 +51,9 @@ def test_float_club_ids_from_a_player_map_still_match() -> None:
 
 def test_no_fixtures_holds_nothing_back() -> None:
     assert unfinished_clubs(pd.DataFrame(), 7) == set()
+
+
+def test_selected_percentage_becomes_a_manager_count() -> None:
+    from fetch_data import selected_count
+    out = selected_count(pd.Series([12.5, '0.4', None]), 10_000_000.0)
+    assert out.iloc[0] == 1_250_000 and out.iloc[1] == 40_000 and np.isnan(out.iloc[2])

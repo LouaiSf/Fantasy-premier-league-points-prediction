@@ -207,6 +207,28 @@ def _full_name(src: pd.DataFrame) -> pd.Series:
     return full.where(full != '', _col(src, 'web_name', '').astype(str))
 
 
+def total_managers() -> float:
+    """FPL's current number of entries, or NaN when the API is unreachable."""
+    try:
+        data = json.loads(http_get('https://fantasy.premierleague.com/api/bootstrap-static/',
+                                   tries=2, timeout=30))
+        return float(data['total_players'])
+    except Exception as exc:  # noqa: BLE001 -- a missing count must not stop a fetch
+        print(f"    could not read total_players ({type(exc).__name__}); selected left blank")
+        return float('nan')
+
+
+def selected_count(percent: pd.Series, managers: float) -> pd.Series:
+    """Ownership as a count of managers, the unit vaastav's `selected` uses.
+
+    olbauday only publishes selected_by_percent. Scaling it by today's entry
+    count slightly overstates early gameweeks (entries keep arriving for the
+    first few weeks), but it puts every season on one scale; the raw
+    percentage made a 2026-27 player look owned by 40 managers.
+    """
+    return (pd.to_numeric(percent, errors='coerce') / 100.0 * managers).round()
+
+
 def _week_teams(fetch_ob, gw: int, team_code_to_id: dict) -> dict:
     """player id -> FPL team id as of this gameweek, from its own players.csv."""
     try:
@@ -526,6 +548,7 @@ def fetch_season_olbauday(local_season: str, force: bool) -> dict:
 
     # ---------------------------------------------------------- per-GW stats
     print("  Fetching per-GW player stats …")
+    managers = total_managers()
     all_gw_frames: list[pd.DataFrame] = []
     available_gws: list[int] = []
 
@@ -580,7 +603,7 @@ def fetch_season_olbauday(local_season: str, force: bool) -> dict:
                 'transfers_balance':
                     _col(src, 'transfers_in_event', 0).astype(float)
                     - _col(src, 'transfers_out_event', 0).astype(float),
-                'selected': _col(src, 'selected_by_percent', 0),
+                'selected': selected_count(_col(src, 'selected_by_percent', 0), managers),
                 'value': _cost_to_tenths(_col(src, 'now_cost', 0)),
                 'round': gw,
                 # The ICT components. ict_index alone was carried through

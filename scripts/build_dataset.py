@@ -40,8 +40,10 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import sys
+import unicodedata
 
 import numpy as np
 import pandas as pd
@@ -61,6 +63,14 @@ MERGED_SEASONS = ['2019-20', '2020-21', '2021-22', '2022-23', '2023-24', '2024-2
 
 DEFENSIVE_COLS = ['tackles', 'recoveries', 'clearances_blocks_interceptions']
 JOIN_KEYS = ['season', 'element', 'fixture']
+
+# FotMob publishes Opta's own defensive counts: against FPL's native columns
+# in 2025-26 its blocks+interceptions+clearances, tackles and recoveries
+# correlate 0.999 and are identical on 98-99% of rows. The FBref values these
+# seasons carried correlate only 0.34-0.62 with them, never had recoveries,
+# and covered only 52% of 2024-25. So wherever FotMob has the row, it wins.
+FOTMOB_DEFENSIVE = {'clearances_blocks_interceptions': ('blocks', 'interceptions', 'clearances'),
+                    'tackles': ('tackles',), 'recoveries': ('recoveries',)}
 
 
 # The two functions below are copied verbatim from fpl_pipeline.ipynb step 5 so that
@@ -317,6 +327,135 @@ def defensive_lookup(path: str) -> pd.DataFrame | None:
     return old
 
 
+def fotmob_defensive(season: str) -> pd.DataFrame | None:
+    """(element, fixture) -> FPL-style defensive columns from FotMob, or None."""
+    path = os.path.join('data', season, 'fotmob', 'player_match.csv')
+    if not os.path.exists(path):
+        return None
+    needed = sorted({c for parts in FOTMOB_DEFENSIVE.values() for c in parts})
+    fm = read_csv_tolerant(path, usecols=['element', 'fpl_fixture'] + needed)
+    fm = fm.dropna(subset=['element', 'fpl_fixture'])
+    out = pd.DataFrame({'element': fm['element'].astype(int),
+                        'fixture': fm['fpl_fixture'].astype(int)})
+    for col, parts in FOTMOB_DEFENSIVE.items():
+        # Keepers have no blocks line at all; that is a zero, not a gap.
+        out[col] = fm[list(parts)].fillna(0).sum(axis=1).to_numpy()
+    out['season'] = season
+    return out.drop_duplicates(subset=JOIN_KEYS, keep='first')
+
+
+def overlay_fotmob_defensive(df: pd.DataFrame) -> pd.DataFrame:
+    """Replace FBref-era defensive stats with FotMob's wherever it has the match."""
+    frames = [f for s in MERGED_SEASONS if (f := fotmob_defensive(s)) is not None]
+    if not frames:
+        print("  no FotMob player_match.csv for the FBref seasons; keeping FBref")
+        return df
+    lookup = pd.concat(frames, ignore_index=True)
+    before = len(df)
+    merged = df.merge(lookup, on=JOIN_KEYS, how='left', suffixes=('', '_fotmob'),
+                      indicator='_fm')
+    assert len(merged) == before, f"FotMob join changed row count: {before} -> {len(merged)}"
+    hit = merged['_fm'] == 'both'
+    for col in DEFENSIVE_COLS:
+        merged.loc[hit, col] = merged.loc[hit, f'{col}_fotmob']
+    merged.loc[hit, 'defensive_source'] = 'fotmob'
+    merged = merged.drop(columns=['_fm'] + [f'{c}_fotmob' for c in DEFENSIVE_COLS])
+    print(f"  FotMob defensive stats on {int(hit.sum()):,} rows "
+          f"({', '.join(sorted(lookup['season'].unique()))})")
+    return merged
+
+
+def derive_fixture_teams(df: pd.DataFrame) -> pd.DataFrame:
+    """Set each row's club to the side it played for in that fixture.
+
+    vaastav's 2016-17..2019-20 files give some players their end-of-season
+    club for every gameweek: 1,080 rows (364 with minutes) name a club that
+    was neither side of the match, which made the fixture features build
+    team-match rows for games those clubs never played. Each fixture's two
+    clubs are recoverable from the rows themselves -- the home side is the
+    opponent of every away row and vice versa -- so this needs no fixtures.csv,
+    which 2016-17 and 2017-18 do not have.
+    """
+    home = df['was_home'].astype(str).str.lower().isin(['true', '1'])
+    sides = (df.assign(_home=home)
+               .groupby(['season', 'fixture', '_home'])['opponent_team']
+               .agg(lambda s: s.mode().iat[0] if not s.mode().empty else np.nan)
+               .unstack()
+               .reindex(columns=[False, True]))
+    # The opponent of the away rows is the home club, and the reverse.
+    sides = sides.rename(columns={False: '_home_team', True: '_away_team'})
+    joined = df[['season', 'fixture']].join(sides, on=['season', 'fixture'])
+    derived = joined['_home_team'].where(home.to_numpy(), joined['_away_team'])
+    derived = pd.Series(derived.to_numpy(), index=df.index).fillna(df['team'])
+    changed = derived != df['team']
+    if changed.any():
+        print(f"\n--- team taken from the fixture: {int(changed.sum()):,} rows corrected ---")
+        print(df.loc[changed].groupby('season').size().to_string())
+    df['team'] = derived
+    return df
+
+
+def _name_key(name) -> str:
+    """'Petr_Cech_1' / 'Petr Čech' -> 'petr cech': the season-independent spelling."""
+    text = re.sub(r'_\d+$', '', str(name)).replace('_', ' ')
+    text = unicodedata.normalize('NFKD', text.casefold())
+    text = ''.join(ch for ch in text if not unicodedata.combining(ch))
+    return re.sub(r'\s+', ' ', re.sub(r'[^\w\s]', ' ', text)).strip()
+
+
+def add_player_ids(df: pd.DataFrame) -> pd.DataFrame:
+    """A player id that holds across seasons: FPL's own `code`.
+
+    The feature stage followed a player from season to season by `name`, but
+    the name's spelling changes with the source: 'David_Ospina' (2016-18),
+    'Petr_Cech_1' (2018-20), 'Mesut Özil' (2020-). Only 0 of 625, 2 of 666 and
+    0 of 712 players carried their history into 2018-19, 2019-20 and 2020-21,
+    and two Ben Davies (Spurs, Liverpool) shared one history in 2020-23.
+    `code` is FPL's permanent player id. Elements missing from a season's
+    players_raw.csv (2025-26's is a 746-player snapshot; 95 later signings
+    are absent) take the code of the same normalised name in another season
+    when that name means one player; otherwise they get a season-local id.
+    """
+    codes = []
+    for season in sorted(df['season'].unique()):
+        path = os.path.join('data', season, 'players_raw.csv')
+        if os.path.exists(path):
+            raw = read_csv_tolerant(path, usecols=['id', 'code'])
+            codes.append(raw.rename(columns={'id': 'element'}).assign(season=season))
+    lookup = pd.concat(codes, ignore_index=True).drop_duplicates(['season', 'element'])
+    df = df.drop(columns=[c for c in ('player_id',) if c in df.columns])
+    df = df.merge(lookup.rename(columns={'code': 'player_id'}),
+                  on=['season', 'element'], how='left')
+
+    keys = df['name'].map(_name_key)
+    known = pd.DataFrame({'key': keys, 'player_id': df['player_id']}).dropna()
+    per_key = known.drop_duplicates().groupby('key')['player_id']
+    unique = per_key.first()[per_key.nunique() == 1]
+    missing = df['player_id'].isna()
+    df.loc[missing, 'player_id'] = keys[missing].map(unique)
+    # A borrowed code must not already belong to another element that season.
+    owners = df.loc[~missing].groupby(['season', 'player_id'])['element'].first()
+    borrowed = df.index[missing & df['player_id'].notna()]
+    owner = pd.Series([owners.get((s, c)) for s, c in
+                       zip(df.loc[borrowed, 'season'], df.loc[borrowed, 'player_id'])],
+                      index=borrowed)
+    taken = owner.notna() & (owner != df.loc[borrowed, 'element'])
+    df.loc[taken[taken].index, 'player_id'] = np.nan
+    by_name = int(missing.sum() - df['player_id'].isna().sum())
+
+    # Never linked to anyone else: a negative id unique to the season-element.
+    still = df['player_id'].isna()
+    season_rank = {s: i for i, s in enumerate(sorted(df['season'].unique()))}
+    df.loc[still, 'player_id'] = -(df.loc[still, 'season'].map(season_rank) * 100_000
+                                   + df.loc[still, 'element'])
+    df['player_id'] = df['player_id'].astype('int64')
+    print(f"\n--- player_id: FPL code on {int((~missing).sum()):,} rows, "
+          f"by name on {by_name:,}, season-local on {int(still.sum()):,} ---")
+    clash = df.groupby(['season', 'player_id'])['element'].nunique()
+    assert (clash == 1).all(), f"player_id shared by two elements: {clash[clash > 1].head()}"
+    return df
+
+
 def build_final(raw: pd.DataFrame, old_final: str) -> pd.DataFrame:
     print("\n" + "=" * 78)
     print("STAGE 2  carry over defensive stats and re-apply the point rules")
@@ -334,6 +473,17 @@ def build_final(raw: pd.DataFrame, old_final: str) -> pd.DataFrame:
     # FBref data that does not exist for them) and the defensive values, which
     # feed the +2 defensive-contribution bonus and so moved total_points itself.
     df = raw.reset_index(drop=True)
+
+    # One row per player per match. 2019-20 keeps a 0-minute GW29 row for
+    # Man City v Arsenal, postponed by Covid and played in GW39 under the same
+    # fixture id, so every squad member looked like he missed a match that was
+    # never played; 2025-26 repeats one row outright. Keep the real kickoff.
+    kickoff = pd.to_datetime(df['kickoff_time'], errors='coerce', utc=True)
+    order = kickoff.sort_values(kind='stable').index
+    repeated = df.loc[order].duplicated(subset=JOIN_KEYS, keep='last')
+    if repeated.any():
+        print(f"  dropping {int(repeated.sum())} repeated (season, element, fixture) rows")
+        df = df.drop(index=repeated[repeated].index).reset_index(drop=True)
 
     if lookup is not None:
         # The FBref merge only ever applied to MERGED_SEASONS. Every other
@@ -385,6 +535,26 @@ def build_final(raw: pd.DataFrame, old_final: str) -> pd.DataFrame:
                 df[col] = 0
         df['has_fbref_defensive'] = 0
 
+    df['defensive_source'] = np.where(df['season'].isin(MERGED_SEASONS), 'fbref', 'fpl')
+    df.loc[df['has_fbref_defensive'] == 0, 'defensive_source'] = 'none'
+    df = overlay_fotmob_defensive(df)
+
+    # Nobody makes a tackle without playing. The FBref merge gave 1,600-2,000
+    # rows a season defensive actions on 0 minutes, and 1,054 of those were
+    # then awarded the +2 defensive-contribution bonus they could never earn.
+    idle = df['minutes'].fillna(0) <= 0
+    stray = idle & (df[DEFENSIVE_COLS].fillna(0).sum(axis=1) > 0)
+    print(f"  clearing defensive stats on {int(stray.sum()):,} rows with no minutes")
+    df.loc[idle, DEFENSIVE_COLS] = 0
+    # A player who did not play is known to have made none, so those zeros
+    # are observations whatever source the rest of his season came from.
+    df.loc[idle & (df['defensive_source'] == 'none'), 'defensive_source'] = 'no_minutes'
+    # has_fbref_defensive keeps its name for the notebook's sake; it means
+    # "these defensive columns are observed", whichever source they came from.
+    df['has_fbref_defensive'] = (df['defensive_source'] != 'none').astype(int)
+    print("  defensive source by season:")
+    print(pd.crosstab(df['season'], df['defensive_source']).to_string())
+
     print(f"\n  rows with carried-over defensive stats: "
           f"{int(df.has_fbref_defensive.sum()):,} / {len(df):,}")
     uncovered = df[df.has_fbref_defensive == 0]
@@ -425,7 +595,7 @@ def report(df: pd.DataFrame, allow_empty_columns: bool = False) -> None:
 
     # The feature stage sorts and filters on game_number; a silent absence
     # here surfaces much later as a confusing KeyError deep inside a cell.
-    required = ['season', 'GW', 'game_number', 'position', 'name',
+    required = ['season', 'GW', 'game_number', 'position', 'name', 'player_id',
                 'element', 'fixture', 'total_points', 'kickoff_time']
     missing = [c for c in required if c not in df.columns]
     if missing:
@@ -556,6 +726,8 @@ def main() -> int:
 
     final = build_final(raw, old_final_snapshot)
     final = add_expected_stats(final)
+    final = derive_fixture_teams(final)
+    final = add_player_ids(final)
     report(final, allow_empty_columns=args.allow_empty_columns)
 
     if args.write:
