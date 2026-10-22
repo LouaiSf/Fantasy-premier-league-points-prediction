@@ -8,6 +8,7 @@ import { fromTenths, sellingPricesTenthsForSquad } from "@/lib/finance";
 import { Loading } from "@/components/loading";
 import { Skeleton } from "@/components/skeleton";
 import { EmptyState } from "@/components/empty-state";
+import { ChipsIcon } from "@/components/chrome/nav-icons";
 import { ChipIcon } from "@/components/chips/chip-icon";
 import { ChipOpportunityMatrix } from "@/components/chips/chip-opportunity-matrix";
 import { ChipPlanTimeline } from "@/components/chips/chip-plan-timeline";
@@ -563,8 +564,10 @@ export default function ChipsPage() {
       <section className="page">
         <div className="shell shell--padded">
           <EmptyState
-            title="Predictions Unavailable"
-            message={`The Chip Advisor requires model projections to evaluate optimal play windows.${snapshot.prediction_error ? ` (${snapshot.prediction_error})` : ""} Run the prediction pipeline or click Refresh in the header.`}
+            icon={<ChipsIcon />}
+            title="Predictions unavailable"
+            message={`The Chip Advisor needs model projections to compare chip weeks.${snapshot.prediction_error ? ` (${snapshot.prediction_error})` : ""} Refresh the data to rebuild them.`}
+            action={{ label: "Refresh data", onClick: () => window.location.reload() }}
           />
         </div>
       </section>

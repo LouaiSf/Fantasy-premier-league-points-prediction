@@ -190,7 +190,7 @@ export default function CaptainPage() {
               </div>
               <div className="bug">
                 <span>Club</span>
-                <strong>{lead.team_short}</strong>
+                <strong>{lead.team}</strong>
               </div>
             </div>
           )}

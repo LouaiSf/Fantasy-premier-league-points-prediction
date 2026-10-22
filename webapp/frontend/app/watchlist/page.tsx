@@ -10,6 +10,7 @@ import { api } from "@/lib/api";
 import { Loading } from "@/components/loading";
 import { Skeleton } from "@/components/skeleton";
 import { EmptyState } from "@/components/empty-state";
+import { WatchlistIcon } from "@/components/chrome/nav-icons";
 import type { WatchlistPlayer, WatchlistResult } from "@/lib/types";
 
 type SectionTab = "all" | "value" | "differentials" | "overpriced" | "no_history";
@@ -70,8 +71,10 @@ export default function WatchlistPage() {
       <section className="page">
         <div className="shell shell--padded">
           <EmptyState
-            title="Predictions Unavailable"
-            message={`The Watchlist requires model projections to calculate value ratios, differentials, and overpriced assets.${snapshot.prediction_error ? ` (${snapshot.prediction_error})` : ""} Run the prediction pipeline or click Refresh.`}
+            icon={<WatchlistIcon />}
+            title="Predictions unavailable"
+            message={`The Watchlist needs model projections for value, differentials and overpriced players.${snapshot.prediction_error ? ` (${snapshot.prediction_error})` : ""} Refresh the data to rebuild them.`}
+            action={{ label: "Refresh data", onClick: () => window.location.reload() }}
           />
         </div>
       </section>

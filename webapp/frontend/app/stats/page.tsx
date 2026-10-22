@@ -7,6 +7,7 @@ import { PlayerPhoto } from "@/components/player-photo";
 import { Scatter } from "@/components/charts/scatter";
 import { Skeleton } from "@/components/skeleton";
 import { EmptyState } from "@/components/empty-state";
+import { StatsIcon } from "@/components/chrome/nav-icons";
 import { api } from "@/lib/api";
 import type { StatsPlayerRow, StatsPlayersResult, StatsPreset, StatsWindow, TeamRecord } from "@/lib/types";
 
@@ -308,7 +309,8 @@ export default function StatsPage() {
         )}
 
         {error ? (
-          <EmptyState title="Stats unavailable" message={error} />
+          <EmptyState icon={<StatsIcon />} title="Stats unavailable" message={error}
+            action={{ label: "Try again", onClick: () => window.location.reload() }} />
         ) : loading && !data ? (
           <Skeleton variant="table" count={12} />
         ) : (
@@ -391,7 +393,8 @@ export default function StatsPage() {
               </table>
             </div>
             {rows.length === 0 && (
-              <EmptyState title="No players match" message="Lower the minimum minutes or clear the search." />
+              <EmptyState icon={<StatsIcon />} title="No players match" message="Lower the minimum minutes or clear the search."
+                action={{ label: "Clear search", onClick: () => setQuery("") }} />
             )}
             {rows.length > shown && (
               <button type="button" className="btn ghost stats-more" onClick={() => setShown((n) => n + PAGE)}>
