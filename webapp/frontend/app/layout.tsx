@@ -14,6 +14,7 @@ import { MotionProvider } from "@/components/motion/motion-provider";
 import { CrestTicker } from "@/components/chrome/crest-ticker";
 import { MainNav } from "@/components/chrome/main-nav";
 import { PlayerDrawer } from "@/components/player-drawer";
+import { OwnershipProvider } from "@/components/providers/ownership-provider";
 import { Toast } from "@/components/chrome/toast";
 
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body>
         <TooltipProvider>
           <AppProvider>
+            <OwnershipProvider>
             <MotionProvider>
               <a className="skip-link" href="#main">
                 Skip to content
@@ -58,6 +60,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <PlayerDrawer />
               <Toast />
             </MotionProvider>
+            </OwnershipProvider>
           </AppProvider>
         </TooltipProvider>
       </body>

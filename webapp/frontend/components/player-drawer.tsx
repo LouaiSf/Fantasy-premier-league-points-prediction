@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { useApp } from "@/components/providers/app-provider";
+import { OWNERSHIP_TIERS, useOwnership } from "@/components/providers/ownership-provider";
 import { PlayerPhoto } from "@/components/player-photo";
 import { ClubCrest } from "@/components/club-crest";
 import { api } from "@/lib/api";
@@ -50,6 +51,7 @@ function difficultyClass(difficulty: number | undefined): string {
 
 export function PlayerDrawer() {
   const { selectedPlayer, closeProfile, snapshot } = useApp();
+  const ownership = useOwnership();
   // The drawer can be opened from anywhere, and not every caller holds a full
   // record: /api/squad answers with a trimmed shape carrying no minutes, ICT,
   // transfers or expected goals, so a marker on the pitch used to open a
@@ -62,6 +64,8 @@ export function PlayerDrawer() {
     return full ?? selectedPlayer;
   }, [selectedPlayer, snapshot]);
   const team = snapshot?.teams.find((t) => t.name === player?.team);
+  const eo = player ? ownership.forPlayer(player.element) : null;
+  const tierLabel = OWNERSHIP_TIERS.find((t) => t.key === ownership.tier)?.label ?? "";
   const ribbon = fixtureRibbon(team, snapshot?.gameweek ?? null);
   const nextUp = ribbon[0] ?? null;
   const predictionAvailable = snapshot?.prediction_available ?? false;
@@ -162,6 +166,7 @@ export function PlayerDrawer() {
                       <span>{player.position}</span>
                       <span>{money(player.value_m)}</span>
                       <span>{num(player.selected_by)}% owned</span>
+                      {eo && <span className="eo-badge">EO {Math.round(eo.eo)}% {tierLabel}</span>}
                     </div>
                   </div>
                   <div className="drawer-status" data-status={player.status !== "a" ? "out" : "fit"}>

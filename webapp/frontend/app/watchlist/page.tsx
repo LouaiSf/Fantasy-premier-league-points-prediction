@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
+import { OWNERSHIP_TIERS, useOwnership } from "@/components/providers/ownership-provider";
 import { PlayerPhoto } from "@/components/player-photo";
 import { ClubCrest } from "@/components/club-crest";
 import { money, num } from "@/lib/format";
@@ -15,6 +16,8 @@ type SectionTab = "all" | "value" | "differentials" | "overpriced" | "no_history
 
 export default function WatchlistPage() {
   const { snapshot, loading, openProfile } = useApp();
+  const { forPlayer: eoFor, tier } = useOwnership();
+  const tierLabel = OWNERSHIP_TIERS.find((t) => t.key === tier)?.label ?? "";
   const [data, setData] = React.useState<WatchlistResult | null>(null);
   const [fetching, setFetching] = React.useState(false);
   const [fetchError, setFetchError] = React.useState<string | null>(null);
@@ -135,7 +138,11 @@ export default function WatchlistPage() {
             {player.opponent_team && (
               <span className="watch-fixture">· {player.opponent_team} ({player.was_home ? "Home" : "Away"})</span>
             )}
-            {player.selected_by != null && (
+            {player.element != null && eoFor(player.element) ? (
+              <span className="watch-ownership" title={`${tierLabel} effective ownership`}>
+                EO {num(eoFor(player.element as number)!.eo, 1)}% · {tierLabel}
+              </span>
+            ) : player.selected_by != null && (
               <span className="watch-ownership">
                 {num(player.selected_by, 1)}% owned
               </span>

@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/skeleton";
 import { ModelInfo } from "@/components/model-info";
 import { ManagerSearch } from "@/components/team/manager-search";
 import { TeamPlan } from "@/components/team/team-plan";
+import { RankExposure } from "@/components/team/rank-exposure";
 import { DeadlineBoard } from "@/components/team/deadline-board";
 import { DataPortability } from "@/components/team/data-portability";
 import { CountUp } from "@/components/motion/count-up";
@@ -443,6 +444,8 @@ export default function TeamPage() {
             </section>
           </aside>
         </div>
+
+        <RankExposure lineup={preview} />
 
         <div className="shell team-plan-shell">
           <TeamPlan

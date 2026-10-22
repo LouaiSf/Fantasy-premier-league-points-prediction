@@ -587,3 +587,33 @@ export interface PlayerUnderlying {
   gameweeks: UnderlyingWeek[];
   has_fotmob: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Effective ownership (GET /api/ownership)
+// ---------------------------------------------------------------------------
+export type OwnershipTier = "top10k" | "top1k" | "overall";
+
+export interface OwnershipRow {
+  owned_pct: number;
+  starting_pct: number;
+  captain_pct: number;
+  tc_pct: number;
+  eo_pct: number;
+  /** Present when the sample is from an earlier gameweek than the one ahead. */
+  eo_estimate_pct?: number;
+}
+
+export interface OwnershipReport {
+  ok: true;
+  key: string;
+  label: string;
+  basis_gw: number;
+  target_gw: number;
+  is_estimate: boolean;
+  sample_size: number;
+  sample_requested: number;
+  sample_failed: number;
+  generated_at: string;
+  chips: Record<string, number>;
+  players: Record<string, OwnershipRow>;
+}

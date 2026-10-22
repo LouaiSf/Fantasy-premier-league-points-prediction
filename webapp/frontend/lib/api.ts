@@ -6,6 +6,8 @@ import type {
   ManagerLineup,
   ManagerSearchCandidate,
   ManagerStatus,
+  OwnershipReport,
+  OwnershipTier,
   PlatformSnapshot,
   PlayerHistoryRecord,
   PlayerUnderlying,
@@ -221,6 +223,8 @@ export const api = {
     if (params.preset) query.set("preset", params.preset);
     return requestJson<StatsPlayersResult>(`/api/stats/players?${query}`, signal ? { signal } : undefined);
   },
+  ownership: (tier: OwnershipTier, signal?: AbortSignal) =>
+    requestJson<OwnershipReport>(`/api/ownership?tier=${tier}`, signal ? { signal } : undefined),
   playerUnderlying: (elementId: number, signal?: AbortSignal) =>
     requestJson<PlayerUnderlying>(`/api/player/${elementId}/underlying`, signal ? { signal } : undefined),
   refresh: () =>

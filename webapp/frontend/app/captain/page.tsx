@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useApp } from "@/components/providers/app-provider";
+import { OWNERSHIP_TIERS, useOwnership } from "@/components/providers/ownership-provider";
 import { PlayerPhoto } from "@/components/player-photo";
 import { ClubCrest } from "@/components/club-crest";
 import { clubStyle } from "@/lib/club-colors";
@@ -51,8 +52,22 @@ function nextFixture(team: TeamRecord | undefined, gameweek: number | null) {
   return team.fixtures.find((fixture) => fixture.gameweek === gameweek) ?? null;
 }
 
+// A captain most of the field also captains only protects your rank: it can
+// never gain on them. One few captain is where the rank is made, or lost.
+function shieldOrSword(name: string, captainPct: number, tierLabel: string): string {
+  if (captainPct >= 50) {
+    return `Shield: ${Math.round(captainPct)}% of the ${tierLabel} captain ${name}. Following them protects your rank; it cannot gain on them.`;
+  }
+  if (captainPct >= 15) {
+    return `${Math.round(captainPct)}% of the ${tierLabel} captain ${name}: a common pick, not a shield.`;
+  }
+  return `Sword: only ${Math.round(captainPct)}% of the ${tierLabel} captain ${name}. A return here climbs past most of them; a blank costs ground on the template.`;
+}
+
 export default function CaptainPage() {
   const { snapshot, loading, squadPlayers, openProfile } = useApp();
+  const ownership = useOwnership();
+  const tierLabel = OWNERSHIP_TIERS.find((t) => t.key === ownership.tier)?.label ?? "";
   const [pool, setPool] = React.useState<"squad" | "all">("squad");
   const [selectedElement, setSelectedElement] = React.useState<number | null>(null);
 
@@ -134,6 +149,11 @@ export default function CaptainPage() {
                     }.`
                   : "No available candidates in this pool yet."}
             </p>
+            {lead && ownership.forPlayer(lead.element) && (
+              <p className="cap-shield">
+                {shieldOrSword(lead.web_name || lead.name, ownership.forPlayer(lead.element)!.captain, tierLabel)}
+              </p>
+            )}
             {lead && (
               <div className="cap-tags">
                 <span className="solid">{lead.team}</span>
@@ -153,10 +173,17 @@ export default function CaptainPage() {
                 <span>{predictionAvailable ? "Projection" : "Form"}</span>
                 <strong><CountUp value={captainScore(lead, predictionAvailable)} decimals={1} /></strong>
               </div>
-              <div className="bug">
-                <span>Ownership</span>
-                <strong>{num(lead.selected_by)}%</strong>
-              </div>
+              {ownership.forPlayer(lead.element) ? (
+                <div className="bug">
+                  <span>EO · {tierLabel}</span>
+                  <strong>{Math.round(ownership.forPlayer(lead.element)!.eo)}%</strong>
+                </div>
+              ) : (
+                <div className="bug">
+                  <span>Ownership</span>
+                  <strong>{num(lead.selected_by)}%</strong>
+                </div>
+              )}
               <div className="bug">
                 <span>Price</span>
                 <strong>{money(lead.value_m)}</strong>
@@ -238,6 +265,14 @@ export default function CaptainPage() {
                   <span className="muted">
                     {player.team} · {player.position}
                   </span>
+                  {ownership.forPlayer(player.element) && (
+                    <span
+                      className={`eo-badge${ownership.forPlayer(player.element)!.eo >= 100 ? " is-high" : ""}`}
+                      title={`${tierLabel} effective ownership, and the share who captain him`}
+                    >
+                      EO {Math.round(ownership.forPlayer(player.element)!.eo)}% · C {Math.round(ownership.forPlayer(player.element)!.captain)}%
+                    </span>
+                  )}
                 </span>
                 <span className="cand-fix">
                   <span className="muted">Next</span>

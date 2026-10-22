@@ -2394,3 +2394,35 @@
   .stats-table .stats-player-col{width:220px}
   .stats-teams th .text-button{padding:0;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;text-decoration:none}
   .stats-teams th[aria-sort="descending"],.stats-teams th[aria-sort="ascending"]{color:var(--white)}
+
+  /* --- RANK EXPOSURE (My Team) and EO badges --------------------------------- */
+  .eo-tier{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3)}
+  .eo-tier .horizon-tabs{margin-left:0}
+  .rank-exposure{margin-top:var(--space-8);margin-bottom:var(--space-8)}
+  .rank-exposure-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:var(--space-4);
+    padding-bottom:var(--space-4);border-bottom:1px solid rgba(255,255,255,.14);margin-bottom:var(--space-5)}
+  .rank-exposure-head h2{margin:0;font:800 var(--type-h2)/.95 var(--display);font-variation-settings:"wdth" 100;text-transform:uppercase}
+  .rank-exposure-net{display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-4);
+    padding:var(--space-4) var(--space-5);background:rgba(255,255,255,.05);margin-bottom:var(--space-5)}
+  .rank-exposure-net > span{color:var(--muted-light);font-size:var(--type-small)}
+  .rank-exposure-net strong{font:900 2rem/1 var(--display)}
+  .rank-exposure-net strong.is-positive{color:var(--lime)}
+  .rank-exposure-net strong.is-negative{color:var(--pink)}
+  .rank-exposure-grid{display:grid;gap:var(--space-6)}
+  @media (min-width:900px){ .rank-exposure-grid{grid-template-columns:1fr 1fr} }
+  .rank-exposure-grid h3{margin:0 0 var(--space-2);font:800 var(--type-h3)/1 var(--display);text-transform:uppercase}
+  .rank-exposure-note{margin:0 0 var(--space-3);color:var(--muted-light);font-size:var(--type-small)}
+  .rank-exposure-grid ol{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+  .rank-exposure-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,1.1fr);align-items:center;gap:var(--space-3);
+    padding:10px var(--space-3);background:rgba(255,255,255,.035)}
+  .rank-exposure-who b{display:block;font:700 var(--type-small)/1.2 var(--ui)}
+  .rank-exposure-empty{color:var(--muted-light)}
+  .eo-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;background:rgba(255,255,255,.1);
+    font:700 var(--type-micro)/1 var(--data);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+  .eo-badge.is-high{background:var(--pink);color:var(--white)}
+  .cap-shield{max-width:52ch;margin:calc(var(--space-4) * -1) 0 var(--space-5);padding-left:var(--space-3);
+    border-left:3px solid var(--lime);color:#fff3f8;font:500 var(--type-small)/1.4 var(--ui)}
+  .rank-exposure-net strong .data{font:inherit;color:inherit}
+  .cand-id .eo-badge{width:max-content;margin-top:4px}
+  .paper-scope .eo-badge:not(.is-high){background:rgba(33,0,37,.08);color:var(--ink)}
+  .bug strong .data{font:inherit;color:inherit}
