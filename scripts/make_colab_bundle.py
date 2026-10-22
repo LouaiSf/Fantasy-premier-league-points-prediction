@@ -43,6 +43,13 @@ CODE = [
 DATASET = ['all_seasons_data_final.csv']
 
 
+def fotmob_inputs() -> list[str]:
+    """FotMob per-match stats: the feature stage's fm_* family and the dataset
+    build's defensive columns read them. Gitignored, so they exist only where
+    scripts/fetch_fotmob.py has run; without them fm_* is simply NaN."""
+    return sorted(glob.glob('data/*/fotmob/player_match.csv'))
+
+
 def raw_inputs() -> list[str]:
     """Files the dataset rebuild (fpl_pipeline.ipynb cells 3-34 + 40) reads."""
     paths = ['data/master_team_list.csv']
@@ -74,7 +81,7 @@ def main() -> int:
     ap.add_argument('--out-dir', default='.', help='where to write the zip')
     args = ap.parse_args()
 
-    paths = list(CODE) + sorted(glob.glob('scripts/*.py')) + list(DATASET)
+    paths = list(CODE) + sorted(glob.glob('scripts/*.py')) + list(DATASET) + fotmob_inputs()
     if not args.minimal:
         paths += raw_inputs()
 
