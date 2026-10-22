@@ -36,7 +36,9 @@ const STATED_CHANCE = /(\d+)% chance of playing/;
 function chanceFor(player: PlayerRecord): number | null {
   const stated = player.news?.match(STATED_CHANCE);
   if (stated) return Number(stated[1]);
-  return player.chance_of_playing_this_round ?? player.chance_of_playing_next_round ?? null;
+  // The snapshot's own gameweek: between deadlines FPL's "this round" is the
+  // gameweek already played, so the server picks the field that applies.
+  return player.chance_of_playing ?? player.chance_of_playing_next_round ?? null;
 }
 
 function hasNote(player: PlayerRecord): boolean {

@@ -47,3 +47,28 @@ def test_build_local_snapshot_reports_missing_local_files(tmp_path: Path) -> Non
     assert snapshot["available"] is False
     assert snapshot["players"] == []
     assert "fixtures.csv" in snapshot["message"]
+
+
+def _season_with_chances(tmp_path: Path, kickoff: str) -> None:
+    season = tmp_path / "data" / "2026-27"
+    season.mkdir(parents=True)
+    (season / "teams.csv").write_text("id,name,short_name,code\n1,Arsenal,ARS,3\n2,Chelsea,CHE,8\n",
+                                      encoding="utf-8")
+    (season / "fixtures.csv").write_text(
+        "event,finished,kickoff_time,team_a,team_h,team_h_difficulty,team_a_difficulty\n"
+        f"8,False,{kickoff},2,1,3,4\n", encoding="utf-8")
+    (season / "players_raw.csv").write_text(
+        "id,first_name,second_name,web_name,team,element_type,now_cost,status,form,total_points,"
+        "minutes,news,code,selected_by_percent,chance_of_playing_this_round,chance_of_playing_next_round\n"
+        "10,Tyrick,Maatsen,Maatsen,1,2,45,a,1.0,10,300,,1,2.0,0,100\n", encoding="utf-8")
+
+
+def test_before_a_gameweek_starts_its_chance_is_fpls_next_round(tmp_path: Path) -> None:
+    # GW7 is FPL's current event, so this_round (0) is last week's.
+    _season_with_chances(tmp_path, "2999-01-01T15:00:00Z")
+    assert build_local_snapshot(tmp_path, "2026-27")["players"][0]["chance_of_playing"] == 100
+
+
+def test_once_a_gameweek_kicks_off_its_chance_is_fpls_this_round(tmp_path: Path) -> None:
+    _season_with_chances(tmp_path, "2020-01-01T15:00:00Z")
+    assert build_local_snapshot(tmp_path, "2026-27")["players"][0]["chance_of_playing"] == 0

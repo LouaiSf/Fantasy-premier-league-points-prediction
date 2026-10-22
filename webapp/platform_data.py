@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import datetime
 import threading
 from pathlib import Path
 from typing import Final, TypedDict
@@ -50,6 +51,8 @@ class PlayerRecord(TypedDict):
     transfers_out_event: int
     chance_of_playing_next_round: int | None
     chance_of_playing_this_round: int | None
+    # FPL's chance for the snapshot's own gameweek, whichever field holds it.
+    chance_of_playing: int | None
     news_since_gw: int | None
     cost_change_event: int
     photo: str | None
@@ -81,6 +84,14 @@ def photo_url(code: int | None, size: str = "110x140") -> str | None:
     shot but is missing for about a dozen players who do have the small one,
     so the caller keeps both and falls back."""
     return PHOTO_URL.format(size=size, code=int(code)) if code else None
+
+
+def _parse_time(value: str | None) -> datetime.datetime | None:
+    try:
+        parsed = datetime.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=datetime.timezone.utc)
 
 
 def _integer(value: str | None, default: int = 0) -> int:
@@ -178,6 +189,14 @@ def build_local_snapshot(
         if row.get("event") and row.get("finished", "").lower() != "true"
     ]
     gameweek = min(unfinished) if unfinished else None
+    # FPL's "this round" is the current event; until the next gameweek's first
+    # kickoff that is the one just finished, so its flag is stale and "next
+    # round" describes the gameweek this snapshot is about.
+    now = datetime.datetime.now(datetime.timezone.utc)
+    gameweek_live = gameweek is not None and any(
+        _integer(row.get("event")) == gameweek and _parse_time(row.get("kickoff_time")) is not None
+        and _parse_time(row.get("kickoff_time")) <= now
+        for row in fixture_rows)
     if gameweek is not None:
         last_gameweek = gameweek + horizon - 1
         for row in fixture_rows:
@@ -221,11 +240,13 @@ def build_local_snapshot(
             text = row.get(column, "")
             return _integer(text) if text not in {"", "None", None} else None
 
-        # FPL splits the doubt across two rounds: "this" is the gameweek being
-        # played next, "next" the one after it. Both travel, because a note
-        # saying 25% belongs beside the round it describes.
+        # FPL splits the doubt across two rounds: "this" is the current event
+        # and "next" the one after. Both travel; chance_of_playing is the one
+        # for this snapshot's gameweek.
         chance = optional_int("chance_of_playing_next_round")
         chance_this = optional_int("chance_of_playing_this_round")
+        first, second = (chance_this, chance) if gameweek_live else (chance, chance_this)
+        chance_now = first if first is not None else second
         players.append(
             PlayerRecord(
                 element=_integer(row.get("id")),
@@ -254,6 +275,7 @@ def build_local_snapshot(
                 transfers_out_event=_integer(row.get("transfers_out_event")),
                 chance_of_playing_next_round=chance,
                 chance_of_playing_this_round=chance_this,
+                chance_of_playing=chance_now,
                 news_since_gw=optional_int("news_since_gw"),
                 cost_change_event=_integer(row.get("cost_change_event")),
                 photo=photo_url(code),
