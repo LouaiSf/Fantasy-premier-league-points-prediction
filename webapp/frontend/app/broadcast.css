@@ -2316,3 +2316,81 @@
   .scatter-dot:hover,.scatter-dot:focus-visible{fill:var(--lime)}
   .scatter-dot:focus-visible{outline:0}
   .scatter-dot.is-highlight{fill:var(--lime)}
+  .scatter-dot.is-selectable{cursor:pointer}
+
+  /* --- STATS LAB (/stats) ----------------------------------------------------- */
+  .stats-controls{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4)}
+  .stats-controls .horizon-tabs{margin-left:0}
+  .stats-search{flex:1;min-width:200px;border:1px solid rgba(255,255,255,.14)}
+  .stats-presets{margin-bottom:var(--space-5)}
+  .stats-note{margin:0 0 var(--space-5);padding:var(--space-3) var(--space-4);border-left:3px solid var(--yellow);
+    background:rgba(255,255,255,.04);color:var(--muted-light);font-size:var(--type-small)}
+  .stats-scatter{margin:0 0 var(--space-6);padding:var(--space-4);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.1)}
+  .stats-scatter figcaption{margin-bottom:var(--space-3)}
+  .stats-scatter-frame{overflow-x:auto}
+  .stats-scatter-frame .scatter-svg{display:block;max-width:100%;height:auto}
+  .stats-count{margin:0 0 var(--space-2)}
+  .stats-table-frame{max-height:72vh;overflow:auto;border:1px solid rgba(255,255,255,.12)}
+  .stats-table-frame:focus-visible{outline:0;box-shadow:var(--focus)}
+  .stats-table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+  .stats-table thead th{position:sticky;top:0;z-index:2;background:var(--night-800);text-align:right;
+    border-bottom:1px solid rgba(255,255,255,.16);padding:0}
+  .stats-table thead th button{width:100%;min-height:40px;padding:0 var(--space-3);border:0;background:transparent;
+    color:var(--muted-light);font:700 var(--type-micro)/1 var(--data);letter-spacing:.08em;text-transform:uppercase;
+    text-align:right;white-space:nowrap;cursor:pointer}
+  .stats-table thead th button:hover{color:var(--white)}
+  .stats-table thead th button:focus-visible{outline:0;box-shadow:inset 0 0 0 2px var(--cyan)}
+  .stats-table thead th.is-sorted{background:var(--white)}
+  .stats-table thead th.is-sorted button{color:var(--ink)}
+  .stats-table .stats-player-col{position:sticky;left:0;z-index:1;text-align:left;background:var(--night-900);
+    min-width:200px;border-right:1px solid rgba(255,255,255,.1)}
+  .stats-table thead .stats-player-col{z-index:3;background:var(--night-800);padding:0 var(--space-3);
+    color:var(--muted-light);font:700 var(--type-micro)/1 var(--data);letter-spacing:.08em;text-transform:uppercase}
+  .stats-table tbody tr:hover td,.stats-table tbody tr:hover .stats-player-col{background:rgba(255,255,255,.04)}
+  .stats-table tbody tr:hover .stats-player-col{background:var(--night-850)}
+  .stats-table tbody tr.is-owned .stats-player-col{box-shadow:inset 3px 0 0 var(--lime)}
+  .stats-table td{padding:6px var(--space-3);text-align:right;border-bottom:1px solid rgba(255,255,255,.06);
+    font:600 13px/1.2 var(--data);white-space:nowrap}
+  .stats-table td.is-empty{color:var(--muted-mid)}
+  .stats-bar{display:block;height:3px;margin-top:4px;background:rgba(255,255,255,.08)}
+  .stats-bar i{display:block;height:100%;background:rgba(255,255,255,.28);transform-origin:left;
+    transition:transform var(--motion-panel) var(--ease-out)}
+  .stats-bar i.is-top{background:var(--lime)}
+  .stats-player{display:grid;grid-template-columns:28px 1fr;grid-template-rows:auto auto;column-gap:var(--space-2);
+    align-items:center;width:100%;padding:6px var(--space-3);border:0;background:transparent;color:var(--white);
+    text-align:left;cursor:pointer}
+  .stats-player:focus-visible{outline:0;box-shadow:inset 0 0 0 2px var(--cyan)}
+  .stats-player > :first-child{grid-row:1 / span 2;width:28px;height:28px;object-fit:cover;font-size:var(--type-micro)}
+  .stats-player-name{font:700 13px/1.15 var(--ui);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .stats-player-meta{display:flex;align-items:center;gap:4px;color:var(--muted-mid);font:600 var(--type-micro)/1.2 var(--data);
+    letter-spacing:.06em;text-transform:uppercase}
+  .stats-more{margin-top:var(--space-4)}
+  @media (max-width:760px){
+    .stats-table .stats-player-col{min-width:150px}
+    .stats-search{flex-basis:100%}
+  }
+
+  /* Player drawer: the underlying-numbers slate. */
+  .drawer-underlying{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:var(--space-3)}
+  .drawer-underlying-item{padding:var(--space-3);background:rgba(255,255,255,.04)}
+  .drawer-underlying-item b{display:block;margin-top:2px;font:700 var(--type-small)/1.2 var(--data)}
+
+  /* Nine tabs since the Stats Lab: tighten them so a 1440 desktop still fits all. */
+  @media (min-width:761px) and (max-width:1520px){ .nav-tab{padding-inline:12px} }
+
+  .stats-overview{display:grid;gap:var(--space-5);margin-bottom:var(--space-6)}
+  .stats-overview .stats-scatter{margin:0}
+  @media (min-width:1100px){ .stats-overview{grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr)} }
+  .stats-teams{padding:var(--space-4);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.1)}
+  .stats-teams .kicker{margin:0 0 var(--space-3)}
+  .stats-teams-scroll{max-height:340px;overflow:auto}
+  .stats-teams table{width:100%;border-collapse:collapse;font:600 13px/1.2 var(--data)}
+  .stats-teams th{position:sticky;top:0;background:var(--night-850);padding:6px 8px;text-align:right;color:var(--muted-light);
+    font:700 var(--type-micro)/1 var(--data);letter-spacing:.08em;text-transform:uppercase}
+  .stats-teams th:first-child,.stats-teams td:first-child{text-align:left}
+  .stats-teams td{padding:6px 8px;text-align:right;border-bottom:1px solid rgba(255,255,255,.06)}
+  .stats-teams td:first-child{font-family:var(--ui);font-weight:700}
+  .stats-teams-club{display:inline-flex;align-items:center;gap:6px}
+  .stats-table .stats-player-col{width:220px}
+  .stats-teams th .text-button{padding:0;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;text-decoration:none}
+  .stats-teams th[aria-sort="descending"],.stats-teams th[aria-sort="ascending"]{color:var(--white)}

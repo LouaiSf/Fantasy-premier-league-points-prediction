@@ -9,7 +9,8 @@ import { api } from "@/lib/api";
 import { clubStyle } from "@/lib/club-colors";
 import { money, num } from "@/lib/format";
 import { Loading } from "@/components/loading";
-import type { PlayerHistoryRecord, TeamRecord } from "@/lib/types";
+import { Sparkline } from "@/components/charts/sparkline";
+import type { PlayerHistoryRecord, PlayerUnderlying, TeamRecord } from "@/lib/types";
 
 function fixtureRibbon(team: TeamRecord | undefined, gameweek: number | null) {
   if (!team || gameweek == null) return [];
@@ -278,6 +279,8 @@ export function PlayerDrawer() {
                   </div>
                 )}
 
+                <UnderlyingSlate element={player.element} position={player.position} />
+
                 <div className="dsec">
                   <div className="slate">
                     <i>Ladder</i>
@@ -453,5 +456,58 @@ export function PlayerDrawer() {
         </DialogPrimitive.Popup>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
+  );
+}
+
+// Per-gameweek underlying numbers (Stats Lab's /api/player/<id>/underlying):
+// what the points were built from, so a blank with 0.9 xGI reads differently
+// from one with 0.1. FotMob series are left out when the server has none.
+function UnderlyingSlate({ element, position }: { readonly element: number; readonly position: string }) {
+  const [data, setData] = React.useState<PlayerUnderlying | null>(null);
+
+  React.useEffect(() => {
+    const controller = new AbortController();
+    api.playerUnderlying(element, controller.signal).then(
+      (result) => setData(result),
+      () => !controller.signal.aborted && setData(null),
+    );
+    return () => controller.abort();
+  }, [element]);
+
+  const weeks = (data?.element === element ? data.gameweeks : []).slice(-8);
+  if (weeks.length < 2) return null;
+  const series = (key: "xgi" | "xgot" | "defensive_contribution" | "goals_prevented") =>
+    weeks.map((week) => week[key]);
+  const items: { label: string; values: (number | null)[] }[] = position === "GK"
+    ? [{ label: "Goals prevented", values: series("goals_prevented") }]
+    : [
+        { label: "xGI", values: series("xgi") },
+        { label: "xGOT", values: series("xgot") },
+        { label: "Defensive actions", values: series("defensive_contribution") },
+      ];
+  const shown = items.filter((item) => item.values.some((value) => value != null));
+  if (!shown.length) return null;
+
+  return (
+    <div className="dsec">
+      <div className="slate">
+        <i>Underlying</i>
+        <b>GW{weeks[0].gw}–GW{weeks[weeks.length - 1].gw}</b>
+        <span className="rule" />
+      </div>
+      <div className="drawer-underlying">
+        {shown.map((item) => {
+          const values = item.values.map((value) => value ?? 0);
+          const total = values.reduce((sum, value) => sum + value, 0);
+          return (
+            <div className="drawer-underlying-item" key={item.label}>
+              <span className="kicker">{item.label}</span>
+              <b>{total.toFixed(item.label === "Defensive actions" ? 0 : 2)} total</b>
+              <Sparkline values={values} width={120} height={28} highlightLast />
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

@@ -8,7 +8,10 @@ import type {
   ManagerStatus,
   PlatformSnapshot,
   PlayerHistoryRecord,
+  PlayerUnderlying,
   SquadResult,
+  StatsPlayersResult,
+  StatsWindow,
   TransferResult,
   WatchlistResult,
 } from "./types";
@@ -208,6 +211,18 @@ export const api = {
     requestJson<{ ok: boolean; history: PlayerHistoryRecord[] }>(
       `/api/player/${elementId}/history`,
     ),
+  statsPlayers: (
+    params: { window: StatsWindow; position?: string | null; minMinutes?: number; preset?: string | null },
+    signal?: AbortSignal,
+  ) => {
+    const query = new URLSearchParams({ window: params.window });
+    if (params.position) query.set("position", params.position);
+    if (params.minMinutes) query.set("min_minutes", String(params.minMinutes));
+    if (params.preset) query.set("preset", params.preset);
+    return requestJson<StatsPlayersResult>(`/api/stats/players?${query}`, signal ? { signal } : undefined);
+  },
+  playerUnderlying: (elementId: number, signal?: AbortSignal) =>
+    requestJson<PlayerUnderlying>(`/api/player/${elementId}/underlying`, signal ? { signal } : undefined),
   refresh: () =>
     postJson<{
       ok: boolean;

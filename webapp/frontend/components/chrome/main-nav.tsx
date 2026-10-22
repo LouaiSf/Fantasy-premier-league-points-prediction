@@ -15,6 +15,7 @@ const TABS = [
   { href: "/watchlist", label: "Watchlist" },
   { href: "/chips", label: "Chip Advisor" },
   { href: "/fixtures", label: "Fixture Matrix" },
+  { href: "/stats", label: "Stats Lab" },
   { href: "/news", label: "News Wire" },
 ] as const;
 

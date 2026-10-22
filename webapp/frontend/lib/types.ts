@@ -514,3 +514,76 @@ export interface ChipsResult {
   free_transfers_used: number;
 }
 
+
+// ---------------------------------------------------------------------------
+// Stats Lab (GET /api/stats/players, GET /api/player/<id>/underlying)
+// ---------------------------------------------------------------------------
+export type StatsWindow = "last4" | "last6" | "season";
+
+/** Every metric is null when its source has no data: FotMob ones without
+ * FotMob files or for an unmapped player, keeper ones for outfielders. */
+export type StatsMetrics = Record<string, number | null>;
+
+export interface StatsPlayerRow {
+  id: number;
+  name: string;
+  team: string;
+  position: "GK" | "DEF" | "MID" | "FWD";
+  code: number | null;
+  sources: ("fpl" | "fotmob")[];
+  metrics: StatsMetrics;
+}
+
+export interface StatsPreset {
+  id: string;
+  label: string;
+  sort: string;
+  desc: boolean;
+  positions: string[];
+  columns: string[];
+  scatter: { x: string; y: string; diagonal: boolean };
+}
+
+export interface StatsTeamRow {
+  team: string;
+  matches: number;
+  xg_for_4: number | null;
+  xg_against_4: number | null;
+  xgot_against_4: number | null;
+  xg_for_6: number | null;
+  xg_against_6: number | null;
+  xgot_against_6: number | null;
+}
+
+export interface StatsPlayersResult {
+  ok: true;
+  season: string;
+  fotmob_updated_at: string | null;
+  rows: StatsPlayerRow[];
+  total: number;
+  window: { gw_from: number; gw_to: number; last_gw: number; name: string | null } | null;
+  sort: string;
+  preset: string | null;
+  has_fotmob: boolean;
+  fotmob_metrics: string[];
+  defcon_threshold: Record<string, number>;
+  presets: StatsPreset[];
+  teams: StatsTeamRow[];
+}
+
+export interface UnderlyingWeek {
+  gw: number;
+  minutes: number | null;
+  xgi: number | null;
+  xgot: number | null;
+  defensive_contribution: number | null;
+  goals_prevented: number | null;
+}
+
+export interface PlayerUnderlying {
+  ok: true;
+  element: number;
+  position?: string;
+  gameweeks: UnderlyingWeek[];
+  has_fotmob: boolean;
+}

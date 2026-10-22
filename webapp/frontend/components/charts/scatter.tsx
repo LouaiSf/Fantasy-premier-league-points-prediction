@@ -15,6 +15,7 @@ export function Scatter({
   diagonal = false,
   width = 640,
   height = 420,
+  onSelect,
 }: {
   readonly points: ScatterPoint[];
   readonly xLabel: string;
@@ -22,6 +23,8 @@ export function Scatter({
   readonly diagonal?: boolean;
   readonly width?: number;
   readonly height?: number;
+  /** Called with a point's id on click, Enter or Space. */
+  readonly onSelect?: (id: string | number) => void;
 }) {
   const pad = { top: 16, right: 16, bottom: 36, left: 44 };
   const plotW = width - pad.left - pad.right;
@@ -89,8 +92,15 @@ export function Scatter({
                 cx={scaleX(point.x)}
                 cy={scaleY(point.y)}
                 r={point.highlight ? 8 : 4}
-                className={`scatter-dot${point.highlight ? " is-highlight" : ""}`}
+                className={`scatter-dot${point.highlight ? " is-highlight" : ""}${onSelect ? " is-selectable" : ""}`}
                 tabIndex={0}
+                onClick={onSelect ? () => onSelect(point.id) : undefined}
+                onKeyDown={onSelect ? (event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onSelect(point.id);
+                  }
+                } : undefined}
                 aria-label={`${point.label}: ${xLabel} ${point.x}, ${yLabel} ${point.y}`}
               />
             }
