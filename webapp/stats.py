@@ -275,19 +275,32 @@ def resolve_window(matches: pd.DataFrame, window: str | None,
     return (1 if span is None else max(1, last - span + 1), last)
 
 
+def _xgi_p90_by_player(rows: pd.DataFrame) -> pd.Series:
+    played = rows[rows['minutes'] > 0]
+    sums = played.groupby('element')[['expected_goal_involvements', 'minutes']].sum()
+    return (sums['expected_goal_involvements'] * 90.0 / sums['minutes']).where(sums['minutes'] > 0)
+
+
 def player_stats(root: str, season: str, *, window: str | None = 'season',
                  gw_from: int | None = None, gw_to: int | None = None,
                  position: str | None = None, min_minutes: int = 0,
                  preset: str | None = None, sort: str | None = None,
                  limit: int | None = None) -> dict:
-    matches, has_fotmob = load_matches(root, season, signature(root, season))
+    return _player_stats(root, season, signature(root, season), window, gw_from, gw_to,
+                         position, min_minutes, preset, sort, limit)
+
+
+@lru_cache(maxsize=64)
+def _player_stats(root: str, season: str, _signature: tuple, window, gw_from, gw_to,
+                  position, min_minutes, preset, sort, limit) -> dict:
+    matches, has_fotmob = load_matches(root, season, _signature)
     if matches.empty:
         return {'rows': [], 'window': None, 'has_fotmob': False, 'presets': _preset_list()}
     lo, hi = resolve_window(matches, window, gw_from, gw_to)
     in_window = matches[(matches['GW'] >= lo) & (matches['GW'] <= hi)]
     last = int(matches['GW'].max())
-    recent = matches[matches['GW'] > last - LAST_FORM_GWS]
-    season_rows = matches
+    recent_xgi = _xgi_p90_by_player(matches[matches['GW'] > last - LAST_FORM_GWS])
+    season_xgi = _xgi_p90_by_player(matches)
 
     spec = PRESETS.get(preset) if preset else None
     players = _players(root, season).set_index('element')
@@ -303,11 +316,11 @@ def player_stats(root: str, season: str, *, window: str | None = 'season',
             continue
         if spec and any((metrics.get(k) or 0) < v for k, v in spec['min'].items()):
             continue
-        last4 = summarise(recent[recent['element'] == element], pos, has_fotmob)
-        whole = summarise(season_rows[season_rows['element'] == element], pos, has_fotmob)
-        metrics['xgi_p90_last4'] = last4['xgi_p90']
-        metrics['xgi_p90_trend'] = (None if last4['xgi_p90'] is None or whole['xgi_p90'] is None
-                                    else last4['xgi_p90'] - whole['xgi_p90'])
+        last4, whole = recent_xgi.get(element), season_xgi.get(element)
+        last4 = None if last4 is None or pd.isna(last4) else float(last4)
+        whole = None if whole is None or pd.isna(whole) else float(whole)
+        metrics['xgi_p90_last4'] = last4
+        metrics['xgi_p90_trend'] = None if last4 is None or whole is None else last4 - whole
         info = players.loc[element] if element in players.index else pd.Series(dtype=object)
         code, web_name = info.get('code'), info.get('web_name')
         rows.append({
