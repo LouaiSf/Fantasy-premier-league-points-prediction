@@ -291,6 +291,17 @@ def fetch_fotmob(season: str, log: Log = print, runner=subprocess.run) -> str | 
         return f'FotMob stats were not refreshed ({exc.message}); fotmob: stale since {since or "never"}.'
 
 
+def fetch_ownership(tier: str, log: Log = print, runner=subprocess.run) -> str | None:
+    """Re-sample effective ownership. Optional and non-fatal, like FotMob."""
+    try:
+        _run('ownership', [sys.executable, os.path.join(ROOT, 'scripts', 'fetch_ownership.py'),
+                           '--tier', tier], FOTMOB_TIMEOUT_S, log, runner)
+        return None
+    except PipelineError as exc:
+        log(f'  ownership step failed ({exc.message}); continuing')
+        return f'Effective ownership ({tier}) was not refreshed ({exc.message}).'
+
+
 def rebuild_history(log: Log = print, runner=subprocess.run) -> None:
     _run('history', [sys.executable, os.path.join(ROOT, 'scripts', 'build_dataset.py'), '--write'],
          HISTORY_TIMEOUT_S, log, runner)
@@ -313,7 +324,7 @@ def _write_manifest(target: str, season: str, horizon: int, summary: dict, log: 
 
 def run_pipeline(season: str | None = None, horizon: int = DEFAULT_HORIZON,
                  fetch: bool = True, rebuild: bool = True, out: str | None = None,
-                 with_fotmob: bool = False,
+                 with_fotmob: bool = False, ownership: str | None = None,
                  log: Log = print, on_step: Callable[[str], None] | None = None,
                  runner=subprocess.run) -> dict:
     """Run the whole chain. Returns a report; raises PipelineError on failure."""
@@ -336,6 +347,11 @@ def run_pipeline(season: str | None = None, horizon: int = DEFAULT_HORIZON,
             step('fotmob')
             log(f'[1/5] fetching {season} FotMob stats')
             fotmob_warning = fetch_fotmob(season, log, runner)
+        ownership_warning = None
+        if ownership:
+            step('ownership')
+            log(f'[1/5] sampling {ownership} effective ownership')
+            ownership_warning = fetch_ownership(ownership, log, runner)
 
         # The predictions are built from this history, not from the raw files
         # just fetched, so a lagging history means last week's form is missing.
@@ -369,7 +385,7 @@ def run_pipeline(season: str | None = None, horizon: int = DEFAULT_HORIZON,
                 os.remove(candidate)
 
     behind = history_gameweeks_behind(season)
-    warnings = [w for w in (fotmob_warning, manifest_warning) if w]
+    warnings = [w for w in (fotmob_warning, ownership_warning, manifest_warning) if w]
     if behind:
         warnings.append(
             f'The model history does not match the fetched data in {behind} gameweek(s), so '
@@ -403,12 +419,14 @@ def main() -> int:
     ap.add_argument('--out', default=None, help=f'defaults to {opt.PREDICTIONS}')
     ap.add_argument('--with-fotmob', action='store_true',
                     help='also scrape FotMob advanced stats (never fails the run)')
+    ap.add_argument('--ownership', choices=('top1k', 'top10k', 'overall'), default=None,
+                    help='also re-sample effective ownership for this tier (never fails the run)')
     args = ap.parse_args()
     os.chdir(ROOT)
     try:
         report = run_pipeline(args.season, args.horizon, fetch=not args.no_fetch,
                               rebuild=not args.no_rebuild_history, out=args.out,
-                              with_fotmob=args.with_fotmob)
+                              with_fotmob=args.with_fotmob, ownership=args.ownership)
     except PipelineError as exc:
         print(f'FAILED at {exc.step}: {exc.message}\nThe previous predictions were not changed.',
               file=sys.stderr)

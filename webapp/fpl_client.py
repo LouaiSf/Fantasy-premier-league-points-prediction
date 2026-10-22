@@ -346,6 +346,11 @@ class FplClient:
             "text manager search provider contract is not documented; refusing to guess its fields"
         )
 
+    def get_bootstrap(self) -> dict[str, object]:
+        """bootstrap-static: events (with is_current), total_players and elements."""
+        return self._get_json(self._url("bootstrap-static/"), not_found_exc=UpstreamUnavailable,
+                              cache_ttl_seconds=600.0)
+
     def get_league_standings(self, league_id: int, page: int = 1) -> LeagueStandingsPage:
         """One page of a classic league's standings: manager name, team name,
         entry ID, rank and points for every member on that page.
