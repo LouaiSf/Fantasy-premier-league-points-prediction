@@ -981,8 +981,8 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
                 if view['gw'] is not None:
                     reasons.append(f"{which}-half {CHIP_LABELS[chip]}: GW{view['gw']} (+{view['gain']:.1f}).")
                 elif view['awaiting_fixtures']:
-                    reasons.append(f"{which}-half {CHIP_LABELS[chip]}: held for the double "
-                                   'gameweeks, which are not scheduled yet.')
+                    reasons.append(f"{which}-half {CHIP_LABELS[chip]}: held until the double and "
+                                   'blank gameweeks are scheduled.')
 
             recommendations.append({
                 'chip': chip, 'label': CHIP_LABELS[chip], 'status': active['status'],
