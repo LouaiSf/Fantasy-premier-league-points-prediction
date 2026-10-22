@@ -5,201 +5,201 @@
     "top_features": [
       {
         "feature": "minutes_prev_1",
-        "share": 0.29665
+        "share": 0.29825
       },
       {
         "feature": "bps_prev_1",
-        "share": 0.0758
+        "share": 0.07909
       },
       {
         "feature": "minutes_rolling_3",
-        "share": 0.07039
+        "share": 0.07062
       },
       {
         "feature": "avail_started_rate_3",
-        "share": 0.06569
+        "share": 0.06505
       },
       {
         "feature": "avail_played_rate_3",
-        "share": 0.06369
-      },
-      {
-        "feature": "bps_rolling_10",
-        "share": 0.04238
-      },
-      {
-        "feature": "minutes_rolling_10",
-        "share": 0.03388
-      },
-      {
-        "feature": "avail_started_rate_10",
-        "share": 0.03369
+        "share": 0.06365
       },
       {
         "feature": "avail_season_played_rate",
-        "share": 0.03119
+        "share": 0.03578
       },
       {
-        "feature": "avail_played_rate_10",
-        "share": 0.02999
+        "feature": "bps_rolling_10",
+        "share": 0.03504
       },
       {
         "feature": "avail_is_nailed",
-        "share": 0.02902
+        "share": 0.03485
       },
       {
-        "feature": "minutes_prev_2",
-        "share": 0.02553
+        "feature": "minutes_rolling_10",
+        "share": 0.0295
       },
       {
-        "feature": "value",
-        "share": 0.02328
+        "feature": "avail_started_rate_10",
+        "share": 0.02817
+      },
+      {
+        "feature": "avail_played_rate_10",
+        "share": 0.02762
+      },
+      {
+        "feature": "value_prev_5",
+        "share": 0.02745
       },
       {
         "feature": "fx_opp_att_form_venue",
-        "share": 0.02202
+        "share": 0.02463
+      },
+      {
+        "feature": "minutes_prev_2",
+        "share": 0.02195
       },
       {
         "feature": "minutes_rolling_5",
-        "share": 0.02024
+        "share": 0.01973
       }
     ],
     "by_group": [
       {
         "group": "minutes",
-        "share": 0.44668
+        "share": 0.44005
       },
       {
         "group": "avail_*",
-        "share": 0.29045
+        "share": 0.29384
       },
       {
         "group": "bps",
-        "share": 0.1357
+        "share": 0.13218
       },
       {
         "group": "value",
-        "share": 0.07185
+        "share": 0.07156
       },
       {
         "group": "fx_opp_att_form_venue",
-        "share": 0.02202
+        "share": 0.02463
       },
       {
         "group": "fx_opp_def_form_venue",
-        "share": 0.01661
+        "share": 0.01372
       },
       {
         "group": "fx_opp_att_form_8",
-        "share": 0.01288
+        "share": 0.0137
       },
       {
-        "group": "fx_is_home",
-        "share": 0.00196
+        "group": "fx_own_att_form_venue",
+        "share": 0.00437
       }
     ],
-    "availability_share": 0.29045
+    "availability_share": 0.29384
   },
   "DEF": {
     "model": "LightGBM",
     "measure": "gain",
     "top_features": [
       {
-        "feature": "fx_opp_def_form_venue",
-        "share": 0.06214
-      },
-      {
         "feature": "fx_opp_att_form_venue",
-        "share": 0.05679
+        "share": 0.0575
       },
       {
-        "feature": "total_points_prev_1",
-        "share": 0.04429
-      },
-      {
-        "feature": "total_points_rolling_10",
-        "share": 0.03857
-      },
-      {
-        "feature": "fx_is_home",
-        "share": 0.03643
-      },
-      {
-        "feature": "fx_opp_att_form_8",
-        "share": 0.03464
+        "feature": "fx_opp_def_form_venue",
+        "share": 0.04536
       },
       {
         "feature": "avail_days_since_last",
-        "share": 0.03179
-      },
-      {
-        "feature": "ict_index_rolling_10",
-        "share": 0.02964
-      },
-      {
-        "feature": "value",
-        "share": 0.02857
-      },
-      {
-        "feature": "minutes_prev_1",
-        "share": 0.02857
+        "share": 0.04179
       },
       {
         "feature": "fx_cs_chance",
-        "share": 0.02857
+        "share": 0.03357
+      },
+      {
+        "feature": "minutes_prev_1",
+        "share": 0.03286
+      },
+      {
+        "feature": "fx_is_home",
+        "share": 0.03036
+      },
+      {
+        "feature": "total_points_prev_1",
+        "share": 0.03
+      },
+      {
+        "feature": "ict_index_rolling_10",
+        "share": 0.03
+      },
+      {
+        "feature": "fx_opp_def_form_8",
+        "share": 0.02964
+      },
+      {
+        "feature": "fx_attack_edge",
+        "share": 0.02929
       },
       {
         "feature": "avail_season_played_rate",
-        "share": 0.02679
+        "share": 0.02571
       },
       {
-        "feature": "fx_defence_edge",
-        "share": 0.02464
+        "feature": "fx_own_att_form_8",
+        "share": 0.02536
       },
       {
-        "feature": "fx_own_att_form_4",
-        "share": 0.02429
+        "feature": "bps_rolling_10",
+        "share": 0.025
+      },
+      {
+        "feature": "fx_opp_att_form_8",
+        "share": 0.025
       },
       {
         "feature": "fx_own_att_form_venue",
-        "share": 0.02321
+        "share": 0.025
       }
     ],
     "by_group": [
       {
-        "group": "total_points",
-        "share": 0.12857
+        "group": "avail_*",
+        "share": 0.10714
       },
       {
         "group": "ict_index",
-        "share": 0.10929
-      },
-      {
-        "group": "value",
-        "share": 0.0875
-      },
-      {
-        "group": "avail_*",
-        "share": 0.08321
+        "share": 0.10393
       },
       {
         "group": "bps",
-        "share": 0.07893
+        "share": 0.09929
+      },
+      {
+        "group": "value",
+        "share": 0.08786
       },
       {
         "group": "minutes",
-        "share": 0.065
+        "share": 0.07857
       },
       {
-        "group": "fx_opp_def_form_venue",
-        "share": 0.06214
+        "group": "total_points",
+        "share": 0.07643
       },
       {
         "group": "fx_opp_att_form_venue",
-        "share": 0.05679
+        "share": 0.0575
+      },
+      {
+        "group": "fx_opp_def_form_venue",
+        "share": 0.04536
       }
     ],
-    "availability_share": 0.08321
+    "availability_share": 0.10714
   },
   "MID": {
     "model": "LightGBM",
@@ -207,200 +207,200 @@
     "top_features": [
       {
         "feature": "minutes_prev_1",
-        "share": 0.07286
-      },
-      {
-        "feature": "total_points_rolling_10",
-        "share": 0.05679
-      },
-      {
-        "feature": "value",
-        "share": 0.05107
-      },
-      {
-        "feature": "ict_index_rolling_10",
-        "share": 0.04786
+        "share": 0.05643
       },
       {
         "feature": "value_prev_5",
-        "share": 0.04393
+        "share": 0.04857
       },
       {
-        "feature": "total_points_prev_1",
-        "share": 0.03179
+        "feature": "value",
+        "share": 0.04571
+      },
+      {
+        "feature": "ict_index_rolling_10",
+        "share": 0.04464
       },
       {
         "feature": "ict_index_prev_1",
-        "share": 0.03
+        "share": 0.035
       },
       {
-        "feature": "ict_index_rolling_3",
-        "share": 0.02857
-      },
-      {
-        "feature": "fx_is_home",
-        "share": 0.02786
+        "feature": "total_points_rolling_10",
+        "share": 0.03393
       },
       {
         "feature": "avail_season_played_rate",
-        "share": 0.02714
+        "share": 0.0325
+      },
+      {
+        "feature": "fx_is_home",
+        "share": 0.03179
+      },
+      {
+        "feature": "fx_cs_chance",
+        "share": 0.02857
+      },
+      {
+        "feature": "ict_index_rolling_3",
+        "share": 0.02679
       },
       {
         "feature": "fx_opp_att_form_venue",
-        "share": 0.02714
-      },
-      {
-        "feature": "fx_opp_def_form_venue",
-        "share": 0.02714
-      },
-      {
-        "feature": "fx_opp_def_form_8",
-        "share": 0.02607
-      },
-      {
-        "feature": "ict_index_rolling_5",
         "share": 0.02429
       },
       {
-        "feature": "total_points_rolling_5",
-        "share": 0.02321
+        "feature": "bps_prev_1",
+        "share": 0.02286
+      },
+      {
+        "feature": "fx_opp_att_form_8",
+        "share": 0.0225
+      },
+      {
+        "feature": "minutes_prev_2",
+        "share": 0.02214
+      },
+      {
+        "feature": "fx_opp_def_form_venue",
+        "share": 0.02
       }
     ],
     "by_group": [
       {
         "group": "ict_index",
-        "share": 0.18036
-      },
-      {
-        "group": "total_points",
-        "share": 0.14786
+        "share": 0.17107
       },
       {
         "group": "value",
-        "share": 0.14679
+        "share": 0.14893
       },
       {
         "group": "minutes",
-        "share": 0.13107
+        "share": 0.11357
       },
       {
-        "group": "avail_*",
-        "share": 0.0825
+        "group": "total_points",
+        "share": 0.09464
       },
       {
         "group": "bps",
-        "share": 0.07964
+        "share": 0.08893
+      },
+      {
+        "group": "avail_*",
+        "share": 0.08607
       },
       {
         "group": "fx_is_home",
-        "share": 0.02786
+        "share": 0.03179
       },
       {
-        "group": "fx_opp_att_form_venue",
-        "share": 0.02714
+        "group": "fx_cs_chance",
+        "share": 0.02857
       }
     ],
-    "availability_share": 0.0825
+    "availability_share": 0.08607
   },
   "FWD": {
-    "model": "ElasticNet",
+    "model": "Ridge",
     "measure": "|coef|",
     "top_features": [
       {
         "feature": "minutes_prev_1",
-        "share": 0.22592
+        "share": 0.12804
       },
       {
         "feature": "avail_played_rate_3",
-        "share": 0.08256
+        "share": 0.05723
       },
       {
-        "feature": "ict_index_rolling_5",
-        "share": 0.03869
-      },
-      {
-        "feature": "value",
-        "share": 0.03841
-      },
-      {
-        "feature": "avail_season_played_rate",
-        "share": 0.03816
-      },
-      {
-        "feature": "ict_index_prev_1",
-        "share": 0.03573
-      },
-      {
-        "feature": "avail_is_frozen_out",
-        "share": 0.03535
-      },
-      {
-        "feature": "fx_opp_att_form_8",
-        "share": 0.0316
-      },
-      {
-        "feature": "ict_index_rolling_10",
-        "share": 0.03114
-      },
-      {
-        "feature": "avail_played_rate_5",
-        "share": 0.02993
+        "feature": "minutes_prev_3",
+        "share": 0.04173
       },
       {
         "feature": "minutes_rolling_3",
-        "share": 0.02815
+        "share": 0.03383
       },
       {
-        "feature": "total_points_rolling_10",
-        "share": 0.02609
+        "feature": "avail_start_streak",
+        "share": 0.02903
       },
       {
-        "feature": "total_points_rolling_3",
-        "share": 0.02557
+        "feature": "minutes_rolling_10",
+        "share": 0.02685
       },
       {
-        "feature": "value_prev_1",
+        "feature": "avail_season_played_rate",
+        "share": 0.0268
+      },
+      {
+        "feature": "value",
+        "share": 0.02641
+      },
+      {
+        "feature": "ict_index_prev_5",
+        "share": 0.02493
+      },
+      {
+        "feature": "bps_prev_3",
+        "share": 0.02453
+      },
+      {
+        "feature": "ict_index_prev_1",
+        "share": 0.02435
+      },
+      {
+        "feature": "avail_is_frozen_out",
         "share": 0.02433
       },
       {
-        "feature": "total_points_rolling_5",
-        "share": 0.02381
+        "feature": "ict_index_rolling_10",
+        "share": 0.02288
+      },
+      {
+        "feature": "total_points_prev_1",
+        "share": 0.02281
+      },
+      {
+        "feature": "minutes_rolling_5",
+        "share": 0.02134
       }
     ],
     "by_group": [
       {
         "group": "minutes",
-        "share": 0.29792
+        "share": 0.27606
       },
       {
         "group": "avail_*",
-        "share": 0.21635
-      },
-      {
-        "group": "value",
-        "share": 0.13672
+        "share": 0.25037
       },
       {
         "group": "ict_index",
-        "share": 0.11012
+        "share": 0.10039
+      },
+      {
+        "group": "value",
+        "share": 0.08631
       },
       {
         "group": "total_points",
-        "share": 0.09743
+        "share": 0.07269
       },
       {
         "group": "bps",
-        "share": 0.04519
-      },
-      {
-        "group": "fx_opp_att_form_8",
-        "share": 0.0316
+        "share": 0.06852
       },
       {
         "group": "fx_is_home",
-        "share": 0.02253
+        "share": 0.01995
+      },
+      {
+        "group": "fx_opp_def_form_8",
+        "share": 0.01868
       }
     ],
-    "availability_share": 0.21635
+    "availability_share": 0.25037
   }
 }
