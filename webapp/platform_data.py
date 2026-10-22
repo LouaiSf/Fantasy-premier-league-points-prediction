@@ -145,7 +145,7 @@ def latest_local_season(root: Path) -> str | None:
 def build_local_snapshot(
     root: Path,
     season: str,
-    horizon: int = 8,
+    horizon: int = 12,  # the Fixture Matrix offers up to 12 gameweeks
 ) -> PlatformSnapshot:
     season_root = root / "data" / season
     required = [season_root / name for name in ("teams.csv", "fixtures.csv", "players_raw.csv")]
