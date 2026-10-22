@@ -2470,3 +2470,7 @@
   .bottom-sheet a.is-active{box-shadow:inset 3px 0 0 var(--lime)}
   .bottom-sheet a .bottom-nav-badge{position:static;margin-left:auto}
   @media (prefers-reduced-motion:reduce){ .bottom-sheet{transition:none} }
+  .team-source-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--space-3);
+    padding:var(--space-3) var(--space-4);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);
+    font-size:var(--type-small);color:var(--muted-light)}
+  .team-source-bar strong{color:var(--white)}

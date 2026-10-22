@@ -39,6 +39,7 @@ export default function TeamPage() {
     reload,
   } = useApp();
   const [picking, setPicking] = React.useState(false);
+  const [showLookup, setShowLookup] = React.useState(false);
   const [liningUp, setLiningUp] = React.useState(false);
   const [refreshingPrices, setRefreshingPrices] = React.useState(false);
   const [freeTransfers, setFreeTransfers] = React.useState(1);
@@ -197,15 +198,31 @@ export default function TeamPage() {
     <section className="page" aria-label="My team">
       <div className="manager-search-zone manager-search-zone--top">
         <div className="shell">
-          <ManagerSearch
-            snapshot={snapshot}
-            onImport={(lineup) => {
-              if (!setImportedTeam(lineup)) return false;
-              setPlannerBank(lineup.bank ?? 0);
-              toast("Imported " + (lineup.manager.team_name || "public team") + " as My Team.");
-              return true;
-            }}
-          />
+          {/* With a squad already loaded the lookup is a one-line bar, so a
+              phone's first screen is the team rather than the form. */}
+          {squadPlayers.length === 15 && !showLookup ? (
+            <div className="team-source-bar">
+              <span>
+                {storedSquad?.source === "manager"
+                  ? <>Imported: <strong>{storedSquad.sourceTeamName || "Public team"}</strong> · GW{storedSquad.sourceGameweek ?? snapshot.gameweek ?? "--"}</>
+                  : <>Squad on this device · <strong>15 players</strong></>}
+              </span>
+              <button type="button" className="btn sm ghost" onClick={() => setShowLookup(true)}>
+                Change team
+              </button>
+            </div>
+          ) : (
+            <ManagerSearch
+              snapshot={snapshot}
+              onImport={(lineup) => {
+                if (!setImportedTeam(lineup)) return false;
+                setPlannerBank(lineup.bank ?? 0);
+                setShowLookup(false);
+                toast("Imported " + (lineup.manager.team_name || "public team") + " as My Team.");
+                return true;
+              }}
+            />
+          )}
         </div>
       </div>
       <div className="hero-team">
