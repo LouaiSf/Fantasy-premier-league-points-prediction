@@ -116,3 +116,54 @@ Slice B — Effective ownership (EO) and rank exposure. See `PLATFORM_V3_PLAN.md
 ### Exact next action
 
 Slice B (effective ownership), or Slice C (Stats Lab) now that its data exists. Check the backfill's coverage in each season's `data/<season>/fotmob/sync.json` first.
+
+## Session 2026-10-22: FotMob data quality, chip logic, data/model audit, Stats Lab, EO, V1
+
+Driven by `NEXT_SESSION_PROMPT.md`. Backend, data and model work is on `main`; every visual change (Stats Lab page, EO panels, phone nav, V1 polish) is on the **`stats-lab-preview`** branch for review first (standing rule: no visual overhaul to `main` without approval). Merging that branch into `main` ships them.
+
+### Implemented (main)
+
+- **FotMob data quality** (`8c6cf592`): omitted-zero stats filled where the detailed block exists; `goals_prevented` derived as xGOT faced - (conceded - own goals) where missing (`goals_prevented_derived`); keeper xGOT cross-check skipped without `keeperId`; surname rule needs compatible first names. **Backfill extended to 2019-20..2022-23** (Watford, Norwich, West Brom added to the team map); every season maps 100% of FotMob minutes.
+- **Chips** (`46ee68ec`, `27020181`): one plan slot per chip per half; MIN_GAIN on every planned week, relaxed only when a half is short of weeks; TC/BB re-valued on the post-Wildcard squad; close call vs the runner-up. Reasons now say why a better-looking week was passed over ("GW8 (+6.8) goes to Bench Boost: one chip per week…", "GW16 is higher but further out"). Extrapolated weeks (beyond the export) count `EXTRAPOLATED_RELIABILITY = 0.85` less on top of the per-week discount. Second-half Bench Boost / Triple Captain / Free Hit are **held for the double/blank gameweeks** while none are scheduled after GW19 (unless 8 or fewer eligible weeks remain), instead of being pinned to GW20-21. `chips-contract.ts` requires `chip_plan[].half`. BarStrip bug: with all-positive data every bar sat a full strip height too high, over the text above (seen at 375px).
+- **Pipeline/data fixes** (`0b180b1c`, `446566cb`, `4d7a5038`):
+  - olbauday names are full names (3 → 471 of 669 players linked to 2025-26); per-week clubs; per-GW transfers; validation-based best model.
+  - **Stable `player_id` (FPL `code`)** replaces `name` as the cross-season key. Names linked **0/625, 2/666, 0/712** players into 2018-19, 2019-20, 2020-21 (spellings `David_Ospina`, `Petr_Cech_1`, `Mesut Özil`), and two Ben Davies shared one history in 2020-23. 95 late 2025-26 signings missing from that season's players_raw borrow a code by normalised name.
+  - **`team` from the fixture side**: 1,080 rows in 2016-20 (364 with minutes) named a club that played in neither side, polluting the fixture features.
+  - **Defensive stats**: FotMob matches FPL's own Opta counts (r = 0.999, 98-99% identical in 2025-26); FBref's 2023-25 values correlated only 0.34-0.62 with it, had no recoveries, covered 52% of 2024-25, and gave 11,087 non-playing rows defensive actions (1,042 of them a +2 DefCon bonus). FotMob now replaces FBref wherever it has the match; 0-minute rows have none; `defensive_source` records fpl/fbref/fotmob/no_minutes.
+  - Covid-postponed 2019-20 GW29 phantom rows dropped; 2021-22 `GKP` → `GK` (101 keeper rows the GK models never saw); olbauday ownership converted from % to a manager count.
+  - Features: `prev_1..5` carry across seasons like rolling/availability (93% of game_number<5 rows now have lags; training never saw the empty state that prediction scored at GW1-4); fixture form ordered by kickoff (doubles); `player_id` and `defensive_source` excluded from features.
+  - **Availability flags**: FPL's `chance_of_playing_this_round` is the *current* event's, i.e. the finished gameweek between deadlines; reading it capped fit players at last week's doubt and ignored new ones (63 players disagreed for GW8, e.g. Maatsen fit but capped at 0, Manzambi's 75% ignored). Prediction and the platform snapshot now pick the field for the gameweek they describe. Later horizon weeks decay a doubt by half per week, hold a player at 0 until a published return date ("Expected back 7 Nov"), and keep leavers at 0.
+- **Stats Lab API** (C1, `11258425`, `634c45e9`): `GET /api/stats/players`, `GET /api/player/<id>/underlying` (see the commit for metrics and presets; DefCon thresholds verified for 2026/27).
+- **Effective ownership** (B1, `11e80f19`): `webapp/ownership.py`, `/api/ownership` (tier or league), refresh job, `scripts/fetch_ownership.py`, `refresh_pipeline.py --ownership TIER`; GW7 samples for top10k/top1k/overall committed.
+- Platform snapshot carries 12 gameweeks of fixtures (`733fa0d0`); Colab bundle includes FotMob files.
+
+### Implemented (stats-lab-preview branch, awaiting approval)
+
+Stats Lab page (presets, scatter + team xG table, sortable sticky table with percentile bars, drawer "Underlying" sparklines); Rank exposure on My Team, EO on captain/drawer/watchlist with a tier selector; phone bottom nav + More sheet; My Team lookup collapses to a bar; Fixture Matrix horizon/sort/FDR ink/sticky axes; captain pill only for real doubts and full club name; hold week shows one pitch; Transfer Studio three-step guide; News Wire squad-first and two columns; empty states with icon + action; global disabled-button style; 9-tab nav fits 1440. All checked with screenshots at 1440 and 375 (no page-level horizontal overflow, no text under 11px on /stats).
+
+### Slice D and the retrain (main)
+
+- **Families built** in `add_underlying_features` (notebook): `fm_*` from FotMob (xGOT, npxG, shots/touches in box, chances and big chances created, blocks, interceptions, clearances, keepers' xGOT faced, goals prevented, saves in box, goals−xG, xGOT−xG; prev_1 and rolling 3/5/10; `fm_recorded_rolling_10`) and `def_*` from FPL's own defensive columns (+ DefCon hit rate, `def_recorded_rolling_10`). Gaps before a source began are NaN, kept native for LightGBM (`NAN_NATIVE_PREFIXES`), with lagged recorded-share indicators for the linear models; `xg_*` likewise NaN before 2022-23.
+- **Evaluation** (`scripts/ablate_two_stage.py`, on the served two-stage model, folds = the notebook's: validation 2023-24, test 2024-25 + 2025-26; keep only if R² up *and* MAE down on both): only **`def_` for MID** passes (val +0.0058 R² / −0.0072 MAE, test +0.0005 / −0.0015) → `EXTRA_PREFIXES = {'MID': ('def_',)}`. `fm_*` and `xg_*` fail everywhere. Training every variant from 2019-20 only (`ablation_two_stage_era.json`) removes the "feature present = recent era" confound but is below the full-history baseline at every position. Results: `ablation_two_stage.json`.
+- **Leak caught**: a first `def_recoveries_recorded` flag read the current row's `defensive_source`; FotMob only has rows for players who appeared, so it encoded "played this match" (+0.10 R² in one run). Replaced by a lagged share; idle rows all labelled `no_minutes`.
+- **Retrained** direct models, two-stage availability models and calibration; predictions regenerated GW8-19 (494 players). Two-stage holdout: GK 0.3841 / 0.6674, DEF 0.2731 / 1.1275, MID 0.3408 / 1.0085, FWD 0.3349 / 1.0810 (R² / MAE). Not comparable to the previous file: 9,692 targets changed (1,042 phantom bonuses removed; +2 on 6,961 played rows and −2 on 1,689 in 2019-25 now that the bonus follows real Opta counts with recoveries; in the 2024-25 test season net about +700 bonuses), which raises DEF/MID MAE on its own.
+- Training runs locally in ~3 min (`LOKY_MAX_CPU_COUNT=3` keeps GridSearch under ~6 GB on this 16 GB machine; the default 12 workers ran out of memory). Colab is no longer required.
+
+### Verification
+
+- `python -m pytest -q tests`: 426 passed on `main` (new: `test_build_dataset.py`, `test_predict_gameweek.py`, `test_stats_lab.py`, `test_ownership.py`, chip and platform tests).
+- `npm exec tsc -- --noEmit` and `npm run build` pass on both branches.
+- Browser (1440 and 375, real screenshots): chips (bar-strip fix, plan reasons), Stats Lab (all presets, scatter at phone width, drawer slate), My Team rank exposure, Captain EO, Fixture Matrix 12 weeks, bottom nav + sheet, Transfer Studio guide, News Wire columns. No page-level horizontal overflow.
+- Live checks: top-10k sample 999/1,000 teams in ~2.5 min; Stats Lab API ~1 s cold, instant warm.
+
+### Not done / caveats
+
+- **Double gameweeks in the live season**: olbauday publishes one FPL row per player per gameweek, and the fetch keys fixtures on (gameweek, club), so a double would keep only its second fixture. `playermatchstats.csv` is per match but has no FPL points or bonus. Fix before the first 2026-27 double: take per-fixture rows from FPL's `element-summary/<id>/` history.
+- FBref-era defensive values (2019-23) remain only on the few played rows FotMob could not map; 2016-19 use FPL's native columns.
+- V1 items left: My Team hero height on phones (shrinking it clips content; needs a design pass), Watchlist duplicate ownership text, captain Form/ICT scale caption, DESIGN.md §5 update for the bottom nav and Stats Lab.
+- "My league" EO is available from the API (`?league=`) but not yet in the tier selector (a 500-member league takes ~60 s to sample).
+- Deferred from Slice A still open: FH/WC in/out lists, Transfer Studio reading the shared free transfers, deadline board reading `chip_plan`.
+
+### Exact next action
+
+Review the `stats-lab-preview` branch (Vercel preview, or `git checkout stats-lab-preview` and run the app); if approved, `git checkout main && git merge stats-lab-preview && git push`. Then the double-gameweek fetch fix above, before FPL announces the first double.
