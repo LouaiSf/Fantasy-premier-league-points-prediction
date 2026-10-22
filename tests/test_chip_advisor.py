@@ -51,7 +51,7 @@ def horizon_points(players, gameweeks):
     )
 
 
-def write_season(tmp_path, double=False, blank=False, weeks=38):
+def write_season(tmp_path, double=False, blank=False, weeks=38, double_gw=2):
     """A 20-team season with a fixture every gameweek 1..weeks.
 
     Defaults to a full 38-gameweek season, since compute_chips now always
@@ -72,7 +72,7 @@ def write_season(tmp_path, double=False, blank=False, weeks=38):
         if blank and gw == 3:
             team_ids = list(range(1, 19))
         pairs = list(zip(team_ids[::2], team_ids[1::2]))
-        if double and gw == 2:
+        if double and gw == double_gw:
             pairs += [(1, 3), (8, 10)]
         for home, away in pairs:
             fixtures.append({
@@ -687,3 +687,39 @@ def test_api_plan_lists_each_half_and_cards_show_the_current_half(monkeypatch, t
     for half in ('first_half', 'second_half'):
         weeks = [e['gw'] for e in data['chip_plan'] if e['half'] == half]
         assert len(weeks) == len(set(weeks))
+
+
+def test_second_half_fixture_chips_wait_for_their_doubles(monkeypatch, tmp_path):
+    write_season(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    players = market().reset_index(drop=True)
+    data = compute_chips(players.iloc[:15].copy(), 'test-season', 6, 8, players,
+                         inventory=synced_inventory(),
+                         future_points=horizon_points(players, range(6, 39)))
+    second = {e['chip'] for e in data['chip_plan'] if e['half'] == 'second_half'}
+    assert not second & {'bench_boost', 'triple_captain', 'free_hit'}
+    bb = next(rec for rec in data['recommendations'] if rec['chip'] == 'bench_boost')
+    later = next(e for e in bb['plan_by_half'] if e['half'] == 'second_half')
+    assert later['status'] == 'hold' and later['gw'] is None
+    assert any('held for the double gameweeks' in reason for reason in bb['reasons'])
+
+
+def test_a_scheduled_second_half_double_lets_the_plan_place_them(monkeypatch, tmp_path):
+    write_season(tmp_path, double=True, double_gw=30)
+    monkeypatch.chdir(tmp_path)
+    players = market().reset_index(drop=True)
+    data = compute_chips(players.iloc[:15].copy(), 'test-season', 6, 8, players,
+                         inventory=synced_inventory(),
+                         future_points=horizon_points(players, range(6, 39)))
+    second = {e['chip'] for e in data['chip_plan'] if e['half'] == 'second_half'}
+    assert 'bench_boost' in second
+
+
+def test_extrapolated_weeks_count_for_less_than_projected_ones():
+    import dataclasses
+    from chip_engine import _discount
+    policy = dataclasses.replace(ChipPlanPolicy(), extrapolated_weeks=frozenset({12}))
+    projected = _discount(10.0, 11, 8, policy)
+    extrapolated = _discount(10.0, 12, 8, policy)
+    assert extrapolated == pytest.approx(10.0 * 0.95 ** 4 * policy.extrapolated_reliability)
+    assert projected == pytest.approx(10.0 * 0.95 ** 3)

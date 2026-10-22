@@ -14,13 +14,14 @@ regardless of which of the two modules a caller happens to import first.
 """
 from __future__ import annotations
 
+import dataclasses
 import itertools
 import os
 from concurrent.futures import ThreadPoolExecutor
 
 import pandas as pd
 
-from chip_policy import ChipPlanPolicy
+from chip_policy import FIXTURE_DEPENDENT_CHIPS, ChipPlanPolicy
 
 
 def _optimise():
@@ -399,7 +400,10 @@ def _wildcard_totals(opt, players: pd.DataFrame, point_matrix: pd.DataFrame,
 def _discount(gain: float | None, week: int, current_gw: int, policy: ChipPlanPolicy) -> float | None:
     if gain is None:
         return None
-    return gain * (policy.future_reliability ** (week - current_gw))
+    factor = policy.future_reliability ** (week - current_gw)
+    if week in policy.extrapolated_weeks:
+        factor *= policy.extrapolated_reliability
+    return gain * factor
 
 
 def _plan_tokens(candidate_windows: dict) -> list[tuple[str, str, list]]:
@@ -432,6 +436,29 @@ def _gain_in_plan(chip: str, gw: int, placed: dict, gains: dict, after_wildcard:
         if chip in later:
             return later[chip][0], wc_gw
     return gains[chip].get(gw), None
+
+
+def _awaiting_fixtures(tokens: list, doubles: dict, blanks: dict,
+                       policy: ChipPlanPolicy) -> set:
+    """(chip, half) copies to hold until their half's doubles or blanks are scheduled.
+
+    Without a double or blank on the calendar, a Bench Boost's or Triple
+    Captain's weeks differ only by fixture difficulty and the discount, so the
+    planner put the second-half copies in GW20-21 -- the opposite of how they
+    are best played. Held instead, unless the half is too short to wait.
+    """
+    held = set()
+    for chip, half, weeks in tokens:
+        # Only the second half: its doubles and blanks come from the cup
+        # rounds, while the first half seldom has any and its chips expire
+        # at GW19 regardless.
+        if (half != 'second_half' or chip not in FIXTURE_DEPENDENT_CHIPS
+                or len(weeks) <= policy.await_fixtures_min_weeks):
+            continue
+        half_weeks = range(min(weeks), SECOND_HALF_LAST_GW + 1)
+        if not any(doubles.get(gw) or blanks.get(gw) for gw in half_weeks):
+            held.add((chip, half))
+    return held
 
 
 def _joint_plan(gains: dict, tokens: list, current_gw: int, policy: ChipPlanPolicy,
@@ -833,8 +860,20 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
 
         # {wildcard gw: {later gw: {chip: (gain, evidence)}}}, kept out of the response.
         after_wildcard = {gw: ev.pop('_after', {}) for gw, ev in evidence['wildcard'].items()}
+        policy = dataclasses.replace(policy, extrapolated_weeks=frozenset(
+            gw for gw, state in week_state.items() if state == 'extrapolated'))
         tokens = _plan_tokens(candidate_windows)
-        plan = _joint_plan(gains, tokens, first_gw, policy, after_wildcard)
+        awaiting = _awaiting_fixtures(tokens, doubles, blanks, policy)
+        plan = _joint_plan(gains, [t for t in tokens if (t[0], t[1]) not in awaiting],
+                           first_gw, policy, after_wildcard)
+        for chip, half, weeks in tokens:
+            if (chip, half) in awaiting:
+                best = max(((w, g) for w in weeks if (g := gains[chip].get(w)) is not None),
+                           key=lambda t: t[1], default=(None, None))
+                plan[(chip, half)] = {
+                    'gw': None, 'gain': None, 'after_wildcard': None, 'use_or_lose': False,
+                    'runner_up_gw': None, 'runner_up_gain': None, 'best_unplaced': best,
+                    'awaiting_fixtures': True}
         current_half = _half_of(first_gw)
 
         def token_view(chip: str, half: str) -> dict:
@@ -853,7 +892,8 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
                     'gain': None if gain is None else round(gain, 2),
                     'discounted_gain': None if gain is None else round(_discount(gain, gw, first_gw, policy), 2),
                     'after_wildcard_gameweek': wc_gw, 'evidence': chip_evidence,
-                    'best_unplaced': entry['best_unplaced']}
+                    'best_unplaced': entry['best_unplaced'],
+                    'awaiting_fixtures': bool(entry.get('awaiting_fixtures'))}
 
         def reason_for(chip: str, view: dict) -> str:
             label, margin = CHIP_LABELS[chip], policy.min_gain[chip]
@@ -862,6 +902,11 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
                 best_gw, best_gain = view['best_unplaced']
                 if best_gw is None:
                     return f'No eligible {label} week remains this half.'
+                if view.get('awaiting_fixtures'):
+                    return ('No double or blank gameweeks are scheduled from GW20 to '
+                            f'GW{half_end} yet. {label} gains most in one, so hold it until FPL '
+                            f"confirms them (on today's fixtures its best week is GW{best_gw}, "
+                            f'+{best_gain:.1f}).')
                 return (f'No week clears the {margin:.0f}-point margin yet (best is +{best_gain:.1f} in '
                         f'GW{best_gw}); hold it. It is planned automatically once GW{half_end} is close '
                         'enough that it would otherwise expire.')
@@ -930,9 +975,14 @@ def compute_chips(squad, season: str, first_gw: int, horizon: int,
                 warnings.append(finance_warning)
             reasons = [reason_for(chip, active)]
             for half, view in views.items():
-                if view is not active and view['gw'] is not None:
-                    which = 'Second' if half == 'second_half' else 'First'
+                if view is active:
+                    continue
+                which = 'Second' if half == 'second_half' else 'First'
+                if view['gw'] is not None:
                     reasons.append(f"{which}-half {CHIP_LABELS[chip]}: GW{view['gw']} (+{view['gain']:.1f}).")
+                elif view['awaiting_fixtures']:
+                    reasons.append(f"{which}-half {CHIP_LABELS[chip]}: held for the double "
+                                   'gameweeks, which are not scheduled yet.')
 
             recommendations.append({
                 'chip': chip, 'label': CHIP_LABELS[chip], 'status': active['status'],

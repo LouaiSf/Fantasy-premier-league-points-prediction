@@ -28,6 +28,18 @@ USE_OR_LOSE_BUFFER = 1
 # for four chips (a chip can be displaced from at most three weeks by the
 # other three) as long as this is at least 4.
 PLAN_TOP_WEEKS = 8
+# Weeks past the model's export are extrapolated from today's squad, form,
+# prices and availability, none of which hold all season: the bench that
+# makes a Bench Boost worth +12 in GW30 will not be this bench. They count for
+# this much less, on top of the per-week discount.
+EXTRAPOLATED_RELIABILITY = 0.85
+# Chips whose value comes mostly from a double or blank gameweek. FPL only
+# schedules those once cup ties are drawn, so while a half has none on the
+# calendar every week in it looks the same and the planner would simply take
+# the earliest. These are held until that half's doubles or blanks appear, or
+# until it has no more than AWAIT_FIXTURES_MIN_WEEKS eligible weeks left.
+FIXTURE_DEPENDENT_CHIPS = ('bench_boost', 'triple_captain', 'free_hit')
+AWAIT_FIXTURES_MIN_WEEKS = 8
 
 
 @dataclass(frozen=True)
@@ -44,6 +56,10 @@ class ChipPlanPolicy:
     wildcard_window: int = WILDCARD_WINDOW
     use_or_lose_buffer: int = USE_OR_LOSE_BUFFER
     plan_top_weeks: int = PLAN_TOP_WEEKS
+    extrapolated_reliability: float = EXTRAPOLATED_RELIABILITY
+    await_fixtures_min_weeks: int = AWAIT_FIXTURES_MIN_WEEKS
+    # Set per request from the projection's week states.
+    extrapolated_weeks: frozenset = frozenset()
     uncertainty_note: str = (
         'Player point projections have model error; the discount and gain '
         'thresholds are conservative product policy, not a learned metric.'
@@ -56,6 +72,8 @@ class ChipPlanPolicy:
             'future_reliability': self.future_reliability,
             'wildcard_window': self.wildcard_window,
             'use_or_lose_buffer': self.use_or_lose_buffer,
+            'extrapolated_reliability': self.extrapolated_reliability,
+            'await_fixtures_min_weeks': self.await_fixtures_min_weeks,
             'uncertainty_note': self.uncertainty_note,
             'basis': 'CHIP_PLAN_POLICY: a conservative product policy, not a learned metric',
             'calibration_version': None,
