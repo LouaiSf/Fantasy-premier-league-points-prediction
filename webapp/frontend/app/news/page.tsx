@@ -164,6 +164,10 @@ export default function NewsPage() {
     }
   });
 
+  // Your squad's notes first: they are the ones that change a decision.
+  filtered.sort((a, b) => Number(squadIdSet.has(b.element)) - Number(squadIdSet.has(a.element)));
+  const ownedCount = filtered.filter((player) => squadIdSet.has(player.element)).length;
+
   const lead = filtered[0] ?? null;
   // A busy week produces far more than two dozen notes, and the cap silently
   // hid the rest; the count and the toggle make the limit visible instead.
@@ -337,8 +341,14 @@ export default function NewsPage() {
                 </small>
               </h3>
               {rest.map((player, idx) => (
+                <React.Fragment key={player.element}>
+                {idx === 0 && ownedCount > 1 && squadIdSet.has(player.element) && (
+                  <p className="wire-group">Your squad ({ownedCount})</p>
+                )}
+                {idx > 0 && squadIdSet.has(rest[idx - 1].element) && !squadIdSet.has(player.element) && (
+                  <p className="wire-group">Rest of the league</p>
+                )}
                 <button
-                  key={player.element}
                   type="button"
                   className="wire-item lift"
                   data-pri={player.status !== "a" ? "high" : "med"}
@@ -367,6 +377,7 @@ export default function NewsPage() {
                   </span>
                   <time>{noteAge(player, newestNoteGw) ?? freshness}</time>
                 </button>
+                </React.Fragment>
               ))}
               {allRest.length > rest.length && (
                 <button
