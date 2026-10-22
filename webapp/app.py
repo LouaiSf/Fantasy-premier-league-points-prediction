@@ -60,9 +60,10 @@ from webapp.platform_data import (  # noqa: E402
 )
 from webapp import contracts  # noqa: E402
 from webapp import stats as stats_lab  # noqa: E402
+from webapp import ownership  # noqa: E402
 from webapp import observability as obs  # noqa: E402
 from webapp.contracts import API_CONTRACT_VERSION, MAX_BODY_BYTES, RequestError  # noqa: E402
-from webapp.fpl_client import FplClient  # noqa: E402
+from webapp.fpl_client import FplClient, FplClientError, LeagueNotFound  # noqa: E402
 from webapp.manager_routes import create_manager_blueprint  # noqa: E402
 
 # optimise.py takes this as a CLI default rather than a module constant.
@@ -1579,6 +1580,120 @@ def api_stats_players():
         limit=contracts.query_number(args, 'limit', None, lo=1, hi=1000, integer=True))
     return jsonify({'ok': True, 'season': season,
                     'fotmob_updated_at': fotmob_updated_at(season), **data})
+
+
+# ---------------------------------------------------------------------------
+# Effective ownership (Slice B)
+# ---------------------------------------------------------------------------
+_ownership_job: dict = {'state': 'idle'}
+_ownership_lock = threading.Lock()
+ownership_cooldown = Cooldown(after_success=_seconds_from_env('OWNERSHIP_COOLDOWN_SECONDS', 900),
+                              after_failure=_seconds_from_env('OWNERSHIP_FAILURE_COOLDOWN_SECONDS', 60))
+league_ownership_limiter = RateLimiter(int(_seconds_from_env('LEAGUE_OWNERSHIP_PER_MINUTE', 3)))
+_LEAGUE_OWNERSHIP_TTL = 3600.0
+_league_ownership_cache: OrderedDict = OrderedDict()
+
+
+def _ownership_inputs() -> tuple[str, int, int | None, dict, dict]:
+    """(season, target gameweek, basis gameweek, total players, selected_by now)."""
+    s = state()
+    season = s.get('season') or latest_local_season(Path(ROOT)) or '2026-27'
+    bootstrap = manager_client.get_bootstrap()
+    events = bootstrap.get('events') or []
+    basis = ownership.basis_gameweek(events)
+    upcoming = [e['id'] for e in events if e.get('is_next')]
+    target = int(upcoming[0]) if upcoming else (basis or 1)
+    selected = {int(p['id']): float(p.get('selected_by_percent') or 0)
+                for p in bootstrap.get('elements') or []}
+    return season, target, basis, bootstrap.get('total_players'), selected
+
+
+def _run_ownership_job(tier: str) -> None:
+    try:
+        season, _target, basis, total, selected = _ownership_inputs()
+        if basis is None:
+            raise RuntimeError('No gameweek has started yet, so no teams are public.')
+        report = ownership.build(manager_client, tier=tier, gameweek=basis,
+                                 total_players=total, selected_by=selected)
+        ownership.save(ROOT, season, report)
+        outcome = {'state': 'succeeded', 'sample_size': report['sample_size'], 'basis_gw': basis}
+        ownership_cooldown.record(True)
+    except Exception as exc:  # noqa: BLE001 -- reported to the caller, not raised
+        outcome = {'state': 'failed', 'error': str(exc)}
+        ownership_cooldown.record(False)
+    with _ownership_lock:
+        _ownership_job.update(outcome, finished_at=_now())
+
+
+@app.route('/api/ownership')
+def api_ownership():
+    """EO by tier (from the saved sample) or for one classic league (computed, cached 1 h)."""
+    league = contracts.query_number(request.args, 'league', None, lo=1, hi=10**9, integer=True)
+    if league is None:
+        tier = request.args.get('tier', 'top10k')
+        if tier not in ownership.TIERS:
+            raise RequestError(f'tier must be one of {list(ownership.TIERS)}', 'invalid_field', 'tier')
+        season = _stats_season()
+        report = ownership.latest(ROOT, season, tier)
+        if report is None:
+            return fail(f'No {tier} ownership sample yet; run an ownership refresh.', 404,
+                        'ownership_not_built')
+        try:
+            _season, target, _basis, _total, selected = _ownership_inputs()
+        except FplClientError:
+            target, selected = report['basis_gw'], {}
+        return jsonify({'ok': True, **ownership.with_estimate(report, target, selected)})
+
+    cached = _league_ownership_cache.get(league)
+    if cached and cached[0] > time.monotonic():
+        return jsonify({'ok': True, **cached[1]})
+    wait = league_ownership_limiter.check(request.remote_addr or 'unknown')
+    if wait:
+        return fail(f'Too many league samples; try again in {wait}s.', 429, 'rate_limited',
+                    retry_after_seconds=wait)
+    try:
+        season, target, basis, total, selected = _ownership_inputs()
+        if basis is None:
+            return fail('No gameweek has started yet, so no teams are public.', 409, 'no_public_teams')
+        report = ownership.with_estimate(
+            ownership.build(manager_client, league_id=league, gameweek=basis,
+                            total_players=total, selected_by=selected), target, selected)
+    except LeagueNotFound:
+        return fail('That classic league does not exist or is private.', 404, 'league_not_found')
+    except FplClientError as exc:
+        return fail(f'FPL could not be reached: {exc}', 502, 'upstream_unavailable')
+    report.pop('selected_by_at_sample', None)
+    _league_ownership_cache[league] = (time.monotonic() + _LEAGUE_OWNERSHIP_TTL, report)
+    while len(_league_ownership_cache) > 16:
+        _league_ownership_cache.popitem(last=False)
+    return jsonify({'ok': True, **report})
+
+
+@app.route('/api/ownership/refresh', methods=['POST'])
+@refresh_guard(refresh_limiter)
+def api_ownership_refresh():
+    body = contracts.read_json_object(request)
+    tier = body.get('tier', 'top10k')
+    if tier not in ownership.TIERS:
+        raise RequestError(f'tier must be one of {list(ownership.TIERS)}', 'invalid_field', 'tier')
+    with _ownership_lock:
+        if _ownership_job.get('state') == 'running':
+            return jsonify({'ok': False, 'code': 'refresh_in_progress',
+                            'error': 'An ownership refresh is already running.',
+                            'job': dict(_ownership_job)}), 409
+        if ownership_cooldown.remaining():
+            return too_soon(ownership_cooldown.remaining())
+        _ownership_job.clear()
+        _ownership_job.update({'state': 'running', 'tier': tier, 'started_at': _now()})
+        threading.Thread(target=_run_ownership_job, args=(tier,), daemon=True).start()
+        return jsonify({'ok': True, 'job': dict(_ownership_job)}), 202
+
+
+@app.route('/api/ownership/status')
+@refresh_guard(status_limiter)
+def api_ownership_status():
+    with _ownership_lock:
+        return jsonify({'ok': True, 'job': dict(_ownership_job)})
 
 
 @app.route('/api/player/<int:element_id>/underlying')
