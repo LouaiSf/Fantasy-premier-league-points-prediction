@@ -412,7 +412,18 @@ export default function TransfersPage() {
                 </div>
                 <div className="draft-row-actions"><button type="button" onClick={() => editMove(index)}>Edit</button><button type="button" onClick={() => removeMove(index)}>Remove</button></div>
               </m.li>;
-            })}</AnimatePresence></ol> : <p className="draft-empty">Choose an OUT player, then a same-position IN player to stage a move.</p>}
+            })}</AnimatePresence></ol> : <ol className="draft-guide" aria-label="How to stage a move">
+              {[
+                { label: "Pick an OUT player", done: pendingOut !== null },
+                { label: "Pick a same-position IN player", done: pendingIn !== null },
+                { label: "Evaluate this draft", done: false },
+              ].map((step, index) => (
+                <li key={step.label} className={step.done ? "is-done" : ""}>
+                  <span className="ghost-num" aria-hidden="true">{index + 1}</span>
+                  <span>{step.label}</span>
+                </li>
+              ))}
+            </ol>}
             {pendingOut !== null ? <div className="pending-move" aria-live="polite">
               <b>{editingIndex === null ? "Add move" : "Edit move " + (editingIndex + 1)}</b>
               <span>OUT: {nameOf(outgoing ?? undefined)} {outgoing ? "(" + outgoing.position + ")" : ""}</span>

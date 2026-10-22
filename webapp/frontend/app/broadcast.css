@@ -2483,3 +2483,10 @@
     .wire-layout--single .wire-col > .col-title,.wire-layout--single .wire-col > .wire-group,
     .wire-layout--single .wire-col > .wire-more,.wire-layout--single .wire-col > .btn{grid-column:1 / -1}
   }
+  /* Transfer Studio: a guide in place of the empty draft column. */
+  .draft-guide{list-style:none;margin:0;padding:0;display:grid;gap:var(--space-3)}
+  .draft-guide li{display:flex;align-items:center;gap:var(--space-4);padding:var(--space-3) var(--space-4);
+    background:rgba(255,255,255,.04);color:var(--muted-light);font:600 var(--type-small)/1.3 var(--ui)}
+  .draft-guide .ghost-num{font:900 2.4rem/1 var(--display);color:rgba(255,255,255,.22);min-width:1.2em}
+  .draft-guide li.is-done{color:var(--white)}
+  .draft-guide li.is-done .ghost-num{color:var(--lime)}
