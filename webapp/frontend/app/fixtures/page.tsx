@@ -21,6 +21,23 @@ function groupByGameweek(team: TeamRecord): Map<number, FixtureRecord[]> {
   return byGw;
 }
 
+const HORIZONS = [4, 6, 8, 12];
+type SortKey = "club" | "easiest" | "hardest";
+const BLANK_COST = 6;
+
+// How hard a run of gameweeks is: the sum of each week's difficulty. A blank
+// costs more than the hardest fixture, since there is nothing to score in;
+// a double is split across its two matches, which is what makes it easier.
+function runCost(team: TeamRecord, gameweeks: number[]): number {
+  const byGw = groupByGameweek(team);
+  return gameweeks.reduce((sum, gw) => {
+    const matches = byGw.get(gw) ?? [];
+    if (!matches.length) return sum + BLANK_COST;
+    const mean = matches.reduce((total, f) => total + f.difficulty, 0) / matches.length;
+    return sum + mean / matches.length;
+  }, 0);
+}
+
 function averageDifficulty(team: TeamRecord, gameweeks: number[]): number | null {
   const byGw = groupByGameweek(team);
   // Every fixture counts, so a club with a double in the window is averaged
@@ -33,6 +50,8 @@ function averageDifficulty(team: TeamRecord, gameweeks: number[]): number | null
 export default function FixturesPage() {
   const { snapshot, loading, squadPlayers } = useApp();
   const [squadOnly, setSquadOnly] = React.useState(false);
+  const [horizon, setHorizon] = React.useState(6);
+  const [sortKey, setSortKey] = React.useState<SortKey>("club");
   const matrixReelRef = React.useRef<HTMLDivElement>(null);
   const [matrixScroll, setMatrixScroll] = React.useState({
     canScroll: false,
@@ -75,11 +94,19 @@ export default function FixturesPage() {
   }
 
   const startGw = snapshot.gameweek ?? 1;
-  const gameweeks = Array.from({ length: 8 }, (_, index) => startGw + index).filter(
+  const gameweeks = Array.from({ length: horizon }, (_, index) => startGw + index).filter(
     (gw) => gw <= 38,
   );
   const squadTeamNames = new Set(squadPlayers.map((player) => player.team));
-  const teams = snapshot.teams.filter((team) => !squadOnly || squadTeamNames.has(team.name));
+  const teams = snapshot.teams
+    .filter((team) => !squadOnly || squadTeamNames.has(team.name))
+    .map((team) => ({ team, cost: runCost(team, gameweeks) }))
+    .sort((a, b) =>
+      sortKey === "club"
+        ? a.team.name.localeCompare(b.team.name)
+        : sortKey === "easiest" ? a.cost - b.cost : b.cost - a.cost,
+    )
+    .map(({ team }) => team);
 
   const runs = [...snapshot.teams]
     .map((team) => ({ team, avg: averageDifficulty(team, gameweeks) }))
@@ -104,6 +131,24 @@ export default function FixturesPage() {
         </div>
 
         <div className="fix-toolbar">
+          <div className="fix-controls">
+            <label className="fix-control">
+              <span className="kicker">Horizon</span>
+              <select className="ctrl-select" value={horizon} onChange={(e) => setHorizon(Number(e.target.value))}>
+                {HORIZONS.map((n) => (
+                  <option key={n} value={n}>{n} gameweeks</option>
+                ))}
+              </select>
+            </label>
+            <label className="fix-control">
+              <span className="kicker">Sort</span>
+              <select className="ctrl-select" value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)}>
+                <option value="club">Club A–Z</option>
+                <option value="easiest">Easiest run</option>
+                <option value="hardest">Hardest run</option>
+              </select>
+            </label>
+          </div>
           <label className="switch-wrap">
             <button
               type="button"

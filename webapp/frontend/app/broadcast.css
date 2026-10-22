@@ -2426,3 +2426,18 @@
   .cand-id .eo-badge{width:max-content;margin-top:4px}
   .paper-scope .eo-badge:not(.is-high){background:rgba(33,0,37,.08);color:var(--ink)}
   .bug strong .data{font:inherit;color:inherit}
+  .team-plan-hold-xi{margin:0;padding:var(--space-4);background:rgba(255,255,255,.04);color:var(--muted-light);font-size:var(--type-small)}
+  /* Disabled buttons read as unavailable, not as faded-out primary actions. */
+  .btn[disabled]{opacity:1;background:rgba(255,255,255,.08);color:var(--muted-mid);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);cursor:not-allowed}
+
+  /* Fixture matrix: controls, FDR-matched ink, sticky axes, row focus. */
+  .fix-controls{display:flex;flex-wrap:wrap;gap:var(--space-4)}
+  .fix-control{display:flex;align-items:center;gap:var(--space-2)}
+  .fix-control .ctrl-select{min-height:36px;font-size:13px}
+  .fix-control .ctrl-select option{color:var(--ink)}
+  .fcell{font:700 var(--type-mini) var(--data)}
+  .fcell[data-fdr="1"]{color:var(--fdr-ink-1)} .fcell[data-fdr="2"]{color:var(--fdr-ink-2)}
+  .fcell[data-fdr="3"]{color:var(--fdr-ink-3)} .fcell[data-fdr="4"]{color:var(--fdr-ink-4)}
+  .fcell[data-fdr="5"]{color:var(--fdr-ink-5)}
+  .matrix .mhead{position:sticky;top:0;z-index:2}
+  .matrix .club-cell{position:sticky;left:0;z-index:1}

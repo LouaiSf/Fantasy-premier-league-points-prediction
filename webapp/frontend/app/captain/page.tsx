@@ -302,9 +302,12 @@ export default function CaptainPage() {
                 </span>
                 <span className="cand-right">
                   <span className="proj">{num(captainScore(player, predictionAvailable))}</span>
-                  <span className="risk" data-risk={risk.level}>
-                    {risk.label}
-                  </span>
+                  {/* Only a real doubt earns a pill; "no doubt" on all ten rows was noise. */}
+                  {risk.level !== "low" && (
+                    <span className="risk" data-risk={risk.level}>
+                      {risk.label}
+                    </span>
+                  )}
                   <button
                     type="button"
                     className="cand-view"

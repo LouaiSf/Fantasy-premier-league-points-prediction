@@ -212,8 +212,16 @@ export function TeamPlan({
               <h3>Suggested starting XI</h3>
               <span className="kicker">{num(recommendation.xi_points)} pts</span>
             </div>
-            <div className="team-plan-suggested-body">
-              <Pitch compact result={{ xi: suggestedXi, captain: suggestedCaptain, vice_captain: suggestedVice }} />
+            <div className={`team-plan-suggested-body${recommendation.transfers === 0 ? " is-hold" : ""}`}>
+              {/* A hold keeps the squad, so a second pitch would repeat the one
+                  above; the lineup and armbands below are what can still change. */}
+              {recommendation.transfers === 0 ? (
+                <p className="team-plan-hold-xi">
+                  No transfers this week: the suggested XI is the best lineup from your current squad.
+                </p>
+              ) : (
+                <Pitch compact result={{ xi: suggestedXi, captain: suggestedCaptain, vice_captain: suggestedVice }} />
+              )}
               <aside className="team-plan-suggested-rail">
                 <div className="team-plan-bench-block">
                   <span className="kicker">Bench</span>
