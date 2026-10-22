@@ -100,7 +100,7 @@ def main() -> int:
                    'train_from': args.train_from,
                    'rule': 'keep only if R2 rises and MAE falls on both folds',
                    'results': results, 'verdict': verdict}, fh, indent=2)
-    print(f"\nwrote {OUT}")
+    print(f"\nwrote {args.out}")
     return 0
 
 
