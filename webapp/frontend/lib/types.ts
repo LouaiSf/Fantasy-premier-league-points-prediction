@@ -55,6 +55,8 @@ export interface PlayerRecord {
   transfers_out_event: number;
   chance_of_playing_next_round: number | null;
   chance_of_playing_this_round: number | null;
+  /** FPL's chance for the snapshot's own gameweek (this or next round, whichever applies). */
+  chance_of_playing?: number | null;
   news_since_gw: number | null;
   cost_change_event: number;
   photo: string | null;
