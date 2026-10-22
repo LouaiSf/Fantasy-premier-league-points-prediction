@@ -67,6 +67,17 @@ def read_csv_tolerant(path: str, **kwargs) -> pd.DataFrame:
     raise RuntimeError(f"could not decode {path}")
 
 
+def display_names(season: str) -> dict:
+    """element -> web_name for the season, or {} without players_raw.csv."""
+    path = os.path.join('data', season, 'players_raw.csv')
+    if not os.path.exists(path):
+        return {}
+    raw = read_csv_tolerant(path)
+    if 'web_name' not in raw.columns:
+        return {}
+    return dict(zip(raw['id'], raw['web_name']))
+
+
 def fetch_json(url: str, timeout: int = 30):
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (fpl)'})
     return json.loads(urllib.request.urlopen(req, timeout=timeout).read())
@@ -777,6 +788,11 @@ def main() -> int:
             'p_plays', 'predicted_points_if_plays', 'predicted_points_single_stage',
             'selected_by', 'status', 'chance', 'model']
     cols = [c for c in cols if c in predictions.columns]
+    # Show FPL's short web_name, as the app always has. The history join above
+    # runs on the full name, which is what links a player across seasons.
+    display = display_names(season)
+    if display:
+        predictions['name'] = predictions['element'].map(display).fillna(predictions['name'])
     predictions[cols].to_csv(args.out, index=False)
 
     last_gw = gameweek + args.horizon - 1

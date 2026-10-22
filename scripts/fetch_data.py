@@ -200,6 +200,23 @@ def _col(df: pd.DataFrame, col: str, default=0) -> pd.Series:
     return df[col] if col in df.columns else pd.Series(default, index=df.index)
 
 
+def _full_name(src: pd.DataFrame) -> pd.Series:
+    """'first second' per row, falling back to web_name when both are blank."""
+    full = (_col(src, 'first_name', '').fillna('').astype(str).str.strip() + ' '
+            + _col(src, 'second_name', '').fillna('').astype(str).str.strip()).str.strip()
+    return full.where(full != '', _col(src, 'web_name', '').astype(str))
+
+
+def _week_teams(fetch_ob, gw: int, team_code_to_id: dict) -> dict:
+    """player id -> FPL team id as of this gameweek, from its own players.csv."""
+    try:
+        week = pd.read_csv(io.BytesIO(fetch_ob(f"By Gameweek/GW{gw}/players.csv")))
+    except urllib.error.HTTPError:
+        return {}
+    teams = week['team_code'].map(team_code_to_id)
+    return {int(p): int(t) for p, t in zip(week['player_id'], teams) if pd.notna(t)}
+
+
 def _cost_to_tenths(costs: pd.Series) -> pd.Series:
     """Normalise a price column to FPL tenths-of-a-million.
 
@@ -527,7 +544,12 @@ def fetch_season_olbauday(local_season: str, force: bool) -> dict:
 
             gw_out = pd.DataFrame({
                 'element': src['id'],
-                'name': _col(src, 'web_name', ''),
+                # The full name, as vaastav writes it. The feature stage
+                # follows a player across seasons by this column, so writing
+                # web_name here cut every current-season player off from his
+                # own history (3 of 648 names matched 2025-26) and merged
+                # namesakes ("Davies", "Fofana") into one player.
+                'name': _full_name(src),
                 'GW': gw,
                 'total_points': _col(src, 'total_points', 0),
                 'minutes': _col(src, 'minutes', 0),
@@ -551,11 +573,13 @@ def fetch_season_olbauday(local_season: str, force: bool) -> dict:
                 'expected_goals_conceded':
                     _col(src, 'expected_goals_conceded', 0),
                 'starts': _col(src, 'starts', 0),
-                'transfers_in': _col(src, 'transfers_in', 0),
-                'transfers_out': _col(src, 'transfers_out', 0),
+                # Per gameweek, as in vaastav; the plain columns are
+                # season-to-date totals.
+                'transfers_in': _col(src, 'transfers_in_event', 0),
+                'transfers_out': _col(src, 'transfers_out_event', 0),
                 'transfers_balance':
-                    _col(src, 'transfers_in', 0).astype(float)
-                    - _col(src, 'transfers_out', 0).astype(float),
+                    _col(src, 'transfers_in_event', 0).astype(float)
+                    - _col(src, 'transfers_out_event', 0).astype(float),
                 'selected': _col(src, 'selected_by_percent', 0),
                 'value': _cost_to_tenths(_col(src, 'now_cost', 0)),
                 'round': gw,
@@ -584,9 +608,13 @@ def fetch_season_olbauday(local_season: str, force: bool) -> dict:
             # models are trained per position and the defensive-contribution
             # thresholds differ by position.
             gw_out['position'] = gw_out['element'].map(player_id_to_position)
-            gw_out['team'] = (gw_out['element']
-                              .map(player_id_to_team)
-                              .map(team_id_to_name))
+            # The club he played for that week. The season list has only
+            # today's club, which filed a transferred player's earlier weeks
+            # under his new club's fixtures -- wrong opponent, venue and score.
+            week_team = _week_teams(fetch_ob, gw, team_code_to_id)
+            team_ids = (gw_out['element'].map(week_team)
+                        .fillna(gw_out['element'].map(player_id_to_team)))
+            gw_out['team'] = team_ids.map(team_id_to_name)
             unplaced = int(gw_out['position'].isna().sum())
             if unplaced:
                 print(f"    GW{gw}: {unplaced} players have no position in "
@@ -595,7 +623,6 @@ def fetch_season_olbauday(local_season: str, force: bool) -> dict:
             gw_out['team'] = gw_out['team'].fillna('')
 
             # Derive opponent_team and was_home from the fixture lookup.
-            team_ids = gw_out['element'].map(player_id_to_team)
             unplayed = team_ids.isin(unfinished_clubs(fixtures_out, gw))
             if unplayed.any():
                 print(f"    GW{gw}: {int(unplayed.sum())} rows held back until "
