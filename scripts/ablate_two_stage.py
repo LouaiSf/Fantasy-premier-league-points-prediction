@@ -40,7 +40,7 @@ POSITIONS = ('GK', 'DEF', 'MID', 'FWD')
 OUT = 'ablation_two_stage.json'
 
 
-def run(fold: str, family: str) -> dict:
+def run(fold: str, family: str, train_from: str | None = None) -> dict:
     through, test = FOLDS[fold]
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, 'metrics.json')
@@ -48,6 +48,8 @@ def run(fold: str, family: str) -> dict:
                '--train-through', through, '--test', *test, '--metrics-out', path]
         if family:
             cmd += ['--extra', *family.split()]
+        if train_from:
+            cmd += ['--train-from', train_from]
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
         with open(path, encoding='utf-8') as fh:
             return json.load(fh)
@@ -57,6 +59,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--families', nargs='+', default=FAMILIES[1:])
+    ap.add_argument('--train-from', default=None,
+                    help='train every variant only on seasons from this one (e.g. 2019-20, '
+                         'where FotMob starts), so presence of a family cannot stand in for era')
+    ap.add_argument('--out', default=OUT)
     args = ap.parse_args()
 
     results = {}
@@ -65,7 +71,7 @@ def main() -> int:
         results[label] = {}
         for fold in FOLDS:
             print(f"  {label:<14} {fold:<10}", flush=True)
-            metrics = run(fold, family)
+            metrics = run(fold, family, args.train_from)
             results[label][fold] = {
                 pos: {'r2': m['combined_test_r2'], 'mae': m['combined_test_mae'],
                       'n_features': m['n_features']}
@@ -89,11 +95,12 @@ def main() -> int:
             cells = ' '.join(f'{d[0]:>+15.4f} {d[1]:>+16.4f}' for d in deltas.values())
             print(f"{label:<14} {pos:<4} {cells}  {'KEEP' if keep else '-'}")
 
-    with open(OUT, 'w', encoding='utf-8') as fh:
+    with open(args.out, 'w', encoding='utf-8') as fh:
         json.dump({'folds': {k: {'train_through': v[0], 'test': v[1]} for k, v in FOLDS.items()},
+                   'train_from': args.train_from,
                    'rule': 'keep only if R2 rises and MAE falls on both folds',
                    'results': results, 'verdict': verdict}, fh, indent=2)
-    print(f"\nwrote {OUT}")
+    print(f"\nwrote {args.out}")
     return 0
 
 

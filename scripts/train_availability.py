@@ -278,6 +278,8 @@ def main() -> int:
     ap.add_argument('--extra', nargs='+', metavar='PREFIX', default=[],
                     help='an ablation: add every feature with these prefixes '
                          '(e.g. fm_ def_ xg_); needs --no-save')
+    ap.add_argument('--train-from', metavar='SEASON', default=None,
+                    help='an ablation: drop training seasons before this one; needs --no-save')
     ap.add_argument('--positions', nargs='+', default=list(POSITIONS))
     ap.add_argument('--metrics-out', default=None,
                     help='with --no-save, write the metrics here anyway')
@@ -288,6 +290,8 @@ def main() -> int:
         # calibrate.py relies on the holdout copy never having seen
         # its seasons, and only the default folds promise that.
         raise SystemExit("--train-through/--test are for backtests; add --no-save")
+    if args.train_from and not args.no_save:
+        raise SystemExit("--train-from is for ablations; add --no-save")
     if args.extra and not args.no_save:
         raise SystemExit("--extra is for ablations; add --no-save, then put the "
                          "families that earn their place into the notebook's feature set")
@@ -306,7 +310,7 @@ def main() -> int:
     frame = frame[frame['position'].isin(POSITIONS)]
     frame = frame.dropna(subset=['total_points', 'minutes'])
     train_seasons = tuple(s for s in sorted(frame['season'].unique())
-                          if s <= args.train_through)
+                          if s <= args.train_through and (not args.train_from or s >= args.train_from))
     print(f"{len(frame):,} rows  |  train {train_seasons[0]}..{train_seasons[-1]}"
           f"  test {', '.join(args.test)}\n")
 

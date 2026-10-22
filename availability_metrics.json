@@ -15,13 +15,13 @@
       "2025-26"
     ],
     "n_features": 66,
-    "train_rows": 21744,
+    "train_rows": 21466,
     "test_rows": 6296,
-    "availability_auc": 0.9731668230437742,
+    "availability_auc": 0.9731282699232479,
     "played_rate": 0.24412325285895806,
-    "combined_test_r2": 0.38503327503648244,
-    "combined_test_mae": 0.6715294075965513,
-    "conditional_test_r2_on_players_who_played": -0.08089637805917227,
+    "combined_test_r2": 0.38409934981179494,
+    "combined_test_mae": 0.6673795146749539,
+    "conditional_test_r2_on_players_who_played": -0.0753312107519184,
     "saved_model": {
       "trained_on": [
         "2016-17",
@@ -36,7 +36,7 @@
         "2025-26",
         "2026-27"
       ],
-      "rows": 28506
+      "rows": 28262
     }
   },
   "DEF": {
@@ -55,13 +55,13 @@
       "2025-26"
     ],
     "n_features": 74,
-    "train_rows": 67697,
+    "train_rows": 66380,
     "test_rows": 18879,
-    "availability_auc": 0.930906643315994,
+    "availability_auc": 0.9301612339719619,
     "played_rate": 0.4098204354044176,
-    "combined_test_r2": 0.27371526125082746,
-    "combined_test_mae": 1.1169649619479964,
-    "conditional_test_r2_on_players_who_played": 0.03169880454045648,
+    "combined_test_r2": 0.2731480749571723,
+    "combined_test_mae": 1.1274607809197874,
+    "conditional_test_r2_on_players_who_played": 0.02506004818523222,
     "saved_model": {
       "trained_on": [
         "2016-17",
@@ -76,7 +76,7 @@
         "2025-26",
         "2026-27"
       ],
-      "rows": 87964
+      "rows": 86759
     }
   },
   "MID": {
@@ -94,14 +94,14 @@
       "2024-25",
       "2025-26"
     ],
-    "n_features": 74,
-    "train_rows": 83741,
+    "n_features": 95,
+    "train_rows": 82165,
     "test_rows": 25559,
-    "availability_auc": 0.9398951717134963,
+    "availability_auc": 0.9399352261149336,
     "played_rate": 0.43370241402245785,
-    "combined_test_r2": 0.33433188956858695,
-    "combined_test_mae": 0.9656365132818693,
-    "conditional_test_r2_on_players_who_played": 0.10694595162505138,
+    "combined_test_r2": 0.34082114847138856,
+    "combined_test_mae": 1.0085016242454148,
+    "conditional_test_r2_on_players_who_played": 0.10673270394190248,
     "saved_model": {
       "trained_on": [
         "2016-17",
@@ -116,7 +116,7 @@
         "2025-26",
         "2026-27"
       ],
-      "rows": 111194
+      "rows": 109765
     }
   },
   "FWD": {
@@ -135,13 +135,13 @@
       "2025-26"
     ],
     "n_features": 74,
-    "train_rows": 27024,
-    "test_rows": 6297,
-    "availability_auc": 0.9466335708714713,
-    "played_rate": 0.4286168016515801,
-    "combined_test_r2": 0.3307085558016013,
-    "combined_test_mae": 1.0842475535415275,
-    "conditional_test_r2_on_players_who_played": 0.09122908226741888,
+    "train_rows": 26468,
+    "test_rows": 6296,
+    "availability_auc": 0.9474631663226828,
+    "played_rate": 0.4286848792884371,
+    "combined_test_r2": 0.3348978880324689,
+    "combined_test_mae": 1.0810319594880673,
+    "conditional_test_r2_on_players_who_played": 0.09842266019270884,
     "saved_model": {
       "trained_on": [
         "2016-17",
@@ -156,7 +156,7 @@
         "2025-26",
         "2026-27"
       ],
-      "rows": 33824
+      "rows": 33308
     }
   }
 }

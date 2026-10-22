@@ -701,7 +701,7 @@ def test_second_half_fixture_chips_wait_for_their_doubles(monkeypatch, tmp_path)
     bb = next(rec for rec in data['recommendations'] if rec['chip'] == 'bench_boost')
     later = next(e for e in bb['plan_by_half'] if e['half'] == 'second_half')
     assert later['status'] == 'hold' and later['gw'] is None
-    assert any('held for the double gameweeks' in reason for reason in bb['reasons'])
+    assert any('double and blank gameweeks are scheduled' in reason for reason in bb['reasons'])
 
 
 def test_a_scheduled_second_half_double_lets_the_plan_place_them(monkeypatch, tmp_path):
