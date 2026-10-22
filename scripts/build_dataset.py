@@ -728,6 +728,8 @@ def main() -> int:
     final = add_expected_stats(final)
     final = derive_fixture_teams(final)
     final = add_player_ids(final)
+    # 2021-22 labels 101 keeper rows 'GKP'; every model filters on 'GK'.
+    final['position'] = final['position'].replace({'GKP': 'GK'})
     report(final, allow_empty_columns=args.allow_empty_columns)
 
     if args.write:

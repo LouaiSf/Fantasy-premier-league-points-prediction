@@ -72,11 +72,16 @@ def _team_match_table(history: pd.DataFrame, season: str) -> pd.DataFrame:
     if played.empty:
         return pd.DataFrame()
 
+    played['_kickoff'] = pd.to_datetime(played['kickoff_time'], errors='coerce',
+                                        utc=True, format='mixed')         if 'kickoff_time' in played.columns else pd.NaT
+    # By kickoff, as add_fixture_features orders them: a double gameweek has
+    # two matches with one GW, and "latest form" must end on the later one.
     table = (played.groupby(['team', 'fixture', 'GW', 'was_home'])
              .agg(scored=('my_team_score', 'max'),
-                  conceded=('opponent_team_score', 'max'))
+                  conceded=('opponent_team_score', 'max'),
+                  _kickoff=('_kickoff', 'min'))
              .reset_index()
-             .sort_values(['team', 'GW']))
+             .sort_values(['team', '_kickoff', 'GW']))
     return table
 
 
@@ -94,7 +99,7 @@ def team_form_snapshot(history: pd.DataFrame, season: str) -> tuple[dict, dict]:
 
     overall: dict = {}
     for team, block in table.groupby('team'):
-        block = block.sort_values('GW')
+        block = block.sort_values(['_kickoff', 'GW'])
         entry = {}
         for window in FORM_WINDOWS:
             entry[f'att_form_{window}'] = block['scored'].rolling(
@@ -107,7 +112,7 @@ def team_form_snapshot(history: pd.DataFrame, season: str) -> tuple[dict, dict]:
 
     venue: dict = {}
     for (team, was_home), block in table.groupby(['team', 'was_home']):
-        block = block.sort_values('GW')
+        block = block.sort_values(['_kickoff', 'GW'])
         venue[(team, bool(was_home))] = {
             'att_form_venue': block['scored'].rolling(
                 VENUE_WINDOW, min_periods=1).mean().iloc[-1],

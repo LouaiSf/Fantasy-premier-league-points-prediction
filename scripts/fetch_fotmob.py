@@ -89,6 +89,7 @@ FOTMOB_TEAM_TO_FPL = {
     9902: ('Ipswich Town', 'Ipswich'), 8463: ('Leeds',), 8197: ('Leicester',), 8650: ('Liverpool',),
     8346: ('Luton',), 8456: ('Man City',), 10260: ('Man Utd',), 10261: ('Newcastle',),
     10203: ("Nott'm Forest",), 8657: ('Sheffield Utd',), 8466: ('Southampton',),
+    9817: ('Watford',), 9850: ('Norwich',), 8659: ('West Brom',),
     8472: ('Sunderland',), 8586: ('Spurs',), 8654: ('West Ham',), 8602: ('Wolves',),
 }
 

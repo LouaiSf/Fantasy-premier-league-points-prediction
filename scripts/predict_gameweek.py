@@ -38,6 +38,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.request
 
@@ -199,28 +200,85 @@ def infer_gameweek_locally(season: str) -> int | None:
     return int(events.min()) if len(events) else None
 
 
-def playing_chance(source, this_round: str = "chance_of_playing_this_round",
+def playing_chance(source, predicting_current: bool,
+                   this_round: str = "chance_of_playing_this_round",
                    next_round: str = "chance_of_playing_next_round"):
     """FPL's published chance for the round being predicted.
 
-    FPL publishes two: "this round" is the gameweek about to be played, which
-    is the one being predicted, and "next round" the one after it. Reading
-    next_round treated a player who is 25% for Saturday and expected back the
-    week after as fully fit -- 29 of them in the GW5 snapshot, including the
-    only cases where the flag carries information the model cannot infer from
-    minutes already played.
+    FPL's "this round" is the *current* event and "next round" the one after.
+    Between a gameweek's last match and the next deadline the current event
+    is the one just finished, so its value is stale and the round being
+    predicted is "next round". Reading this_round then capped fit players at
+    last week's doubt (Maatsen fit with this_round 0 -> p_plays 0) and ignored
+    new ones (Manzambi 75% for GW8, this_round still 100): 63 players
+    disagreed in the GW8 snapshot. Only while the predicted gameweek is itself
+    the current event, i.e. its deadline has passed, is this_round the answer.
 
-    Falls back to next_round where this one is absent, which is how the feed
-    marks most doubts that have not been graded for the imminent round yet.
+    Falls back to the other field where the chosen one is absent.
     """
+    first, second = (this_round, next_round) if predicting_current else (next_round, this_round)
     if isinstance(source, dict):
-        value = source.get(this_round)
-        return source.get(next_round) if value is None else value
-    here = source.get(this_round)
-    there = source.get(next_round)
+        value = source.get(first)
+        return source.get(second) if value is None else value
+    here = source.get(first)
+    there = source.get(second)
     if here is None:
         return there
     return here if there is None else here.combine_first(there)
+
+
+# Share of a published doubt still assumed one further gameweek out. FPL only
+# grades the next round, and most knocks clear within a week or two, so a 75%
+# flag is 87.5% the week after and 94% the week after that.
+FLAG_DECAY = 0.5
+_EXPECTED_BACK = re.compile(r'(?:expected back|suspended until)\s+(\d{1,2})\s+([A-Za-z]{3})',
+                            re.IGNORECASE)
+
+
+def expected_back(news, reference: pd.Timestamp) -> pd.Timestamp | None:
+    """The return date in FPL's news text ("Expected back 7 Nov"), or None.
+
+    The text carries no year; a date that would fall well before the
+    reference time belongs to the following year.
+    """
+    match = _EXPECTED_BACK.search(str(news or ''))
+    if not match:
+        return None
+    try:
+        when = pd.Timestamp(f"{match.group(1)} {match.group(2)} {reference.year}", tz='UTC')
+    except ValueError:
+        return None
+    if when < reference - pd.Timedelta(days=60):
+        when = when.replace(year=reference.year + 1)
+    return when
+
+
+def horizon_chance(rows: pd.DataFrame, weeks_ahead: int, kickoff: pd.Timestamp | None,
+                   reference: pd.Timestamp) -> pd.Series:
+    """Availability cap, in percent (NaN = none), `weeks_ahead` gameweeks past the first.
+
+    Later gameweeks used to reuse the first one's flag unchanged, so a 75%
+    knock cost a quarter of every week to the end of the horizon (Gibbs-White
+    GW9-10). Now a player who has left the club stays at 0; a published return
+    date holds him at 0 for matches before it and lifts the cap after; and any
+    other doubt decays towards none by FLAG_DECAY a week. `chance_following`
+    is FPL's own flag for the week after the first, published only while the
+    first gameweek is in progress; where it exists the decay starts from it.
+    """
+    base = pd.to_numeric(rows['chance'], errors='coerce') / 100.0
+    following = (pd.to_numeric(rows['chance_following'], errors='coerce') / 100.0
+                 if 'chance_following' in rows.columns
+                 else pd.Series(np.nan, index=rows.index))
+    start = following.combine_first(base)
+    steps = np.where(following.notna(), weeks_ahead - 1, weeks_ahead)
+    capped = 1.0 - (1.0 - start) * np.power(FLAG_DECAY, steps)
+
+    if 'status' in rows.columns:
+        capped = capped.where(rows['status'].ne('u'), 0.0)
+    if kickoff is not None and 'news' in rows.columns:
+        back = pd.to_datetime(rows['news'].map(lambda text: expected_back(text, reference)), utc=True)
+        capped = capped.where(back.isna(), np.where(back > kickoff, 0.0, np.nan))
+    return capped * 100.0
 
 def target_fixtures(season: str, gameweek: int | None, use_api: bool) -> tuple:
     """Fixtures for the gameweek to predict, as (gw, [(home_id, away_id), ...])."""
@@ -279,6 +337,18 @@ def target_fixtures(season: str, gameweek: int | None, use_api: bool) -> tuple:
     return gameweek, pairs, bootstrap
 
 
+def gameweek_started(season: str, gameweek: int) -> bool:
+    """Offline stand-in for the API's is_current: has any of its matches kicked off?"""
+    path = os.path.join('data', season, 'fixtures.csv')
+    if not os.path.exists(path):
+        return False
+    local = read_csv_tolerant(path)
+    event_col = 'event' if 'event' in local.columns else 'GW'
+    week = local[local[event_col] == gameweek]
+    kickoff = pd.to_datetime(week.get('kickoff_time'), errors='coerce', utc=True)
+    return bool((kickoff < pd.Timestamp.now(tz='UTC')).any())
+
+
 def build_placeholder_rows(season: str, gameweek: int, pairs, bootstrap,
                            history: pd.DataFrame) -> pd.DataFrame:
     """One unplayed row per player whose team features in the gameweek.
@@ -317,29 +387,41 @@ def build_placeholder_rows(season: str, gameweek: int, pairs, bootstrap,
     element_to_name = (season_hist.drop_duplicates('element', keep='last')
                        .set_index('element')['name'].to_dict())
 
+    # Which of FPL's two chance fields describes `gameweek`: see playing_chance.
+    if bootstrap:
+        current = any(e.get('is_current') and e['id'] == gameweek for e in bootstrap['events'])
+    else:
+        current = gameweek_started(season, gameweek)
+
     if bootstrap:
         players = pd.DataFrame([{
             'element': p['id'],
+            'player_id': p.get('code'),
             'web_name': p['web_name'],
             'full_name': f"{p['first_name']} {p['second_name']}",
             'team_id': p['team'],
             'position': ELEMENT_TYPE.get(p['element_type']),
             'value': p['now_cost'],
             'status': p.get('status', 'a'),
-            'chance': playing_chance(p),
+            'chance': playing_chance(p, current),
+            'chance_following': p.get('chance_of_playing_next_round') if current else None,
+            'news': p.get('news', ''),
             'selected_by': p.get('selected_by_percent'),
         } for p in bootstrap['elements']])
     else:
         raw = read_csv_tolerant(os.path.join('data', season, 'players_raw.csv'))
         players = pd.DataFrame({
             'element': raw['id'],
+            'player_id': raw.get('code'),
             'web_name': raw['web_name'],
             'full_name': raw['first_name'].astype(str) + ' ' + raw['second_name'].astype(str),
             'team_id': raw['team'],
             'position': raw['element_type'].map(ELEMENT_TYPE),
             'value': raw['now_cost'],
             'status': raw.get('status', 'a'),
-            'chance': playing_chance(raw),
+            'chance': playing_chance(raw, current),
+            'chance_following': raw.get('chance_of_playing_next_round') if current else np.nan,
+            'news': raw.get('news', ''),
             'selected_by': raw.get('selected_by_percent'),
         })
 
@@ -352,6 +434,16 @@ def build_placeholder_rows(season: str, gameweek: int, pairs, bootstrap,
     playing = players[players['team_id'].isin(opponent)].copy()
     playing['name'] = playing['element'].map(element_to_name)
     playing['name'] = playing['name'].fillna(playing['full_name'])
+    # The id every rolling feature groups by. FPL's code is the same number
+    # build_dataset stores; the history's own value wins where it has one.
+    if 'player_id' in season_hist.columns:
+        known = (season_hist.drop_duplicates('element', keep='last')
+                 .set_index('element')['player_id'])
+        playing['player_id'] = playing['element'].map(known).fillna(playing['player_id'])
+    playing['player_id'] = pd.to_numeric(playing['player_id'], errors='coerce')
+    missing_id = playing['player_id'].isna()
+    playing.loc[missing_id, 'player_id'] = -playing.loc[missing_id, 'element']
+    playing['player_id'] = playing['player_id'].astype('int64')
 
     playing['team'] = playing['team_id'].map(id_to_name)
     playing['opponent_team'] = playing['team_id'].map(opponent).map(id_to_name)
@@ -387,7 +479,8 @@ def build_placeholder_rows(season: str, gameweek: int, pairs, bootstrap,
     # score well below average -- the honest answer for someone with no
     # recorded form, but worth marking so it is not mistaken for a prediction
     # made from evidence.
-    playing['has_prior_history'] = playing['name'].isin(set(history['name']))
+    key = 'player_id' if 'player_id' in history.columns else 'name'
+    playing['has_prior_history'] = playing[key].isin(set(history[key]))
 
     print(f"  {len(playing):,} players across {len(pairs)} fixtures")
     unknown = playing['element'].map(element_to_name).isna().sum()
@@ -421,6 +514,7 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
         ('season and price context', ns['add_context_features']),
         ('availability', ns['add_availability_features']),
         ('expected goals', ns['add_expected_features']),
+        ('underlying numbers', ns['add_underlying_features']),
         ('fixture difficulty', ns['add_fixture_features']),
     )
     for label, build in feature_stages:
@@ -470,7 +564,9 @@ def predict(featured: pd.DataFrame, models: dict) -> pd.DataFrame:
             if missing_avail:
                 print(f"  {position}: filling {len(missing_avail)} availability "
                       f"features with zero")
-            Xa = block[avail_feats].replace([np.inf, -np.inf], np.nan).fillna(0)
+            # The same matrix the two-stage models were fitted on, gaps included.
+            from train_availability import matrix as availability_matrix
+            Xa = availability_matrix(block, avail_feats)
             Za = spec['availability_scaler'].transform(Xa)
             block['p_plays'] = spec['availability'].predict_proba(Za)[:, 1]
 
@@ -646,6 +742,12 @@ def predict_horizon(featured: pd.DataFrame, first: pd.DataFrame, models: dict,
                            | {f for spec in models.values()
                               for f in spec.get('availability_features', [])})
 
+    event_col = 'event' if 'event' in fixtures.columns else 'GW'
+    kickoffs = (fixtures.assign(_k=pd.to_datetime(fixtures.get('kickoff_time'),
+                                                  errors='coerce', utc=True))
+                .groupby(event_col)['_k'].min())
+    now = pd.Timestamp.now(tz='UTC')
+
     first = first.copy()
     first['GW'] = first_gw
     frames = [first]
@@ -654,6 +756,9 @@ def predict_horizon(featured: pd.DataFrame, first: pd.DataFrame, models: dict,
         if aimed.empty:
             print(f"  GW{gw}: no fixtures")
             continue
+        kickoff = kickoffs.get(gw)
+        aimed['chance'] = horizon_chance(aimed, gw - first_gw,
+                                         None if pd.isna(kickoff) else kickoff, now)
         frames.append(predict(aimed, models))
 
     out = pd.concat(frames, ignore_index=True)

@@ -141,8 +141,28 @@ def features_for(position: str, frame: pd.DataFrame) -> list:
     return sorted(cols)
 
 
+# Families whose gaps mean "not recorded" rather than "zero": FotMob starts
+# in 2023-24, FPL's xG in 2022-23, and the FBref seasons have no recoveries.
+# LightGBM routes a missing value down its own branch, so these stay NaN
+# instead of being read as a match with no shots or no tackles.
+NAN_NATIVE_PREFIXES = ('fm_', 'def_', 'xg_')
+
+
 def matrix(block: pd.DataFrame, feats: list) -> pd.DataFrame:
-    return block[feats].replace([np.inf, -np.inf], np.nan).fillna(0)
+    X = block[feats].replace([np.inf, -np.inf], np.nan)
+    filled = [f for f in feats if not f.startswith(NAN_NATIVE_PREFIXES)]
+    X[filled] = X[filled].fillna(0)
+    return X
+
+
+def with_extra(feats: list, frame: pd.DataFrame, prefixes) -> list:
+    """`feats` plus every numeric column of `frame` starting with one of `prefixes`."""
+    if not prefixes:
+        return feats
+    extra = sorted(c for c in frame.columns
+                   if c.startswith(tuple(prefixes)) and c not in feats and c not in EXCLUDE
+                   and pd.api.types.is_numeric_dtype(frame[c]))
+    return feats + extra
 
 
 PARAMS = dict(n_estimators=400, learning_rate=0.05, num_leaves=31,
@@ -187,7 +207,8 @@ def save_pair(out_dir: str, pair: tuple, feats: list, meta: dict) -> None:
 
 
 def train_position(position: str, frame: pd.DataFrame, save: bool,
-                   train_seasons=TRAIN_SEASONS, test_seasons=TEST_SEASONS) -> dict | None:
+                   train_seasons=TRAIN_SEASONS, test_seasons=TEST_SEASONS,
+                   extra=()) -> dict | None:
     from sklearn.metrics import mean_absolute_error, r2_score, roc_auc_score
 
     block = frame[frame['position'] == position]
@@ -197,7 +218,7 @@ def train_position(position: str, frame: pd.DataFrame, save: bool,
         print(f"  {position}: no rows in one of the folds; skipped")
         return None
 
-    feats = features_for(position, frame)
+    feats = with_extra(features_for(position, frame), frame, extra)
     y_test = test['total_points'].astype(float)
     played_test = (test['minutes'] > 0).astype(int)
 
@@ -254,6 +275,12 @@ def main() -> int:
                     help='a backtest: train on every season up to and including this one')
     ap.add_argument('--test', nargs='+', metavar='SEASON', default=list(TEST_SEASONS),
                     help='a backtest: score on these seasons instead')
+    ap.add_argument('--extra', nargs='+', metavar='PREFIX', default=[],
+                    help='an ablation: add every feature with these prefixes '
+                         '(e.g. fm_ def_ xg_); needs --no-save')
+    ap.add_argument('--positions', nargs='+', default=list(POSITIONS))
+    ap.add_argument('--metrics-out', default=None,
+                    help='with --no-save, write the metrics here anyway')
     args = ap.parse_args()
 
     backtest = (args.train_through, args.test) != (TRAIN_SEASONS[-1], list(TEST_SEASONS))
@@ -261,6 +288,9 @@ def main() -> int:
         # calibrate.py relies on the holdout copy never having seen
         # its seasons, and only the default folds promise that.
         raise SystemExit("--train-through/--test are for backtests; add --no-save")
+    if args.extra and not args.no_save:
+        raise SystemExit("--extra is for ablations; add --no-save, then put the "
+                         "families that earn their place into the notebook's feature set")
     if min(args.test) <= args.train_through:
         raise SystemExit(f"test seasons must come after {args.train_through}")
 
@@ -281,9 +311,10 @@ def main() -> int:
           f"  test {', '.join(args.test)}\n")
 
     metrics = {}
-    for position in POSITIONS:
+    for position in args.positions:
         result = train_position(position, frame, save=not args.no_save,
-                                train_seasons=train_seasons, test_seasons=tuple(args.test))
+                                train_seasons=train_seasons, test_seasons=tuple(args.test),
+                                extra=tuple(args.extra))
         if result:
             metrics[position] = result
 
@@ -293,6 +324,9 @@ def main() -> int:
     print(f"\nfinished in {(time.time() - started) / 60:.1f} min")
 
     if args.no_save:
+        if args.metrics_out:
+            with open(args.metrics_out, 'w', encoding='utf-8') as fh:
+                json.dump(metrics, fh, indent=2)
         return 0
 
     with open(METRICS_OUT, 'w', encoding='utf-8') as fh:
