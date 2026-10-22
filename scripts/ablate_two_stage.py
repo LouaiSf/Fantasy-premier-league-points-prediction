@@ -5,13 +5,16 @@ train_availability.py, so that is the model a new family has to improve.
 Each family is added on top of the current per-position feature list and
 scored on two later-season folds:
 
-    validation  train 2016-17..2023-24, score 2024-25
-    test        train 2016-17..2024-25, score 2025-26
+    validation  train 2016-17..2022-23, score 2023-24
+    test        train 2016-17..2023-24, score 2024-25 + 2025-26
 
-FotMob only starts in 2023-24, so an earlier validation season would train
-the fm_* features on nothing but gaps. A family is kept for a position only
-when it improves R2 *and* MAE on *both* folds; anything less is noise at this
-sample size.
+the same seasons fpl_pipeline.ipynb validates and tests on. FotMob reaches
+back to 2019-20, so the validation fold trains fm_* on four seasons of data.
+With FotMob starting in 2023-24 instead, the families were present in one
+training season out of eight, "has the feature" came to mean "is 2023-24",
+and every family scored worse (ablation run of 2026-10-22). A family is kept
+for a position only when it improves R2 *and* MAE on *both* folds; anything
+less is noise at this sample size.
 
 Usage
 -----
@@ -29,8 +32,8 @@ import sys
 import tempfile
 
 FOLDS = {
-    'validation': ('2023-24', ['2024-25']),
-    'test': ('2024-25', ['2025-26']),
+    'validation': ('2022-23', ['2023-24']),
+    'test': ('2023-24', ['2024-25', '2025-26']),
 }
 FAMILIES = ['', 'xg_', 'def_', 'fm_', 'fm_ def_', 'fm_ def_ xg_']
 POSITIONS = ('GK', 'DEF', 'MID', 'FWD')
