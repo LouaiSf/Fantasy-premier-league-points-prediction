@@ -147,6 +147,11 @@ def test_keeper_xgot_faced_is_cross_checked_against_the_shots(match) -> None:
     warnings = fm.match_rows(bad)[2]
     assert len(warnings) == 1 and warnings[0].startswith('David Raya')
 
+    # Shots before ~2024-25 carry no keeperId: no evidence either way, so no warning.
+    for s in bad['content']['shotmap']['shots']:
+        s['keeperId'] = None
+    assert fm.match_rows(bad)[2] == []
+
 
 # --------------------------------------------------------------------------
 # FPL joins
@@ -190,6 +195,11 @@ def test_name_scores() -> None:
     assert fm.name_score('Gabriel Magalhães', 'Gabriel', 'dos Santos Magalhães', 'Gabriel') == 0.95
     assert fm.name_score('Igor Jesus', 'Igor Jesus', 'Maciel da Cruz', 'Igor Jesus') == 0.9
     assert fm.name_score('Bukayo Saka', 'Declan', 'Rice', 'Rice') < fm.NAME_MATCH_MIN
+    # Same squad, same surname, different first names (Wolves 2024-25).
+    assert fm.name_score('Toti Gomes', 'Toti António', 'Gomes', 'Toti') >= fm.NAME_MATCH_MIN
+    assert fm.name_score('Toti Gomes', 'Rodrigo', 'Martins Gomes', 'R.Gomes') < fm.NAME_MATCH_MIN
+    assert fm.name_score('Rodrigo Gomes', 'João Victor', 'Gomes da Silva', 'J.Gomes') < fm.NAME_MATCH_MIN
+    assert fm.name_score('Dan Burn', 'Daniel', 'Burn', 'Burn') == 0.95
 
 
 def fotmob_players(rows) -> pd.DataFrame:
@@ -328,3 +338,48 @@ def test_a_failed_fetch_exits_1(monkeypatch) -> None:
         raise fm.FotmobError('robots.txt does not allow fetching x')
     monkeypatch.setattr(fm, 'check_robots', blocked)
     assert fm.main(['--season', '2026-27']) == 1
+
+
+# --------------------------------------------------------------------------
+# Zeros FotMob leaves out, and goals prevented where it is not published
+# --------------------------------------------------------------------------
+
+def players_frame(rows) -> pd.DataFrame:
+    base = {c: np.nan for c in fm.LABEL_COLUMNS}
+    return pd.DataFrame([{**base, **r} for r in rows],
+                        columns=['fotmob_player_id', 'opta_id', 'player_name', 'fotmob_team_id', 'is_gk']
+                        + fm.LABEL_COLUMNS)
+
+
+def test_stats_fotmob_omits_at_zero_become_zero_only_with_a_detailed_block() -> None:
+    out = fm.fill_omitted_zeros(players_frame([
+        {'fotmob_player_id': 1, 'is_gk': False, 'touches': 40, 'offsides': np.nan, 'xgot_faced': np.nan},
+        {'fotmob_player_id': 2, 'is_gk': False, 'touches': np.nan, 'offsides': np.nan},
+        {'fotmob_player_id': 3, 'is_gk': True, 'touches': 30, 'xgot_faced': np.nan},
+    ])).set_index('fotmob_player_id')
+    assert out.loc[1, 'offsides'] == 0
+    assert np.isnan(out.loc[1, 'xgot_faced'])      # not a keeper: not applicable
+    assert np.isnan(out.loc[2, 'offsides'])        # no breakdown at all: unknown
+    assert out.loc[3, 'xgot_faced'] == 0
+    assert np.isnan(out.loc[1, 'fotmob_rating'])   # genuinely missing stays missing
+
+
+def test_goals_prevented_is_derived_without_counting_own_goals() -> None:
+    keeper = {'fotmob_player_id': 7, 'fotmob_team_id': 100, 'is_gk': True, 'minutes': 90,
+              'xgot_faced': 3.59, 'goals_conceded': 4, 'goals_prevented': np.nan}
+    own_goal = shot(playerId=5, teamId=100, eventType='Goal', isOwnGoal=True, keeperId=7)
+    out = fm.derive_goals_prevented(players_frame([keeper]), fm.parse_shots({'shots': [own_goal]})).iloc[0]
+    assert out['goals_prevented'] == pytest.approx(0.59) and out['goals_prevented_derived']
+
+    # No keeper ids (older seasons): the team's own goal is his if he was its only keeper.
+    no_ids = fm.parse_shots({'shots': [{**own_goal, 'keeperId': None}]})
+    assert fm.derive_goals_prevented(players_frame([keeper]), no_ids).iloc[0]['goals_prevented'] == pytest.approx(0.59)
+    sub = {**keeper, 'fotmob_player_id': 8}
+    assert np.isnan(fm.derive_goals_prevented(players_frame([keeper, sub]), no_ids).iloc[0]['goals_prevented'])
+
+
+def test_published_goals_prevented_is_never_replaced() -> None:
+    keeper = {'fotmob_player_id': 7, 'fotmob_team_id': 100, 'is_gk': True, 'minutes': 90,
+              'xgot_faced': 1.0, 'goals_conceded': 0, 'goals_prevented': 0.9}
+    out = fm.derive_goals_prevented(players_frame([keeper]), fm.parse_shots({'shots': []})).iloc[0]
+    assert out['goals_prevented'] == 0.9 and not out['goals_prevented_derived']

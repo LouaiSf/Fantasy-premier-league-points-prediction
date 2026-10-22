@@ -148,6 +148,18 @@ FRACTION_COLUMNS = ('accurate_passes', 'accurate_crosses', 'accurate_long_balls'
 LABEL_COLUMNS = list(LABELS.values()) + [f'{c}_att' for c in FRACTION_COLUMNS]
 SHOT_COLUMNS = ['xg', 'npxg', 'xgot', 'shots', 'shots_on_target', 'shots_in_box',
                 'shots_blocked', 'goals']
+DERIVED_COLUMNS = ['goals_prevented_derived']
+# FotMob leaves these out of a player's stats when they are zero (measured
+# 2023-24 and 2026-27: never present as 0, or present as 0 only alongside
+# attempts). For a player whose detailed stats exist, absent means 0.
+ZERO_WHEN_ABSENT = ('xa', 'big_chances_created', 'big_chances_missed', 'hit_woodwork',
+                    'passes_final_third', 'was_fouled', 'offsides', 'headed_clearances',
+                    'clearances_off_line', 'last_man_tackles', 'errors_led_to_goal',
+                    'duels_won', 'duels_lost', 'accurate_crosses', 'accurate_crosses_att',
+                    'accurate_long_balls', 'accurate_long_balls_att', 'successful_dribbles',
+                    'successful_dribbles_att', 'ground_duels_won', 'ground_duels_won_att',
+                    'aerial_duels_won', 'aerial_duels_won_att')
+GK_ZERO_WHEN_ABSENT = ('xgot_faced', 'chances_created')
 KEY_COLUMNS = ['season', 'gw', 'fpl_fixture', 'fotmob_match_id', 'fpl_team_id',
                'fotmob_player_id', 'opta_id', 'player_name', 'element', 'map_method',
                'map_confidence', 'is_gk']
@@ -347,6 +359,8 @@ def aggregate_shots(shots: pd.DataFrame) -> pd.DataFrame:
 def keeper_xgot_mismatches(rows: list[dict], shots: pd.DataFrame, tol: float = 0.05) -> list[str]:
     """GKs whose reported xGOT faced disagrees with the shots they faced."""
     out = []
+    if shots['keeper_id'].isna().all():
+        return out      # older matches' shots do not name the keeper; nothing to check against
     faced = shots[~shots['is_own_goal'].astype(bool)].groupby('keeper_id')['xgot'].sum()
     for r in rows:
         if not r['is_gk'] or np.isnan(r['xgot_faced']):
@@ -355,6 +369,50 @@ def keeper_xgot_mismatches(rows: list[dict], shots: pd.DataFrame, tol: float = 0
         if abs(from_shots - r['xgot_faced']) > tol:
             out.append(f"{r['player_name']}: xGOT faced {r['xgot_faced']:.2f}, shots say {from_shots:.2f}")
     return out
+
+
+def fill_omitted_zeros(players: pd.DataFrame) -> pd.DataFrame:
+    """Absent-means-zero stats become 0 for players whose detailed stats exist.
+
+    'touches' is in every detailed stat block, so a row without it is a player
+    FotMob has no breakdown for, and his gaps stay unknown.
+    """
+    players = players.copy()
+    detailed = players['touches'].notna()
+    for col in ZERO_WHEN_ABSENT:
+        players.loc[detailed & players[col].isna(), col] = 0.0
+    for col in GK_ZERO_WHEN_ABSENT:
+        players.loc[detailed & players['is_gk'] & players[col].isna(), col] = 0.0
+    return players
+
+
+def derive_goals_prevented(players: pd.DataFrame, shots: pd.DataFrame) -> pd.DataFrame:
+    """Fill goals prevented where FotMob did not publish it (most of 2023-24).
+
+    FotMob's own figure is xGOT faced minus goals conceded, own goals not
+    counted against the keeper. An own goal's shot carries the conceding
+    team's id, and keeperId when FotMob recorded it. Without keeper ids, a
+    team's own goals are only attributable when one keeper played for it.
+    """
+    players = players.copy()
+    players['goals_prevented_derived'] = False
+    gaps = players['is_gk'] & players['goals_prevented'].isna()         & players['xgot_faced'].notna() & players['goals_conceded'].notna()
+    if not gaps.any():
+        return players
+    own_goals = shots[shots['is_own_goal'].astype(bool)]
+    has_keeper_ids = shots['keeper_id'].notna().any()
+    keepers_used = players[players['is_gk'] & (players['minutes'].fillna(0) > 0)]         .groupby('fotmob_team_id').size()
+    for idx in players.index[gaps]:
+        p = players.loc[idx]
+        if has_keeper_ids:
+            og = int((own_goals['keeper_id'] == p['fotmob_player_id']).sum())
+        elif keepers_used.get(p['fotmob_team_id'], 0) == 1:
+            og = int((own_goals['fotmob_team_id'] == p['fotmob_team_id']).sum())
+        else:
+            continue
+        players.loc[idx, 'goals_prevented'] = round(p['xgot_faced'] - (p['goals_conceded'] - og), 2)
+        players.loc[idx, 'goals_prevented_derived'] = True
+    return players
 
 
 def match_rows(cached: dict) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
@@ -366,6 +424,8 @@ def match_rows(cached: dict) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
     warnings = keeper_xgot_mismatches(rows, shots)
     players = pd.DataFrame(rows, columns=['fotmob_player_id', 'opta_id', 'player_name',
                                           'fotmob_team_id', 'is_gk'] + LABEL_COLUMNS)
+    players = fill_omitted_zeros(players)
+    players = derive_goals_prevented(players, shots)
     if shotmap is None or 'shots' not in shotmap:
         for col in SHOT_COLUMNS:
             players[col] = np.nan      # no shotmap at all: unknown, not zero
@@ -432,8 +492,14 @@ def name_score(fotmob_name: str, first: str, second: str, web: str) -> float:
     if full == fpl_full:
         return 1.0
     tokens = full.split()
-    second_n, web_n = normalise(second), normalise(web)
-    if tokens[-1] in (web_n, second_n) or (second_n and tokens[-1] == second_n.split()[-1]):
+    second_n, web_n, first_n = normalise(second), normalise(web), normalise(first)
+    # A shared surname is only a match when the first names do not contradict
+    # it: Wolves had Toti, João and Rodrigo Gomes in one squad.
+    first_ok = (len(tokens) == 1 or not first_n
+                or tokens[0] in set(first_n.split()) | set(web_n.split())
+                or tokens[0][0] == first_n[0])
+    if first_ok and (tokens[-1] in (web_n, second_n)
+                     or (second_n and tokens[-1] == second_n.split()[-1])):
         return 0.95
     fpl_tokens = set(fpl_full.split()) | set(web_n.split())
     if set(tokens) <= fpl_tokens or (web_n and set(web_n.split()) <= set(tokens) and len(web_n) > 3):
@@ -691,7 +757,7 @@ def build_season(season: str, matches: list[dict], log=print) -> dict:
     rows, pmap, conflicts = season_consolidate(rows)
     rows = rows.drop(columns=['_fixture_elements', 'fotmob_team_id'])
     rows['element'] = rows['element'].astype('Int64')
-    rows = rows[KEY_COLUMNS + LABEL_COLUMNS + SHOT_COLUMNS].sort_values(['gw', 'fpl_fixture', 'fpl_team_id'])
+    rows = rows[KEY_COLUMNS + LABEL_COLUMNS + DERIVED_COLUMNS + SHOT_COLUMNS].sort_values(['gw', 'fpl_fixture', 'fpl_team_id'])
     shots = pd.concat(all_shots, ignore_index=True)
     shots['element'] = shots.merge(
         rows[['fotmob_match_id', 'fotmob_player_id', 'element']],
