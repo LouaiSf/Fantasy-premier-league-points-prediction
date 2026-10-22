@@ -548,7 +548,10 @@ def build_final(raw: pd.DataFrame, old_final: str) -> pd.DataFrame:
     df.loc[idle, DEFENSIVE_COLS] = 0
     # A player who did not play is known to have made none, so those zeros
     # are observations whatever source the rest of his season came from.
-    df.loc[idle & (df['defensive_source'] == 'none'), 'defensive_source'] = 'no_minutes'
+    # One label for every such row outside the native FPL seasons, so the
+    # source never differs between a played and an unplayed row of a season
+    # except through minutes themselves.
+    df.loc[idle & (df['defensive_source'] != 'fpl'), 'defensive_source'] = 'no_minutes'
     # has_fbref_defensive keeps its name for the notebook's sake; it means
     # "these defensive columns are observed", whichever source they came from.
     df['has_fbref_defensive'] = (df['defensive_source'] != 'none').astype(int)
