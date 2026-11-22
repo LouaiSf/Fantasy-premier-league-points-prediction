@@ -77,9 +77,9 @@ import joblib
 import numpy as np
 import pandas as pd
 
-IN_FILE = 'all_seasons_data_featured.csv'
+IN_FILE = 'data/all_seasons_data_featured.csv'
 MODEL_DIR = os.path.join('saved_models', 'direct')
-METRICS_OUT = 'calibration_metrics.json'
+METRICS_OUT = 'reports/calibration_metrics.json'
 POSITIONS = ('GK', 'DEF', 'MID', 'FWD')
 
 # The seasons the holdout models in saved_models/ have not trained on. Keep in

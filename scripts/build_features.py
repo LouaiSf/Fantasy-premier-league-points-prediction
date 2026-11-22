@@ -26,8 +26,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from nbrun import run_range  # noqa: E402
 
 NOTEBOOK = 'fpl_pipeline.ipynb'
-IN_FILE = 'all_seasons_data_final.csv'
-OUT_FILE = 'all_seasons_data_featured.csv'
+IN_FILE = 'data/all_seasons_data_final.csv'
+OUT_FILE = 'data/all_seasons_data_featured.csv'
 
 
 def main() -> int:

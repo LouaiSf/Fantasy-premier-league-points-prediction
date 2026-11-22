@@ -355,7 +355,7 @@ def test_a_failed_run_leaves_the_manifest_matching_the_kept_predictions(tmp_path
 
 def test_meta_reports_the_served_artifact_and_its_models():
     artifact = client.get("/api/meta").get_json()["artifact"]
-    assert artifact["sha256"] == artifacts.sha256_file(str(PROJECT / "predictions_next_gw.csv"))
+    assert artifact["sha256"] == artifacts.sha256_file(str(PROJECT / "predictions" / "predictions_next_gw.csv"))
     assert {"manifest_status", "generated_at", "model_bundle", "first_gw", "last_gw"} <= artifact.keys()
 
 

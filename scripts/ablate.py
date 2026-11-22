@@ -41,7 +41,7 @@ from nbrun import run_range, stub_boosters_if_absent  # noqa: E402
 
 
 NOTEBOOK = 'fpl_pipeline.ipynb'
-IN_FILE = 'all_seasons_data_featured.csv'
+IN_FILE = 'data/all_seasons_data_featured.csv'
 POSITIONS = ('GK', 'DEF', 'MID', 'FWD')
 
 BUILDERS = {
@@ -238,7 +238,7 @@ def main() -> int:
     ap.add_argument('--keep-only', nargs='+', default=None, metavar='PREFIX',
                     help='instead of ablating, train on the union of these '
                          'prefixes and compare against the full feature set')
-    ap.add_argument('--out', default='ablation_metrics.json')
+    ap.add_argument('--out', default='reports/ablation_metrics.json')
     ap.add_argument('--notebook', default=NOTEBOOK)
     args = ap.parse_args()
 

@@ -40,7 +40,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'scripts'))
 
 MANIFEST_SCHEMA = 1
-DEFAULT_ARTIFACT = 'predictions_next_gw.csv'
+DEFAULT_ARTIFACT = 'predictions/predictions_next_gw.csv'
 MODEL_DIRS = ('saved_models', os.path.join('fpl_results', 'saved_models'))
 
 

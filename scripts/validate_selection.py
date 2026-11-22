@@ -48,7 +48,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from nbrun import run_range, stub_boosters_if_absent  # noqa: E402
 
 NOTEBOOK = 'fpl_pipeline.ipynb'
-IN_FILE = 'all_seasons_data_featured.csv'
+IN_FILE = 'data/all_seasons_data_featured.csv'
 MODEL_DIR = os.path.join('saved_models', 'direct')
 POSITIONS = ('GK', 'DEF', 'MID', 'FWD')
 
@@ -238,7 +238,7 @@ def main() -> int:
                          'once a bench is paid for out of the 100m squad limit)')
     ap.add_argument('--seasons', nargs='+', default=None,
                     help='defaults to every test season')
-    ap.add_argument('--out', default='selection_metrics.json')
+    ap.add_argument('--out', default='reports/selection_metrics.json')
     ap.add_argument('--verbose', action='store_true')
     args = ap.parse_args()
 

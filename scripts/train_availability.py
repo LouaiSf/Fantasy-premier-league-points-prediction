@@ -60,11 +60,11 @@ import time
 import numpy as np
 import pandas as pd
 
-IN_FILE = 'all_seasons_data_featured.csv'
+IN_FILE = 'data/all_seasons_data_featured.csv'
 MODEL_DIR = os.path.join('saved_models', 'direct')
 HOLDOUT_DIR = 'holdout'
 META_FILE = 'availability_meta.json'
-METRICS_OUT = 'availability_metrics.json'
+METRICS_OUT = 'reports/availability_metrics.json'
 POSITIONS = ('GK', 'DEF', 'MID', 'FWD')
 
 # Matches the split in train.py: whole seasons, never shuffled, so a model is

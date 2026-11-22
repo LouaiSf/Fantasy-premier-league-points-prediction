@@ -207,7 +207,7 @@ def history_gameweeks_behind(season: str) -> int | None:
     keep serving predictions without Sunday's matches. Rows the fetch no longer
     has count too.
     """
-    history_path = os.path.join(ROOT, 'all_seasons_data_final.csv')
+    history_path = os.path.join(ROOT, 'data', 'all_seasons_data_final.csv')
     merged_path = os.path.join(ROOT, 'data', season, 'gws', 'merged_gw.csv')
     if not (os.path.exists(history_path) and os.path.exists(merged_path)):
         return None

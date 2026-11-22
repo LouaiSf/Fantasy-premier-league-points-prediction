@@ -4,7 +4,9 @@
 # Hand-written FotMob -> FPL player fixes (scripts/fetch_fotmob.py).
 !data/fotmob_overrides.csv
 # The deployed API serves this file; commit it after each predict_gameweek.py run.
-!predictions_next_gw.csv
+!predictions/predictions_next_gw.csv
+# The built history: the dataset rebuild lifts its defensive columns back out.
+!data/all_seasons_data_final.csv
 data/standardized_data.csv
 data/standardized_predictive_data.csv
 data/predictive_features_data.csv
@@ -13,6 +15,7 @@ data/predictive_features_list.pkl
 
 # Python cache
 __pycache__/
+.pytest_cache/
 *.pyc
 *.pyo
 *.pyd
@@ -51,14 +54,12 @@ model_results_*.csv
 model_comparison_*.png
 *_results.csv
 
-all_seasons_data_featured.csv
-all_seasons_data_cleaned.csv
-all_seasons_data_final.csv
+data/all_seasons_data.csv
+data/all_seasons_data_featured.csv
 defensive_stats_cleaned.csv
 defensive_stats_raw.csv
 backtest_summary.csv
 model_results_predictive.csv
-all_seasons_data_final.csv
 # Backups of files repaired by scripts/
 *.bak
 *.prev
@@ -74,6 +75,9 @@ fpl_results/
 
 # IDE / tool cache
 .omo/
+
+# Logs
+*.log
 
 # Refresh pipeline: lock file and half-written temporaries
 data/.refresh_pipeline.lock

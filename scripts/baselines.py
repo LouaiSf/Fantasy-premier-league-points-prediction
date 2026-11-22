@@ -69,7 +69,7 @@ from nbrun import run_range  # noqa: E402
 
 NOTEBOOK = 'fpl_pipeline.ipynb'
 POSITIONS = ('GK', 'DEF', 'MID', 'FWD')
-OUT_FILE = 'baseline_metrics.json'
+OUT_FILE = 'reports/baseline_metrics.json'
 
 
 def read_csv_tolerant(path: str, **kwargs) -> pd.DataFrame:
@@ -331,7 +331,7 @@ def main() -> int:
     ap.add_argument('--notebook', default=NOTEBOOK)
     args = ap.parse_args()
 
-    if not os.path.exists('all_seasons_data_featured.csv'):
+    if not os.path.exists('data/all_seasons_data_featured.csv'):
         raise SystemExit("all_seasons_data_featured.csv not found. "
                          "Run scripts/build_features.py first.")
 
@@ -343,7 +343,7 @@ def main() -> int:
     # then, and no model has to be trained.
     ns = run_range(
         args.notebook,
-        first="all_seasons_data_featured = pd.read_csv('all_seasons_data_featured.csv')",
+        first="all_seasons_data_featured = pd.read_csv('data/all_seasons_data_featured.csv')",
         # Must reach prepare_position_data, which is defined after
         # POSITION_FEATURES. Stopping at the latter left the namespace
         # without it and only showed up when running standalone, since
@@ -355,8 +355,8 @@ def main() -> int:
     baselines = compute_baselines(ns)
 
     model_metrics = None
-    if os.path.exists('model_metrics.json'):
-        model_metrics = json.load(open('model_metrics.json'))
+    if os.path.exists('reports/model_metrics.json'):
+        model_metrics = json.load(open('reports/model_metrics.json'))
 
     print_table(baselines, model_metrics)
 

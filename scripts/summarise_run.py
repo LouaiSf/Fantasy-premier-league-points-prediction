@@ -35,7 +35,7 @@ def rule(title):
 
 def dataset_section():
     rule("1. DATASET")
-    path = 'all_seasons_data_final.csv'
+    path = 'data/all_seasons_data_final.csv'
     if not os.path.exists(path):
         print(f"  MISSING {path}")
         return
@@ -55,7 +55,7 @@ def dataset_section():
 
 def features_section():
     rule("2. FEATURES")
-    path = 'all_seasons_data_featured.csv'
+    path = 'data/all_seasons_data_featured.csv'
     if not os.path.exists(path):
         print(f"  MISSING {path}")
         return
@@ -74,10 +74,10 @@ def features_section():
 
 def models_section():
     rule("3. MODELS")
-    if not os.path.exists('model_metrics.json'):
+    if not os.path.exists('reports/model_metrics.json'):
         print("  MISSING model_metrics.json -- training did not finish")
         return
-    metrics = json.load(open('model_metrics.json'))
+    metrics = json.load(open('reports/model_metrics.json'))
 
     rows = []
     for approach in ('direct',):

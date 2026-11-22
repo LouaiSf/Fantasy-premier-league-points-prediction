@@ -52,8 +52,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from nbrun import run_range  # noqa: E402
 
 NOTEBOOK = 'fpl_pipeline.ipynb'
-RAW_OUT = 'all_seasons_data.csv'
-FINAL_OUT = 'all_seasons_data_final.csv'
+RAW_OUT = 'data/all_seasons_data.csv'
+FINAL_OUT = 'data/all_seasons_data_final.csv'
 
 # Seasons whose defensive stats came from the FBref merge, and whose points
 # therefore get the defensive-contribution adjustment in the notebook's step 5.

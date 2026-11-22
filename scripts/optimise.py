@@ -53,7 +53,7 @@ from console import force_utf8  # noqa: E402
 
 force_utf8()
 
-PREDICTIONS = 'predictions_next_gw.csv'
+PREDICTIONS = 'predictions/predictions_next_gw.csv'
 
 # An FPL squad is exactly this shape, and the XI drawn from it must satisfy
 # the second. The bench is whatever the XI leaves over.

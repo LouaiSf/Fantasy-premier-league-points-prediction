@@ -37,7 +37,7 @@ FOLDS = {
 }
 FAMILIES = ['', 'xg_', 'def_', 'fm_', 'fm_ def_', 'fm_ def_ xg_']
 POSITIONS = ('GK', 'DEF', 'MID', 'FWD')
-OUT = 'ablation_two_stage.json'
+OUT = 'reports/ablation_two_stage.json'
 
 
 def run(fold: str, family: str, train_from: str | None = None) -> dict:

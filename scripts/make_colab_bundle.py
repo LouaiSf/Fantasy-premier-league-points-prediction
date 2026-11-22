@@ -40,7 +40,11 @@ CODE = [
 
 # Produced by scripts/build_dataset.py. The feature stage reads it, and the
 # dataset rebuild lifts the FBref defensive columns out of it.
-DATASET = ['all_seasons_data_final.csv']
+DATASET = ['data/all_seasons_data_final.csv']
+
+# The last measured results. Training writes its metrics into reports/, so the
+# folder has to exist in the unzipped bundle.
+REPORTS = sorted(glob.glob('reports/*.json'))
 
 
 def fotmob_inputs() -> list[str]:
@@ -81,7 +85,8 @@ def main() -> int:
     ap.add_argument('--out-dir', default='.', help='where to write the zip')
     args = ap.parse_args()
 
-    paths = list(CODE) + sorted(glob.glob('scripts/*.py')) + list(DATASET) + fotmob_inputs()
+    paths = (list(CODE) + sorted(glob.glob('scripts/*.py')) + list(DATASET) + REPORTS
+             + fotmob_inputs())
     if not args.minimal:
         paths += raw_inputs()
 

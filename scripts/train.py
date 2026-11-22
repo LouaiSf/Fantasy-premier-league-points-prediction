@@ -34,8 +34,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from nbrun import run_range  # noqa: E402
 
 NOTEBOOK = 'fpl_pipeline.ipynb'
-IN_FILE = 'all_seasons_data_featured.csv'
-METRICS_OUT = 'model_metrics.json'
+IN_FILE = 'data/all_seasons_data_featured.csv'
+METRICS_OUT = 'reports/model_metrics.json'
 
 
 def preflight() -> None:
@@ -98,7 +98,7 @@ def collect_metrics(ns: dict) -> dict:
     return out
 
 
-def report_importances(ns: dict, top: int = 15, out: str = 'feature_importance.json') -> None:
+def report_importances(ns: dict, top: int = 15, out: str = 'reports/feature_importance.json') -> None:
     """Which of the 220 features the best model per position actually uses.
 
     Two hundred features and no idea which ones matter makes it impossible to
@@ -253,9 +253,9 @@ def main() -> int:
         from baselines import compute_baselines, print_table
         baselines = compute_baselines(ns)
         print_table(baselines, metrics)
-        with open('baseline_metrics.json', 'w', encoding='utf-8') as fh:
+        with open('reports/baseline_metrics.json', 'w', encoding='utf-8') as fh:
             json.dump(baselines, fh, indent=2)
-        print("\nwrote baseline_metrics.json")
+        print("\nwrote reports/baseline_metrics.json")
     except Exception as exc:  # never let this cost you a finished training run
         print(f"\nWARNING: baseline comparison failed ({type(exc).__name__}: {exc})")
         print("The models and metrics above are unaffected; run "

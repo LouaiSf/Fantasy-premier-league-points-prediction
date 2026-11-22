@@ -49,7 +49,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from nbrun import run_range  # noqa: E402
 
 NOTEBOOK = 'fpl_pipeline.ipynb'
-HISTORY = 'all_seasons_data_final.csv'
+HISTORY = 'data/all_seasons_data_final.csv'
 MODEL_DIR = os.path.join('saved_models', 'direct')
 POSITIONS = ('GK', 'DEF', 'MID', 'FWD')
 API = 'https://fantasy.premierleague.com/api'
@@ -804,7 +804,7 @@ def main() -> int:
                     help='defaults to the next unfinished gameweek per the FPL API')
     ap.add_argument('--top', type=int, default=30)
     ap.add_argument('--no-api', action='store_true', help='use local files only')
-    ap.add_argument('--out', default='predictions_next_gw.csv')
+    ap.add_argument('--out', default='predictions/predictions_next_gw.csv')
     ap.add_argument('--horizon', type=int, default=1, metavar='N',
                     help='also predict the N-1 gameweeks after the target, with '
                          'each player frozen as he is today and only the fixture '

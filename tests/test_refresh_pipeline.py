@@ -362,7 +362,7 @@ def write_rows(root, history: dict, fetched: dict):
     """history / fetched: {GW: [element, ...]} for SEASON, plus one older season row."""
     rows = [{"season": "2025-26", "GW": 38, "element": 1}]
     rows += [{"season": SEASON, "GW": gw, "element": e} for gw, es in history.items() for e in es]
-    pd.DataFrame(rows).to_csv(root / "all_seasons_data_final.csv", index=False)
+    pd.DataFrame(rows).to_csv(root / "data" / "all_seasons_data_final.csv", index=False)
     (root / "data" / SEASON / "gws").mkdir(exist_ok=True)
     pd.DataFrame([{"GW": gw, "element": e} for gw, es in fetched.items() for e in es]).to_csv(
         root / "data" / SEASON / "gws" / "merged_gw.csv", index=False)
