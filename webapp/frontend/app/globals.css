@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-/* The FPL Assistant Broadcast Design System (see /DESIGN.md), ported verbatim
-   from fpl-assistant-prototype.html. Unlayered, so it wins over the @layer
+/* The FPL Assistant Broadcast Design System (see /docs/DESIGN.md), ported verbatim
+   from docs/fpl-assistant-prototype.html. Unlayered, so it wins over the @layer
    base rules below regardless of import order -- this is deliberate: every
    screen is built from these tokens and component classes, not Tailwind
    utilities or shadcn's default theme. */
