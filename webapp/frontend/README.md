@@ -1,36 +1,33 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FPL Assistant frontend
 
-## Getting Started
+The Next.js site for FPL Assistant. It renders the pages and calls the Flask API
+in `webapp/app.py` for every number it shows. What the site does, how to run the
+API beside it, and how the two are deployed are in the
+[main README](../../README.md#the-web-ui).
 
-First, run the development server:
+## Commands
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev                   # http://localhost:3000, API expected on :5000
+npm exec tsc -- --noEmit      # type-check
+npm run lint
+npm run build                 # production build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`NEXT_PUBLIC_API_BASE` points the site at the API (default
+`http://127.0.0.1:5000`). Open the dev server through `localhost` or
+`127.0.0.1`. Those two are in `allowedDevOrigins`, and any other host blocks
+hydration without an error.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Layout
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```text
+app/              one folder per page; broadcast.css holds the design system
+components/       shared UI: chrome (nav, ticker, clock), team, chips, charts, motion
+lib/              API client and types, finance, transfer planning, local storage
+```
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The visual system is specified in [`docs/DESIGN.md`](../../docs/DESIGN.md) and
+ported from [`docs/fpl-assistant-prototype.html`](../../docs/fpl-assistant-prototype.html).
+Fonts are self-hosted through Fontsource, not loaded from Google at runtime.
