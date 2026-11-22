@@ -13,11 +13,12 @@ export interface RecentManager {
 
 const recentManagerLimit = 5;
 
+function hasScheme(value: string): boolean {
+  return /^[a-z][a-z\d+.-]*:/i.test(value);
+}
+
 function looksLikeUrl(value: string): boolean {
-  return (
-    /^[a-z][a-z\d+.-]*:/i.test(value) ||
-    /^(?:www\.)?[^/\s]+\.[a-z]{2,}(?:[/:?#]|$)/i.test(value)
-  );
+  return hasScheme(value) || /^(?:www\.)?[^/\s]+\.[a-z]{2,}(?:[/:?#]|$)/i.test(value);
 }
 
 export function parseManagerEntryInput(rawValue: string): ManagerEntryInput {
@@ -37,7 +38,9 @@ export function parseManagerEntryInput(rawValue: string): ManagerEntryInput {
   if (looksLikeUrl(value)) {
     let url: URL;
     try {
-      url = new URL(value);
+      // A link copied without its scheme ("fantasy.premierleague.com/entry/1")
+      // is read as https; the host, port and path checks below still apply.
+      url = new URL(hasScheme(value) ? value : `https://${value}`);
     } catch (error) {
       if (error instanceof TypeError) {
         return { kind: "invalid", message: "Paste a complete FPL team link." };
