@@ -62,22 +62,36 @@ it measures ranking quality rather than achievable FPL performance.
 
 ## The web UI
 
+Two processes: a Flask API (`webapp/app.py`, `/api/*` only) and a Next.js
+frontend (`webapp/frontend/`) that calls it.
+
 ```bash
-python webapp/app.py       # then open http://127.0.0.1:5000
+python webapp/app.py                                # API on http://127.0.0.1:5000
+cd webapp/frontend && npm install && npm run dev    # site on http://localhost:3000
 ```
 
-Four tools in one page:
+The frontend finds the API through `NEXT_PUBLIC_API_BASE` (default
+`http://127.0.0.1:5000`). The API needs `predictions/predictions_next_gw.csv`;
+without it, the pages that depend on projections say so instead of showing numbers.
 
-| tab | what it answers |
+| page | what it answers |
 |---|---|
-| **Squad builder** | Best legal 15 for a budget, solved as one LP with the XI and captain. Lock players in, exclude others, see the result laid out on a pitch. |
-| **Transfers** | How many moves are worth making, with the −4 hit charged before comparing. Your squad is saved in the browser. |
-| **Chips** | When to play Bench Boost, Triple Captain, Free Hit and Wildcard, from the fixture calendar and your squad's blanks. |
-| **Watchlist** | Value per million, low-ownership differentials, and expensive players the model does not rate. |
+| **My Team** | Import your squad by FPL entry ID or team link, or find it by name in a mini-league. Shows the pitch with projections, a deadline checklist, squad alerts, and one transfer plan that returns the move, XI, bench and armbands together. |
+| **Transfer Studio** | Stage several transfers, see the hit charged before the gain, and save up to three scenarios to compare against holding. |
+| **Comparison** | Two players side by side across twelve categories, leader marked per row. The URL carries both players, so it can be shared. |
+| **Captain & Form** | The captain shortlist from your squad or the whole game, ranked by projection, with availability risk from FPL's own status. |
+| **Watchlist** | Value per million, low-ownership differentials, players priced above what they return, and players with little or no model history. |
+| **Chip Advisor** | Syncs your chips and free transfers from FPL, then plans Triple Captain, Bench Boost, Free Hit and Wildcard through GW38. Each gain is in points against the best no-chip play that week. |
+| **Fixture Matrix** | Fixture difficulty for every club over the coming gameweeks, doubles and blanks included, filterable to your squad. |
+| **News Wire** | Every injury, suspension and doubt note FPL publishes, filtered by type; the nav badge counts only your squad's. |
 
-It calls `scripts/optimise.py` directly rather than reimplementing anything, so
-the browser and the CLI cannot disagree — the same `solve_squad` produces both.
-Needs `predictions/predictions_next_gw.csv` from `scripts/predict_gameweek.py`.
+Every decision calls `scripts/optimise.py` rather than reimplementing it, so
+the site and the CLI cannot disagree. Squads, saved scenarios and chip state
+live in the browser. **Export my data** on My Team moves them to another device.
+
+Deployed, the API runs on Render (`render.yaml`) and the frontend on Vercel
+with `NEXT_PUBLIC_API_BASE` pointing at it; set `ALLOWED_ORIGINS` on the API to
+the Vercel URL (see [Securing the API](#securing-the-api)).
 
 ## Keeping predictions fresh
 
