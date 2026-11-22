@@ -234,13 +234,19 @@ models, and a first save-and-predict workflow. Merged through PRs #1–#20.
   was updated to match.
 - The 16 plan, prompt, progress and handoff files and `debug.log` were deleted.
   This file replaces them.
+- Data refreshed through GW11's finished matches (GW9 and GW10 complete, 7 of
+  GW11's 10 matches). FotMob re-run, so `player_match.csv` now carries the
+  stable fixture ids (100% of minutes mapped, 107 matches).
+- Features rebuilt and the served availability models refit on every season
+  through 2026-27 GW11. Holdout scores reproduce exactly and calibration is
+  unchanged. Predictions regenerated for GW11–GW22 (500 players).
 
 ---
 
 ## Current numbers
 
-**Two-stage model, holdout** (retrained 2026-10-22; validation 2023-24, test
-2024-25 + 2025-26). Details are in `reports/availability_metrics.json`.
+**Two-stage model, holdout** (retrained 2026-10-22, reproduced exactly on
+2026-11-22; validation 2023-24, test 2024-25 + 2025-26). Details are in `reports/availability_metrics.json`.
 
 | position | R² | MAE |
 |---|---|---|
@@ -334,8 +340,6 @@ Standing product rules:
 **Data**
 - [ ] A double gameweek's per-match split needs FPL's history to contain both
       matches. Until it does, those rows are held back (logged).
-- [ ] After the next fetch, re-run `--with-fotmob` so `player_match.csv`
-      carries the new stable fixture ids.
 - [ ] FBref-era defensive values (2019-23) remain on the few played rows
       FotMob could not map.
 
