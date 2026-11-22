@@ -77,7 +77,7 @@ Four tools in one page:
 
 It calls `scripts/optimise.py` directly rather than reimplementing anything, so
 the browser and the CLI cannot disagree — the same `solve_squad` produces both.
-Needs `predictions_next_gw.csv` from `scripts/predict_gameweek.py`.
+Needs `predictions/predictions_next_gw.csv` from `scripts/predict_gameweek.py`.
 
 ## Keeping predictions fresh
 
@@ -92,7 +92,7 @@ runs the whole chain and only swaps the result in once it has checked it:
 3. validate it: required columns, no blank points, the first gameweek matches the
    freshly fetched fixtures, every week of the horizon present, clubs match
    `teams.csv`, no collapse in player count
-4. `os.replace()` it onto `predictions_next_gw.csv`
+4. `os.replace()` it onto `predictions/predictions_next_gw.csv`
 
 Any failure leaves the previous export untouched. A lock file stops two runs
 overlapping. The web app reloads on the file's mtime, so no restart is needed.
@@ -107,7 +107,7 @@ Windows Task Scheduler and alert on a non-zero exit. From the site, the Refresh
 button fetches the data and then runs the same pipeline in the background
 (`POST /api/refresh/predictions`, poll `GET /api/refresh/status`).
 
-If `all_seasons_data_final.csv` does not match the fetched data row for row (a new
+If `data/all_seasons_data_final.csv` does not match the fetched data row for row (a new
 gameweek, or more of the current one played since the last build) the pipeline runs
 `build_dataset.py --write` first (about 30 s, and it keeps a `.prev` copy), since
 predictions are built from that history; `--no-rebuild-history` skips it. It never
@@ -152,7 +152,7 @@ internal_error`; details go to the server log, not the response.
 ## Reproducibility: what a deployment consumes
 
 The site never trains or predicts. It serves one **immutable prediction artifact**,
-`predictions_next_gw.csv`, and its manifest `predictions_next_gw.manifest.json`
+`predictions/predictions_next_gw.csv`, and its manifest `predictions/predictions_next_gw.manifest.json`
 (sha256 of the CSV, when it was generated, season, gameweek range, the git commit,
 and a fingerprint of the model bundle that produced it). Commit both together.
 
@@ -228,15 +228,15 @@ pip install -r requirements.txt
 
 python scripts/fetch_data.py            # refresh 2025-26 / 2026-27 from upstream
 python scripts/rebuild_merged_gw.py     # audit merged_gw.csv against its parts
-python scripts/build_dataset.py --write # -> all_seasons_data_final.csv
-python scripts/build_features.py        # -> all_seasons_data_featured.csv
-python scripts/train.py                 # -> saved_models/, model_metrics.json
+python scripts/build_dataset.py --write # -> data/all_seasons_data_final.csv
+python scripts/build_features.py        # -> data/all_seasons_data_featured.csv
+python scripts/train.py                 # -> saved_models/, reports/model_metrics.json
 python scripts/train_availability.py    # -> the two-stage models predictions use
 python scripts/calibrate.py             # -> per-position calibration.json
-python scripts/predict_gameweek.py --season 2026-27 --horizon 12 --out predictions_next_gw.csv
+python scripts/predict_gameweek.py --season 2026-27 --horizon 12 --out predictions/predictions_next_gw.csv
 python scripts/optimise.py squad --budget 100        # best legal 15 + XI + captain
-python scripts/optimise.py transfers --squad example_squad.txt --free 1
-python scripts/optimise.py chips --squad example_squad.txt --horizon 8
+python scripts/optimise.py transfers --squad squads/example_squad.txt --free 1
+python scripts/optimise.py chips --squad squads/example_squad.txt --horizon 8
 python scripts/optimise.py watchlist --max-ownership 5
 python scripts/validate_selection.py    # does it pick better teams than a heuristic?
 python scripts/train.py --features full # all 220 features instead of 54
@@ -288,7 +288,7 @@ captain totals without adding speculative avoided-hit value.
 priced above what they return, and anyone whose number comes from no prior
 data at all.
 
-Copy `example_squad.txt` and edit it to your own 15.
+Copy `squads/example_squad.txt` and edit it to your own 15.
 
 ## How it fits together
 
@@ -298,15 +298,15 @@ data/<season>/gws/merged_gw.csv          raw, from vaastav/Fantasy-Premier-Leagu
         |  build_dataset.py     merge 11 seasons, harmonise columns, map teams,
         |                       assign game_number, carry over FBref defensive
         v                       stats, re-apply the scoring rules
-all_seasons_data_final.csv               254,179 rows x 47 cols
+data/all_seasons_data_final.csv          254,179 rows x 47 cols
         |
         |  build_features.py    lags 1-5, rolling 3/5/10, price momentum,
         v                       availability, expected goals, fixture difficulty
-all_seasons_data_featured.csv            254,179 rows x 339 cols
+data/all_seasons_data_featured.csv       254,179 rows x 339 cols
         |
         |  train.py             per-position models, season-holdout split,
         v                       TimeSeriesSplit hyperparameter search
-saved_models/ + model_metrics.json + baseline_metrics.json
+saved_models/ + reports/model_metrics.json + reports/baseline_metrics.json
 ```
 
 The whole pipeline lives in **`fpl_pipeline.ipynb`**, in the order it runs:
@@ -331,7 +331,7 @@ scripts cannot drift from it.
 | `predict_gameweek.py` | predict the upcoming gameweek from the live FPL API; rank every player |
 | `validate_selection.py` | score the XI the model picks against a rolling-average XI |
 | `optimise.py` | squad, transfers, chip timing and watchlist |
-| `summarise_run.py` | render `model_metrics.json` as a table |
+| `summarise_run.py` | render `reports/model_metrics.json` as a table |
 | `test_notebook_fixes.py` | 25 regression tests over the split, guards and features |
 | `make_colab_bundle.py` | package the 122 files Colab needs (24 MB, not 17,000 files) |
 
@@ -434,10 +434,18 @@ gameweeks. `train.py`'s notebook models, which only feed the
 fpl_pipeline.ipynb       the pipeline, in the order it runs
 FPL_Colab.ipynb          runs the whole pipeline on Colab free tier
 scripts/                 each stage as a runnable script, plus the tools
-webapp/                  Flask UI over the tools
+webapp/                  Flask API (app.py) and the Next.js frontend (frontend/)
 data/<season>/           raw season data
-saved_models/direct/     per-position models, scalers, feature lists
+data/all_seasons_*.csv   the merged and featured datasets built from it
+saved_models/            per-position models, scalers, feature lists
+predictions/             the served prediction artifact and its manifest
+reports/                 measured results: model, baseline, ablation, calibration
+squads/                  example squad files for the optimiser CLI
+docs/                    project history, design system, requirements, screenshots
 ```
+
+`docs/PROJECT_HISTORY.md` is the single record of what has been built, the
+decisions behind it, and what is still open.
 
 Earlier exploratory notebooks (`advanced_fpl_models`, `prediction_workflow`,
 `using_api`, `add_game_number`, `fetching_defensive_data`) have been removed:
